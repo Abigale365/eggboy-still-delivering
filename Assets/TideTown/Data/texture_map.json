@@ -1,0 +1,4907 @@
+{
+ "models": [
+  {
+   "id": "B1_邮局_分享包版",
+   "folder": "Art/Textures/B1_邮局_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "front_normal",
+     "file": "front_normal.png",
+     "bytes": 406247,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "front_color",
+     "file": "front_color.png",
+     "bytes": 716563,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "front_roughness",
+     "file": "front_roughness.png",
+     "bytes": 280041,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "plaster_normal",
+     "file": "plaster_normal.png",
+     "bytes": 44310,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "plaster_color",
+     "file": "plaster_color.png",
+     "bytes": 111058,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "plaster_roughness",
+     "file": "plaster_roughness.png",
+     "bytes": 67630,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 36946,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 89389,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "wood_roughness",
+     "file": "wood_roughness.png",
+     "bytes": 57094,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "right_color",
+     "file": "right_color.png",
+     "bytes": 469393,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "right_normal",
+     "file": "right_normal.png",
+     "bytes": 262162,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "right_roughness",
+     "file": "right_roughness.png",
+     "bytes": 183495,
+     "mime": "image/png"
+    },
+    {
+     "index": 15,
+     "name": "left_color",
+     "file": "left_color.png",
+     "bytes": 461258,
+     "mime": "image/png"
+    },
+    {
+     "index": 16,
+     "name": "left_normal",
+     "file": "left_normal.png",
+     "bytes": 252785,
+     "mime": "image/png"
+    },
+    {
+     "index": 17,
+     "name": "left_roughness",
+     "file": "left_roughness.png",
+     "bytes": 180359,
+     "mime": "image/png"
+    },
+    {
+     "index": 18,
+     "name": "terracotta_color",
+     "file": "terracotta_color.png",
+     "bytes": 97692,
+     "mime": "image/png"
+    },
+    {
+     "index": 19,
+     "name": "terracotta_normal",
+     "file": "terracotta_normal.png",
+     "bytes": 36491,
+     "mime": "image/png"
+    },
+    {
+     "index": 20,
+     "name": "terracotta_roughness",
+     "file": "terracotta_roughness.png",
+     "bytes": 59247,
+     "mime": "image/png"
+    },
+    {
+     "index": 21,
+     "name": "back_color",
+     "file": "back_color.png",
+     "bytes": 732037,
+     "mime": "image/png"
+    },
+    {
+     "index": 22,
+     "name": "back_normal",
+     "file": "back_normal.png",
+     "bytes": 358088,
+     "mime": "image/png"
+    },
+    {
+     "index": 23,
+     "name": "back_roughness",
+     "file": "back_roughness.png",
+     "bytes": 265064,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Reference facade colour + estimated normal + roughness",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Source plaster",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Source oak",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Projected brass",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.3499999940395355,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Warm old brass",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.6600000262260437,
+      0.3799999952316284,
+      0.10000000149011612,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 0.3100000023841858,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "v4 warm source plaster",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 9,
+     "normalTex": 10,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": 9,
+     "normalScale": 0.25
+    },
+    {
+     "name": "v4 circle side source",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 12,
+     "normalTex": 13,
+     "mrTex": 14,
+     "occlusionTex": -1,
+     "emissiveTex": 12,
+     "normalScale": 0.25
+    },
+    {
+     "name": "v4 arch side source",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 15,
+     "normalTex": 16,
+     "mrTex": 17,
+     "occlusionTex": -1,
+     "emissiveTex": 15,
+     "normalScale": 0.25
+    },
+    {
+     "name": "v4 terracotta",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 18,
+     "normalTex": 19,
+     "mrTex": 20,
+     "occlusionTex": -1,
+     "emissiveTex": 18,
+     "normalScale": 0.25
+    },
+    {
+     "name": "v4 gold",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.6499999761581421,
+      0.3499999940395355,
+      0.09000000357627869,
+      1
+     ],
+     "metallicFactor": 0.5199999809265137,
+     "roughnessFactor": 0.3400000035762787,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "V16 ivory eaves continuous texture",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 9,
+     "normalTex": 10,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": 9,
+     "normalScale": 0.25
+    },
+    {
+     "name": "v4 rear source",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 21,
+     "normalTex": 22,
+     "mrTex": 23,
+     "occlusionTex": -1,
+     "emissiveTex": 21,
+     "normalScale": 0.25
+    },
+    {
+     "name": "V11 soffit oak",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "V11 soffit oak.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "B2_面包店_分享包版",
+   "folder": "Art/Textures/B2_面包店_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "2026-11-05_nonperiodic_plaster",
+     "file": "2026-11-05_nonperiodic_plaster.png",
+     "bytes": 293845,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "Recess shadow_albedo",
+     "file": "Recess shadow_albedo.png",
+     "bytes": 45568,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "Smoked blue window glass_albedo",
+     "file": "Smoked blue window glass_albedo.png",
+     "bytes": 72183,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Soft warm ivory plaster",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8199999928474426,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 2,
+     "normalTex": 1,
+     "mrTex": 3,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 5,
+     "normalTex": 4,
+     "mrTex": 6,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Recess shadow",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 10,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Smoked blue window glass",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.25,
+     "roughnessFactor": 0.23999999463558197,
+     "baseTex": 11,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Dark patinated iron",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 13,
+     "normalTex": 12,
+     "mrTex": 14,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "B3_小学校舍_精修版",
+   "folder": "Art/Textures/B3_小学校舍_精修版",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 7438236,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 3600484,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "COL_school_invisible",
+     "alphaMode": "MASK",
+     "baseColorFactor": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      0
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.5,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Material_0",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "B4_灯塔_分享包版",
+   "folder": "Art/Textures/B4_灯塔_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "2026-11-05_nonperiodic_plaster",
+     "file": "2026-11-05_nonperiodic_plaster.png",
+     "bytes": 293845,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "Sage painted wood_albedo",
+     "file": "Sage painted wood_albedo.png",
+     "bytes": 83232,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "Smoked blue window glass_albedo",
+     "file": "Smoked blue window glass_albedo.png",
+     "bytes": 72183,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Old coral enamel.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Soft warm ivory plaster.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8199999928474426,
+     "baseTex": 3,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Weathered warm timber.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 5,
+     "normalTex": 4,
+     "mrTex": 6,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Sage painted wood.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 7,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Antique brass.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 9,
+     "normalTex": 8,
+     "mrTex": 10,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Smoked blue window glass.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.25,
+     "roughnessFactor": 0.23999999463558197,
+     "baseTex": 11,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Dark patinated iron.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 13,
+     "normalTex": 12,
+     "mrTex": 14,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "B5_船棚_分享包版",
+   "folder": "Art/Textures/B5_船棚_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "2026-11-05_nonperiodic_plaster",
+     "file": "2026-11-05_nonperiodic_plaster.png",
+     "bytes": 293845,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "Recess shadow_albedo",
+     "file": "Recess shadow_albedo.png",
+     "bytes": 45568,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "Smoked blue window glass_albedo",
+     "file": "Smoked blue window glass_albedo.png",
+     "bytes": 72183,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Soft warm ivory plaster.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8199999928474426,
+     "baseTex": 3,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 5,
+     "normalTex": 4,
+     "mrTex": 6,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn slate blue paint.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.005",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 11,
+     "normalTex": 10,
+     "mrTex": 12,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Recess shadow.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 13,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Smoked blue window glass.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.25,
+     "roughnessFactor": 0.23999999463558197,
+     "baseTex": 14,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "B6_瓦房_分享包版",
+   "folder": "Art/Textures/B6_瓦房_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "2026-11-05_nonperiodic_plaster",
+     "file": "2026-11-05_nonperiodic_plaster.png",
+     "bytes": 293845,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "Sage painted wood_albedo",
+     "file": "Sage painted wood_albedo.png",
+     "bytes": 83232,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "Smoked blue window glass_albedo",
+     "file": "Smoked blue window glass_albedo.png",
+     "bytes": 72183,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Soft warm ivory plaster.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8199999928474426,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 2,
+     "normalTex": 1,
+     "mrTex": 3,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 5,
+     "normalTex": 4,
+     "mrTex": 6,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Sage painted wood.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 7,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Antique brass.007",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 9,
+     "normalTex": 8,
+     "mrTex": 10,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Smoked blue window glass.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.25,
+     "roughnessFactor": 0.23999999463558197,
+     "baseTex": 11,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "B7_木板房_分享包版",
+   "folder": "Art/Textures/B7_木板房_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "2026-11-05_nonperiodic_plaster",
+     "file": "2026-11-05_nonperiodic_plaster.png",
+     "bytes": 293845,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "Smoked blue window glass_albedo",
+     "file": "Smoked blue window glass_albedo.png",
+     "bytes": 72183,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "Recess shadow_albedo",
+     "file": "Recess shadow_albedo.png",
+     "bytes": 45568,
+     "mime": "image/png"
+    },
+    {
+     "index": 15,
+     "name": "Sage painted wood_albedo",
+     "file": "Sage painted wood_albedo.png",
+     "bytes": 83232,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Soft warm ivory plaster.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8199999928474426,
+     "baseTex": 3,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 5,
+     "normalTex": 4,
+     "mrTex": 6,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn slate blue paint.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.009",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 11,
+     "normalTex": 10,
+     "mrTex": 12,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Smoked blue window glass.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.25,
+     "roughnessFactor": 0.23999999463558197,
+     "baseTex": 13,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Recess shadow.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 14,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Sage painted wood.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 15,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "B9_灯塔灯头_v4",
+   "folder": "Art/Textures/B9_灯塔灯头_v4",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 6230060,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 1403036,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Burnished brass burner",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.34191441535949707,
+      0.1119324266910553,
+      0.024157632142305374,
+      1
+     ],
+     "metallicFactor": 0.8399999737739563,
+     "roughnessFactor": 0.3100000023841858,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Glass Fresnel ridges",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.9300000071525574,
+      0.9700000286102295,
+      0.9800000190734863,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.07999999821186066,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Clear lantern glass",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.9300000071525574,
+      0.9700000286102295,
+      0.9800000190734863,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.054999999701976776,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Unlit dark wick",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      0.03310476616024971,
+      0.01850022003054619,
+      0.012286487966775894,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.8999999761581421,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A1_烤炉_暖色材质版",
+   "folder": "Art/Textures/A1_烤炉_暖色材质版",
+   "images": [
+    {
+     "index": 0,
+     "name": "baked_surface_normal",
+     "file": "baked_surface_normal.png",
+     "bytes": 1694355,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Oven_Warm_Color",
+     "file": "Oven_Warm_Color.png",
+     "bytes": 4953070,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "Oven_Roughness_Metallic_Adjusted",
+     "file": "Oven_Roughness_Metallic_Adjusted.png",
+     "bytes": 899971,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Oven_Ivory_Stucco_Terracotta_Iron_Brass",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A2_柴火捆_v2",
+   "folder": "Art/Textures/A2_柴火捆_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4386880,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 1145464,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A3_火柴盒_v2",
+   "folder": "Art/Textures/A3_火柴盒_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 3721624,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 1148056,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A4_面包篮_v2",
+   "folder": "Art/Textures/A4_面包篮_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4917924,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 957840,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A5_门铃_v2",
+   "folder": "Art/Textures/A5_门铃_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4016312,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 735712,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A6_台秤_v2",
+   "folder": "Art/Textures/A6_台秤_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4362612,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 893044,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A7_菜谱本_当前生成版",
+   "folder": "Art/Textures/A7_菜谱本_当前生成版",
+   "images": [
+    {
+     "index": 0,
+     "name": "",
+     "file": "img0.png",
+     "bytes": 4199488,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "",
+     "file": "img1.png",
+     "bytes": 1220912,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1.0,
+      1.0,
+      1.0,
+      1.0
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "A8_面粉袋_后续平滑版",
+   "folder": "Art/Textures/A8_面粉袋_后续平滑版",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 3744344,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 894628,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "E1_花盆_v4",
+   "folder": "Art/Textures/E1_花盆_v4",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4695432,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 2052048,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D1_油壶_v2",
+   "folder": "Art/Textures/D1_油壶_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "geometry_0_normal",
+     "file": "geometry_0_normal.png",
+     "bytes": 2890568,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "geometry_0_color",
+     "file": "geometry_0_color.png",
+     "bytes": 4278666,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "geometry_0_metal_rough",
+     "file": "geometry_0_metal_rough.png",
+     "bytes": 1741286,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "geometry_0_baked",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D2_航海日志_v2",
+   "folder": "Art/Textures/D2_航海日志_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 3819452,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 903208,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D3_望远镜_v2",
+   "folder": "Art/Textures/D3_望远镜_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4243940,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 1216620,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D4O_船桨_v2",
+   "folder": "Art/Textures/D4O_船桨_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4230568,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 933284,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D5_守塔人帽子_v9",
+   "folder": "Art/Textures/D5_守塔人帽子_v9",
+   "images": [
+    {
+     "index": 0,
+     "name": "cap_normal",
+     "file": "cap_normal.png",
+     "bytes": 2613314,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "cap_color",
+     "file": "cap_color.png",
+     "bytes": 3230522,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "cap_metal_rough",
+     "file": "cap_metal_rough.png",
+     "bytes": 1789502,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "cap_baked",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "COL_body_invisible",
+     "alphaMode": "MASK",
+     "baseColorFactor": [
+      0.800000011920929,
+      0.800000011920929,
+      0.800000011920929,
+      0
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.5,
+     "baseTex": -1,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "D6_救生圈_v2",
+   "folder": "Art/Textures/D6_救生圈_v2",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4041308,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 1266148,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "C1_狗碗_分享包版",
+   "folder": "Art/Textures/C1_狗碗_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "Sandstone_albedo",
+     "file": "Sandstone_albedo.png",
+     "bytes": 92446,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Warm brushed bowl metal",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.75,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Sandstone",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 6,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "C2_红色小球_分享包版",
+   "folder": "Art/Textures/C2_红色小球_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Old coral enamel.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn ivory enamel.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "C3_被咬过的拖鞋_分享包版",
+   "folder": "Art/Textures/C3_被咬过的拖鞋_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn slate blue paint.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "C4_狗窝木箱_后续修改版",
+   "folder": "Art/Textures/C4_狗窝木箱_后续修改版",
+   "images": [
+    {
+     "index": 0,
+     "name": "Image_0",
+     "file": "Image_0.png",
+     "bytes": 4288254,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "Image_1",
+     "file": "Image_1.png",
+     "bytes": 933084,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Designer_Logic_PBR",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 0,
+     "normalTex": -1,
+     "mrTex": 1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "C5_滑梯_分享包版",
+   "folder": "Art/Textures/C5_滑梯_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn slate blue paint",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "C6_秋千_分享包版",
+   "folder": "Art/Textures/C6_秋千_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn ivory enamel.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.009",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "C7_黑板_后续修改2",
+   "folder": "Art/Textures/C7_黑板_后续修改2",
+   "images": [
+    {
+     "index": 0,
+     "name": "source_high_normal",
+     "file": "source_high_normal.png",
+     "bytes": 2637723,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "source_high_color",
+     "file": "source_high_color.png",
+     "bytes": 3373552,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "source_high_metal_rough",
+     "file": "source_high_metal_rough.png",
+     "bytes": 1870378,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "source_high_baked",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "C8_课桌_后续修改2",
+   "folder": "Art/Textures/C8_课桌_后续修改2",
+   "images": [
+    {
+     "index": 0,
+     "name": "desk_high_normal",
+     "file": "desk_high_normal.png",
+     "bytes": 2549276,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "desk_high_color",
+     "file": "desk_high_color.png",
+     "bytes": 3874007,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "desk_high_metal_rough",
+     "file": "desk_high_metal_rough.png",
+     "bytes": 1826260,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "desk_high_baked",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 1.0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "S11_晾衣架_分享包版",
+   "folder": "Art/Textures/S11_晾衣架_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "Ivory woven fabric_albedo",
+     "file": "Ivory woven fabric_albedo.png",
+     "bytes": 97559,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.005",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.011",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Ivory woven fabric",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.949999988079071,
+     "baseTex": 6,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel.005",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S1_山口邮筒_分享包版",
+   "folder": "Art/Textures/S1_山口邮筒_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "Recess shadow_albedo",
+     "file": "Recess shadow_albedo.png",
+     "bytes": 45568,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Recess shadow",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 12,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    }
+   ]
+  },
+  {
+   "id": "S2_木箱_分享包版",
+   "folder": "Art/Textures/S2_木箱_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Dark patinated iron",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S3_邮局门口信箱_分享包版",
+   "folder": "Art/Textures/S3_邮局门口信箱_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "Sage painted wood_albedo",
+     "file": "Sage painted wood_albedo.png",
+     "bytes": 83232,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 15,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Sage painted wood.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 0.6499999761581421,
+     "baseTex": 6,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Dark patinated iron.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 8,
+     "normalTex": 7,
+     "mrTex": 9,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 11,
+     "normalTex": 10,
+     "mrTex": 12,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber.001",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 14,
+     "normalTex": 13,
+     "mrTex": 15,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S4_路灯_分享包版",
+   "folder": "Art/Textures/S4_路灯_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "Honey amber glass_albedo",
+     "file": "Honey amber glass_albedo.png",
+     "bytes": 92222,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Dark patinated iron.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.005",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Honey amber glass.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.15000000596046448,
+     "roughnessFactor": 0.27000001072883606,
+     "baseTex": 9,
+     "normalTex": -1,
+     "mrTex": -1,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 1.0
+    },
+    {
+     "name": "Old coral enamel.002",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 11,
+     "normalTex": 10,
+     "mrTex": 12,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S5_路牌_分享包版",
+   "folder": "Art/Textures/S5_路牌_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.007",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn ivory enamel.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn slate blue paint.003",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 13,
+     "normalTex": 12,
+     "mrTex": 14,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S6_长椅_分享包版",
+   "folder": "Art/Textures/S6_长椅_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "dark_normal",
+     "file": "dark_normal.png",
+     "bytes": 556715,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "dark_color",
+     "file": "dark_color.png",
+     "bytes": 663209,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "dark_rough",
+     "file": "dark_rough.png",
+     "bytes": 692770,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Dark patinated iron.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6000000238418579,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.009",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber.004",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S7_木栅栏_分享包版",
+   "folder": "Art/Textures/S7_木栅栏_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn ivory enamel.006",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.006",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.013",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber.006",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S8_木码头_分享包版",
+   "folder": "Art/Textures/S8_木码头_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Weathered warm timber.007",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn ivory enamel.007",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.007",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.015",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  },
+  {
+   "id": "S9_小船_分享包版",
+   "folder": "Art/Textures/S9_小船_分享包版",
+   "images": [
+    {
+     "index": 0,
+     "name": "blue_normal",
+     "file": "blue_normal.png",
+     "bytes": 578117,
+     "mime": "image/png"
+    },
+    {
+     "index": 1,
+     "name": "blue_color",
+     "file": "blue_color.png",
+     "bytes": 890818,
+     "mime": "image/png"
+    },
+    {
+     "index": 2,
+     "name": "blue_rough",
+     "file": "blue_rough.png",
+     "bytes": 699864,
+     "mime": "image/png"
+    },
+    {
+     "index": 3,
+     "name": "ivory_normal",
+     "file": "ivory_normal.png",
+     "bytes": 588066,
+     "mime": "image/png"
+    },
+    {
+     "index": 4,
+     "name": "ivory_color",
+     "file": "ivory_color.png",
+     "bytes": 1093616,
+     "mime": "image/png"
+    },
+    {
+     "index": 5,
+     "name": "ivory_rough",
+     "file": "ivory_rough.png",
+     "bytes": 702900,
+     "mime": "image/png"
+    },
+    {
+     "index": 6,
+     "name": "wood_normal",
+     "file": "wood_normal.png",
+     "bytes": 556809,
+     "mime": "image/png"
+    },
+    {
+     "index": 7,
+     "name": "wood_color",
+     "file": "wood_color.png",
+     "bytes": 854544,
+     "mime": "image/png"
+    },
+    {
+     "index": 8,
+     "name": "wood_rough",
+     "file": "wood_rough.png",
+     "bytes": 693114,
+     "mime": "image/png"
+    },
+    {
+     "index": 9,
+     "name": "coral_normal",
+     "file": "coral_normal.png",
+     "bytes": 579252,
+     "mime": "image/png"
+    },
+    {
+     "index": 10,
+     "name": "coral_color",
+     "file": "coral_color.png",
+     "bytes": 928900,
+     "mime": "image/png"
+    },
+    {
+     "index": 11,
+     "name": "coral_rough",
+     "file": "coral_rough.png",
+     "bytes": 700123,
+     "mime": "image/png"
+    },
+    {
+     "index": 12,
+     "name": "brass_normal",
+     "file": "brass_normal.png",
+     "bytes": 564269,
+     "mime": "image/png"
+    },
+    {
+     "index": 13,
+     "name": "brass_color",
+     "file": "brass_color.png",
+     "bytes": 920605,
+     "mime": "image/png"
+    },
+    {
+     "index": 14,
+     "name": "brass_rough",
+     "file": "brass_rough.png",
+     "bytes": 694921,
+     "mime": "image/png"
+    }
+   ],
+   "materials": [
+    {
+     "name": "Worn slate blue paint.008",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.11999999731779099,
+     "roughnessFactor": 1.0,
+     "baseTex": 1,
+     "normalTex": 0,
+     "mrTex": 2,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Worn ivory enamel.008",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 4,
+     "normalTex": 3,
+     "mrTex": 5,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Weathered warm timber.008",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0,
+     "roughnessFactor": 1.0,
+     "baseTex": 7,
+     "normalTex": 6,
+     "mrTex": 8,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Old coral enamel.008",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.10000000149011612,
+     "roughnessFactor": 1.0,
+     "baseTex": 10,
+     "normalTex": 9,
+     "mrTex": 11,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    },
+    {
+     "name": "Antique brass.017",
+     "alphaMode": "OPAQUE",
+     "baseColorFactor": [
+      1,
+      1,
+      1,
+      1
+     ],
+     "metallicFactor": 0.6499999761581421,
+     "roughnessFactor": 1.0,
+     "baseTex": 13,
+     "normalTex": 12,
+     "mrTex": 14,
+     "occlusionTex": -1,
+     "emissiveTex": -1,
+     "normalScale": 0.25
+    }
+   ]
+  }
+ ]
+}

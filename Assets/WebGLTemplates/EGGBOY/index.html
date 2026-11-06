@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EGGBOY · Still Delivering</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #f3d9b5; }
+  body { font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif; color: #3b2a1a; }
+  #unity-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #f3d9b5; }
+  #loading {
+    position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center;
+    background: #f3d9b5; color: #3b2a1a; font-size: 20px; letter-spacing: 1px;
+  }
+  #error {
+    position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+    padding: 24px; box-sizing: border-box; background: #f3d9b5; color: #8a2f25; font-size: 16px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="loading">EGGBOY 正在开机…</div>
+<canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+<div id="error"></div>
+<script src="Build/{{{ LOADER_FILENAME }}}"></script>
+<script>
+  const canvas = document.getElementById("unity-canvas");
+  const loading = document.getElementById("loading");
+  const error = document.getElementById("error");
+  const config = {
+    dataUrl: "Build/{{{ DATA_FILENAME }}}",
+    frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+    codeUrl: "Build/{{{ CODE_FILENAME }}}",
+    streamingAssetsUrl: "StreamingAssets",
+    companyName: "{{{ COMPANY_NAME }}}",
+    productName: "{{{ PRODUCT_NAME }}}",
+    productVersion: "{{{ PRODUCT_VERSION }}}",
+    showBanner: false
+  };
+  createUnityInstance(canvas, config, (progress) => {
+    loading.textContent = "EGGBOY 正在开机… " + Math.round(progress * 100) + "%";
+  }).then(() => {
+    loading.style.display = "none";
+  }).catch((message) => {
+    loading.style.display = "none";
+    error.style.display = "flex";
+    error.textContent = "加载失败：" + message;
+  });
+</script>
+</body>
+</html>

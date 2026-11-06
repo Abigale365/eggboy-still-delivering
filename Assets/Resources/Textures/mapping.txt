@@ -1,0 +1,3 @@
+shell img0
+leather img0
+visor img0

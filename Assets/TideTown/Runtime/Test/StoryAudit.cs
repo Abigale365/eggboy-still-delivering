@@ -1,4 +1,5 @@
-// WP-07 自动剧情审计；WP-10 覆盖序章，WP-11 覆盖面包店（到点读信、火柴→柴火→烤炉、第一枚邮戳、L1）。
+// WP-07 自动剧情审计；WP-10 覆盖序章，WP-11 覆盖面包店（到点读信、火柴→柴火→烤炉、第一枚邮戳、L1），
+// WP-12 检查小黑跟随。
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -15,6 +16,8 @@ public class StoryAudit : MonoBehaviour
     float sumFps; int frames; string error = "";
     string status = "passed";
     string walkFail = "";
+    DogFollower dog;
+    float dogMax, dogMinClear = 999f;
 
     public void Begin(GameBootstrap b) { boot = b; StartCoroutine(Run()); }
 
@@ -23,6 +26,7 @@ public class StoryAudit : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         Time.timeScale = 1f;
         var p = boot.player;
+        dog = FindObjectOfType<DogFollower>();
         float bootAt = boot.intro != null ? boot.intro.StartTime : Time.realtimeSinceStartup;
 
         bool introRan = boot.intro != null;
@@ -107,6 +111,7 @@ public class StoryAudit : MonoBehaviour
         }
 
         // 面包店：B0 到点自动读信 → 回忆线索 → 火柴 → 柴火 → 装炉 → 点火
+        if (status == "passed") yield return SnapDog("story_dog.png");
         float bakeryAt = Time.realtimeSinceStartup;
         bool b0Auto = false, memoryOk = false, matchesOk = false, woodOk = false, loadOk = false;
         bool litOk = false, stampOk = false, waterOk = false, smokeOk = false;
@@ -224,6 +229,24 @@ public class StoryAudit : MonoBehaviour
             new SaveStore().Clear();
         }
 
+        // WP-12：小黑全程跟随、贴地、收尾时在身后
+        float dogEnd = 999f;
+        bool dogBehind = false;
+        bool dogOk = false;
+        if (dog != null && dog.Bound && p != null)
+        {
+            Vector3 dp = dog.transform.position, pp = p.transform.position;
+            dogEnd = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
+            var fwd = new Vector3(Mathf.Sin(p.yaw), 0f, Mathf.Cos(p.yaw));
+            dogBehind = Vector3.Dot(new Vector3(dp.x - pp.x, 0f, dp.z - pp.z), fwd) < 0.05f;
+            dogOk = dogMax <= 4.0f && dogMinClear >= -0.05f && dogEnd <= 3.0f && dogBehind;
+        }
+        if (status == "passed" && !dogOk)
+        {
+            status = "dog_failed";
+            error = $"max={dogMax:F2} end={dogEnd:F2} clear={dogMinClear:F2} behind={dogBehind}";
+        }
+
         float secs = Time.realtimeSinceStartup - bakeryAt;
         var sb = new StringBuilder();
         sb.AppendLine("{");
@@ -259,6 +282,15 @@ public class StoryAudit : MonoBehaviour
                   + ", \"smoke_visible\": " + (fx != null && fx.SmokeVisible ? "true" : "false")
                   + ", \"shots\": [\"story_bakery_letter.png\", \"story_oven.png\"] },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
+        var visual = dog != null ? dog.GetComponent<DogVisual>() : null;
+        sb.AppendLine("  \"dog\": { \"followed\": " + (dog != null && dog.Bound ? "true" : "false")
+                  + ", \"follow_max\": " + dogMax.ToString("F2")
+                  + ", \"distance_end\": " + dogEnd.ToString("F2")
+                  + ", \"behind\": " + (dogBehind ? "true" : "false")
+                  + ", \"ground_error_min\": " + dogMinClear.ToString("F2")
+                  + ", \"wag_hz\": " + (dog != null ? dog.WagHz.ToString("F1") : "0")
+                  + ", \"visual\": \"" + (visual != null ? visual.GetType().Name : "none") + "\""
+                  + ", \"shots\": [\"story_dog.png\"] },");
         sb.AppendLine("  \"letter_open\": " + (opened ? "true" : "false") + ",");
         sb.AppendLine("  \"move_locked\": " + (lockedMove ? "true" : "false") + ",");
         sb.AppendLine("  \"no_repeat\": " + (noRepeat ? "true" : "false") + ",");
@@ -305,6 +337,16 @@ public class StoryAudit : MonoBehaviour
         }
     }
 
+    // 从玩家背后拍，小黑在玩家身后 1.2 米，正好进画面
+    IEnumerator SnapDog(string file)
+    {
+        var p = boot.player;
+        var fwd = new Vector3(Mathf.Sin(p.yaw), 0f, Mathf.Cos(p.yaw));
+        var from = p.transform.position - fwd * 4.4f + Vector3.up * 1.8f;
+        var look = p.transform.position + Vector3.up * 0.55f;
+        yield return SnapFrom(file, from, look);
+    }
+
     // 全屏截图带 HUD，给评审看目标、教学提示、信纸和炉火
     IEnumerator Snap(string file)
     {
@@ -341,5 +383,13 @@ public class StoryAudit : MonoBehaviour
     void Update()
     {
         if (Time.deltaTime > 0f) { sumFps += 1f / Time.deltaTime; frames++; }
+        if (dog != null && dog.Bound && boot != null && boot.player != null && boot.world != null)
+        {
+            var dp = dog.transform.position;
+            var pp = boot.player.transform.position;
+            float gap = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
+            if (Time.timeScale > 0f) dogMax = Mathf.Max(dogMax, gap);
+            dogMinClear = Mathf.Min(dogMinClear, dp.y - boot.world.GroundAt(dp.x, dp.z));
+        }
     }
 }

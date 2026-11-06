@@ -100,6 +100,10 @@ public sealed class GameBootstrap : MonoBehaviour
         // 存档里已经点过火，重开时炉火和烟要还在
         if (effects != null && state.flags.Contains("oven_lit")) effects.Light();
 
+        // WP-12：小黑跟随；模型还没导入，先由场景里的灰盒视觉顶着
+        var dog = FindObjectOfType<DogFollower>();
+        if (dog != null) dog.Bind(player, world, state);
+
         // WP-09：扫描站默认隐藏；-scan 打开时才注册到互动服务
         var scan = FindObjectOfType<ScanStation>();
         if (scan != null)

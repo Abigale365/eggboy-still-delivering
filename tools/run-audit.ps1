@@ -32,7 +32,7 @@ try {
     } elseif ($Mode -eq 'story') {
         $argv += ' -storyaudit -resetsave'
         $files = @('story-audit.json', 'shots\story_boot.png', 'shots\story_wake.png', 'shots\story_pickup.png',
-                   'shots\story_bakery_letter.png', 'shots\story_oven.png')
+                   'shots\story_dog.png', 'shots\story_bakery_letter.png', 'shots\story_oven.png')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")

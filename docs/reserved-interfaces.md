@@ -27,6 +27,19 @@
 3. 把 `Features.scan` 打开（或保留 `-scan` 仅作调试）。
 4. 扫描结果走 `IModelProvider` 加载模型；`ScanStation` 只负责“拿数据”，不直接调网络。
 
+### 换成小黑的绑骨模型（WP-12）
+跟随逻辑只依赖 `DogVisual`（`Assets/TideTown/Runtime/Characters/DogVisual.cs`）：
+
+1. 把 `小黑_绑骨.glb` 导入 Unity，确认骨骼和 idle/walk/run/wag 动作都能播放。
+2. 写 `DogVisualGlb : DogVisual`，用 `Animation` 或 `Animator` 驱动，实现
+   `ApplyMotion(dt, speed, trot, wag, happy)`：走路、小跑、摇尾；表情只需开心。
+3. 在 `Assets/TideTown/Editor/IslandBuilder.cs` 的 `BuildDog` 里，把 `DogVisualGreybox` 换成
+   `DogVisualGlb`，根节点名字仍叫 `XIAOHEI`，`DogFollower` 不用改。
+4. 实时毛发（fur.bin）不移植，用贴图或少量外壳代替。
+5. GLB 的着色器参考物品模型注意事项：需要进 Always Included Shaders。
+
+`GameBootstrap` 里的 `dog.Bind(player, world, state)` 是唯一的接线点；存档、剧情和审计都不直接碰视觉实现。
+
 ### 打开/关闭
 - 运行：`TideTown.exe -scan`
 - 代码：`Features.scan = true`（必须在 `ScanStation.Awake` 之前，静态初始化已读命令行）

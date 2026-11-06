@@ -64,6 +64,21 @@ public sealed class InteractionService : MonoBehaviour
         best.Interact(s, this);
         return true;
     }
+
+    // 自动测试用固定 id，避免附近有回忆线索时点错最近的那个
+    public bool TryInteract(string entityId)
+    {
+        var s = state();
+        foreach (var it in items)
+        {
+            if (it.EntityId != entityId || !it.CanInteract(s)) continue;
+            if (string.IsNullOrEmpty(it.Prompt(s))) continue;
+            if (player != null && Vector3.Distance(player.transform.position, it.Position) > range) continue;
+            it.Interact(s, this);
+            return true;
+        }
+        return false;
+    }
 }
 
 public sealed class MailboxInteractable : IInteractable

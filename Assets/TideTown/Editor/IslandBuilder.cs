@@ -85,6 +85,7 @@ public static class IslandBuilder
             foreach (var b in layout.buildings) BuildBuilding(b, generated.transform, greybox);
         BuildScanStation(layout, generated.transform, scanMat);
         BuildMailbox(layout, generated.transform, Mat("MailboxRed", new Color32(0x9e, 0x2b, 0x25, 255)));
+        BuildBakeryProps(generated.transform);
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
@@ -575,6 +576,135 @@ public static class IslandBuilder
         var glow = go.AddComponent<MailboxGlow>();
         glow.Height = 1.6f;
         Debug.Log($"MAILBOX x={pos.x:F2} y={pos.y:F2} z={pos.z:F2} prefab={(prefab != null)} native_h={h:F2}");
+    }
+
+    // WP-11：面包店一带先用可辨认的灰盒占位（A1–A8 还没减面，见 progress WP-03）。
+    static void BuildBakeryProps(Transform parent)
+    {
+        var ta = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/TideTown/Data/Resources/Story/bakery.json");
+        if (ta == null) { Debug.LogWarning("BAKERY no bakery.json"); return; }
+        var list = JsonUtility.FromJson<BakeryList>(ta.text);
+        if (list == null || list.items == null) return;
+
+        var wood = Mat("BakeryWood", new Color32(0x8a, 0x62, 0x3e, 255));
+        var stoveMat = Mat("BakeryStove", new Color32(0x4a, 0x44, 0x40, 255));
+        var metal = Mat("BakeryMetal", new Color32(0x2c, 0x2c, 0x2c, 255));
+        var cream = Mat("BakeryCream", new Color32(0xe8, 0xd6, 0xb4, 255));
+        var red = Mat("BakeryRed", new Color32(0x9e, 0x35, 0x2b, 255));
+        var particle = ParticleMat();
+
+        foreach (var it in list.items)
+        {
+            var root = new GameObject("Bakery_" + it.id);
+            root.transform.SetParent(parent, false);
+            root.transform.position = new Vector3(it.x, it.y, it.z);
+            switch (it.id)
+            {
+                case "stall":
+                    Cube(root.transform, "table", new Vector3(0, 0.72f, 0), new Vector3(1.1f, 0.08f, 0.62f), wood);
+                    for (int i = 0; i < 4; i++)
+                        Cube(root.transform, "leg", new Vector3(i % 2 == 0 ? -0.47f : 0.47f, 0.36f, i < 2 ? -0.24f : 0.24f),
+                            new Vector3(0.07f, 0.72f, 0.07f), wood);
+                    Cube(root.transform, "matchbox", new Vector3(0.2f, 0.79f, 0), new Vector3(0.14f, 0.05f, 0.10f), red);
+                    break;
+                case "wood":
+                    for (int i = 0; i < 4; i++)
+                    {
+                        var log = Cyl(root.transform, "log", new Vector3((i % 2) * 0.13f - 0.065f, 0.07f + (i / 2) * 0.12f, 0f),
+                            new Vector3(0.12f, 0.25f, 0.12f), wood);
+                        log.transform.localRotation = Quaternion.Euler(0, 0, 90);
+                    }
+                    Cyl(root.transform, "strap", new Vector3(0, 0.17f, 0), new Vector3(0.30f, 0.02f, 0.30f), metal);
+                    break;
+                case "stove":
+                    Cube(root.transform, "body", new Vector3(0, 1.0f, 0), new Vector3(1.2f, 2.0f, 0.9f), stoveMat);
+                    Cube(root.transform, "mouth", new Vector3(0, 0.72f, -0.46f), new Vector3(0.55f, 0.45f, 0.04f), metal);
+                    Cube(root.transform, "shelf", new Vector3(0, 1.6f, 0.5f), new Vector3(1.3f, 0.08f, 0.2f), metal);
+                    var pipe = Cyl(root.transform, "pipe", new Vector3(0.3f, 2.9f, 0), new Vector3(0.18f, 0.9f, 0.18f), metal);
+                    pipe.transform.localScale = new Vector3(0.18f, 0.9f, 0.18f);
+                    var fx = root.AddComponent<BakeryEffects>();
+                    fx.chimneyTopLocalY = 3.7f;
+                    fx.ParticleMaterial = particle;
+                    break;
+                case "bell":
+                    Cyl(root.transform, "bell", new Vector3(0, 1.42f, 0), new Vector3(0.14f, 0.05f, 0.14f), metal);
+                    Cube(root.transform, "plate", new Vector3(0, 1.42f, -0.03f), new Vector3(0.2f, 0.12f, 0.03f), cream);
+                    break;
+                case "basket":
+                    Cyl(root.transform, "basket", new Vector3(0, 0.14f, 0), new Vector3(0.36f, 0.12f, 0.36f), wood);
+                    Cube(root.transform, "bread", new Vector3(0, 0.30f, 0), new Vector3(0.18f, 0.12f, 0.14f), cream);
+                    break;
+                case "scale":
+                    Cube(root.transform, "base", new Vector3(0, 0.05f, 0), new Vector3(0.34f, 0.1f, 0.3f), metal);
+                    Cyl(root.transform, "plate", new Vector3(0, 0.16f, 0), new Vector3(0.30f, 0.02f, 0.30f), cream);
+                    Cube(root.transform, "dial", new Vector3(0.1f, 0.26f, -0.08f), new Vector3(0.1f, 0.1f, 0.04f), cream);
+                    break;
+                case "recipe":
+                    Cube(root.transform, "book", new Vector3(0, 0.79f, 0), new Vector3(0.2f, 0.04f, 0.15f), cream);
+                    break;
+                case "flour":
+                    Cyl(root.transform, "sack", new Vector3(0, 0.3f, 0), new Vector3(0.5f, 0.3f, 0.4f), cream);
+                    Cube(root.transform, "knot", new Vector3(0, 0.62f, 0), new Vector3(0.12f, 0.08f, 0.12f), cream);
+                    break;
+            }
+
+            if (it.id == "bell" || it.id == "basket" || it.id == "scale" || it.id == "flour" || it.id == "wood")
+            {
+                var g = root.AddComponent<MailboxGlow>();
+                g.UseLight = false;
+                g.OrbSize = 0.1f;
+                g.Height = it.id == "bell" ? 1.35f : it.id == "flour" ? 0.6f : it.id == "wood" ? 0.25f : 0.3f;
+            }
+        }
+        Debug.Log($"BAKERY items={list.items.Length}");
+    }
+
+    static GameObject Cube(Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+        return go;
+    }
+
+    static GameObject Cyl(Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name;
+        UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+        return go;
+    }
+
+    // 粒子材质存成资产，打包后不会因为 Shader.Find 找不到而隐身
+    static Material ParticleMat()
+    {
+        string path = MatRoot + "/BakeryParticle.mat";
+        var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (m == null)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (sh == null) { Debug.LogWarning("PARTICLE shader missing"); return null; }
+            m = new Material(sh);
+            AssetDatabase.CreateAsset(m, path);
+        }
+        if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 1f);
+        if (m.HasProperty("_Blend")) m.SetFloat("_Blend", 0f);
+        if (m.HasProperty("_SrcBlend")) m.SetFloat("_SrcBlend", 5f);
+        if (m.HasProperty("_DstBlend")) m.SetFloat("_DstBlend", 10f);
+        if (m.HasProperty("_ZWrite")) m.SetFloat("_ZWrite", 0f);
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+        m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        m.renderQueue = 3000;
+        AssetDatabase.SaveAssets();
+        return m;
     }
 
     // 工程书 WP-05 第 4 步：未减面时建筑先用灰盒。按预览图的建筑框反推世界尺寸与位置。

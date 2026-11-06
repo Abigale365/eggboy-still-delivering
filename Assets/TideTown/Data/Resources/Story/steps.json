@@ -14,7 +14,33 @@
     },
     {
       "id": "B0_arrive",
-      "goal": "目标：去面包店",
+      "goal": "目标：走到面包店门前，读林阿婆的信",
+      "letter": "lin_oven",
+      "next": "B1_matches",
+      "at": "11",
+      "auto": true
+    },
+    {
+      "id": "B1_matches",
+      "goal": "目标：在门前摊位拿火柴盒",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "B2_wood",
+      "goal": "目标：去后院抱柴火捆",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "B3_load",
+      "goal": "目标：把柴火放进烤炉",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "B4_light",
+      "goal": "目标：点燃烤炉，让它暖一暖",
       "letter": "",
       "next": ""
     }

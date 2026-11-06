@@ -10,15 +10,17 @@ public class EggboyUI : MonoBehaviour
     public Action<ExprId> OnExpressionPicked;
     public Action OnLetterClosed;
     public bool LetterOpen { get; private set; }
-    Text letterTitle, letterBody, letterSign;
+    public bool legacyPrompt = true;   // 旧 Prototype 场景自己管邮筒提示；新框架交给 InteractionService
+    Text letterTitle, letterBody, letterSign, letterIntro1, letterIntro2, letterHint;
 
     const int RefW = 1280, RefH = 720;
     EggboyPlayer player;
     IEggboyWorld world;
     Font font;
     Canvas canvas;
-    Text goalText, promptText, lookText, tutorialText;
-    GameObject promptPanel, letterOverlay, tutorialPanel;
+    Text goalText, promptText, lookText, tutorialText, carryText, toastText;
+    GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel;
+    float toastUntil;
     readonly System.Collections.Generic.List<Image> faceBg = new System.Collections.Generic.List<Image>();
     readonly System.Collections.Generic.List<Text> faceLabel = new System.Collections.Generic.List<Text>();
     ExprId activeExpr = ExprId.happy;
@@ -74,6 +76,12 @@ public class EggboyUI : MonoBehaviour
         tutorialText = Label(tutPanel.transform, "", 14, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleLeft, 13, -3, 594, 24, false);
         tutorialPanel = tutPanel.gameObject;
         tutorialPanel.SetActive(false);
+
+        // 邮包 / 手上的东西（WP-11 火柴盒、柴火捆）
+        var carry = Panel(root, 18, -156, 300, 30, new Color32(0x3b, 0x2a, 0x1a, 185));
+        carryText = Label(carry.transform, "", 14, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleLeft, 13, -3, 274, 24, false);
+        carryPanel = carry.gameObject;
+        carryPanel.SetActive(false);
 
         // 渲染标签
         var look = Panel(root, -18, -14, 150, 32, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
@@ -147,6 +155,14 @@ public class EggboyUI : MonoBehaviour
         SetRect(promptText.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 320, 34);
         promptPanel.SetActive(false);
 
+        // 邮戳 / 道具提示，几秒后自己收
+        var toast = Panel(root, 0, 0, 420, 38, new Color32(0x3b, 0x2a, 0x1a, 235), true, true);
+        SetRect(toast.rectTransform, 0.5f, 0f, 0.5f, 0f, 0, 158, 420, 38);
+        toastText = Label(toast.transform, "", 16, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleCenter, 0, 0, 400, 32, false);
+        SetRect(toastText.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 400, 32);
+        toastPanel = toast.gameObject;
+        toastPanel.SetActive(false);
+
         BuildLetter(root);
     }
 
@@ -177,14 +193,14 @@ public class EggboyUI : MonoBehaviour
             line.raycastTarget = false;
         }
 
-        Label(paper.transform, "你从邮筒里取出了三封信：", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 30, -24, 500, 24, false);
-        Label(paper.transform, "· 致 面包店的烤炉\n· 致 小黑\n· 致 灯塔", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 44, -50, 480, 62, false);
+        letterIntro1 = Label(paper.transform, "你从邮筒里取出了三封信：", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 30, -24, 500, 24, false);
+        letterIntro2 = Label(paper.transform, "· 致 面包店的烤炉\n· 致 小黑\n· 致 灯塔", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 44, -50, 480, 62, false);
         letterTitle = Label(paper.transform, "面包店的烤炉", 24, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 30, -120, 500, 34, true);
         letterBody = Label(paper.transform,
             "老伙计：\n\n四十二年，你每天早上五点就热起来，比我还早。\n搬家的卡车装不下你，我只带走了你烤的最后一炉面包，路上就吃完了。\n新城的面包都用电炉烤，没有味道。\n\n邮差，如果你读到这里，请帮我再生一次火。\n不用烤什么，让它暖一暖就好。",
             18, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 30, -162, 500, 320, false);
         letterSign = Label(paper.transform, "——林阿婆", 19, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperRight, 30, -486, 500, 30, false);
-        Label(paper.transform, "点一下或按 E 收起信", 12, new Color32(0xa0, 0x8a, 0x6a, 255), TextAnchor.MiddleCenter, 30, -572, 500, 24, false);
+        letterHint = Label(paper.transform, "点一下或按 E 收起信", 12, new Color32(0xa0, 0x8a, 0x6a, 255), TextAnchor.MiddleCenter, 30, -572, 500, 24, false);
     }
 
     public void SetGoal(string text)
@@ -225,6 +241,22 @@ public class EggboyUI : MonoBehaviour
 
     public void SetLetterTaken(bool taken) => letterTaken = taken;
 
+    public void SetCarried(string text)
+    {
+        if (carryPanel == null) return;
+        bool on = !string.IsNullOrEmpty(text);
+        if (on && carryText != null) carryText.text = text;
+        carryPanel.SetActive(on);
+    }
+
+    public void ShowToast(string text)
+    {
+        if (toastPanel == null) return;
+        if (toastText != null) toastText.text = text;
+        toastPanel.SetActive(true);
+        toastUntil = Time.unscaledTime + 4.5f;
+    }
+
     public void ShowLetter()
     {
         if (letterOverlay == null) return;
@@ -237,10 +269,40 @@ public class EggboyUI : MonoBehaviour
     // WP-07：信正文从 Resources/Story/letters.json 读，旧场景仍可调无参版本
     public void ShowLetter(string title, string body, string sign)
     {
+        Chrome(true, true, "点一下或按 E 收起信");
+        Fill(title, body, sign);
+        ShowLetter();
+    }
+
+    // B0 重读单封信：不显示“三封信”的清单
+    public void ShowLetterDetail(string title, string body, string sign)
+    {
+        Chrome(false, true, "点一下或按 E 收起信");
+        Fill(title, body, sign);
+        ShowLetter();
+    }
+
+    // WP-11 回忆线索：没有落款，用“回忆 · 门铃”做标题
+    public void ShowMemory(string title, string body)
+    {
+        Chrome(false, false, "点一下或按 E 收起");
+        Fill(title, body, null);
+        ShowLetter();
+    }
+
+    void Fill(string title, string body, string sign)
+    {
         if (letterTitle != null && !string.IsNullOrEmpty(title)) letterTitle.text = title;
         if (letterBody != null && !string.IsNullOrEmpty(body)) letterBody.text = body;
         if (letterSign != null && !string.IsNullOrEmpty(sign)) letterSign.text = sign;
-        ShowLetter();
+    }
+
+    void Chrome(bool list, bool sign, string hint)
+    {
+        if (letterIntro1 != null) letterIntro1.gameObject.SetActive(list);
+        if (letterIntro2 != null) letterIntro2.gameObject.SetActive(list);
+        if (letterSign != null) letterSign.gameObject.SetActive(sign);
+        if (letterHint != null && hint != null) letterHint.text = hint;
     }
 
     public void CloseLetter()
@@ -253,6 +315,8 @@ public class EggboyUI : MonoBehaviour
 
     void Update()
     {
+        if (toastPanel != null && toastPanel.activeSelf && Time.unscaledTime >= toastUntil)
+            toastPanel.SetActive(false);
         if (player == null || world == null) return;
         if (LetterOpen)
         {
@@ -260,6 +324,7 @@ public class EggboyUI : MonoBehaviour
                 CloseLetter();
             return;
         }
+        if (!legacyPrompt) return;
         bool near = Vector3.Distance(player.transform.position, world.MailboxPos) < 1.4f;
         SetPrompt(near && !letterTaken ? "E　取信" : null);
     }

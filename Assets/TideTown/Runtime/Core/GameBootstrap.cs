@@ -64,7 +64,8 @@ public sealed class GameBootstrap : MonoBehaviour
         service = gameObject.AddComponent<InteractionService>();
         service.Init(player, ui, gate, () => state);
         director = gameObject.AddComponent<StoryDirector>();
-        director.Init(player, ui, state, store, gate);
+        director.Init(player, ui, state, store, gate, water);
+        ui.legacyPrompt = false;
 
         var asset = Resources.Load<TextAsset>("World/route");
         if (asset != null)
@@ -79,6 +80,25 @@ public sealed class GameBootstrap : MonoBehaviour
                         break;
                     }
         }
+
+        // WP-11：面包店的摊位、柴火、烤炉和 A4–A8 回忆线索
+        var effects = FindObjectOfType<BakeryEffects>();
+        foreach (var item in BakeryData.Load())
+        {
+            var pos = new Vector3(item.x, item.y, item.z);
+            switch (item.id)
+            {
+                case "stall": service.Register(new StallInteractable(pos, director)); break;
+                case "wood": service.Register(new WoodInteractable(pos, director)); break;
+                case "stove": service.Register(new StoveInteractable(pos, director, effects)); break;
+                default:
+                    if (!string.IsNullOrEmpty(item.text))
+                        service.Register(new MemoryInteractable(pos, director, item.id, item.label, item.text));
+                    break;
+            }
+        }
+        // 存档里已经点过火，重开时炉火和烟要还在
+        if (effects != null && state.flags.Contains("oven_lit")) effects.Light();
 
         // WP-09：扫描站默认隐藏；-scan 打开时才注册到互动服务
         var scan = FindObjectOfType<ScanStation>();

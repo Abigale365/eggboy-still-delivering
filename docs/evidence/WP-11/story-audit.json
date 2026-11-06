@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "steps": { "P0_boot": true, "P1_mailbox": true, "B0_arrive": true, "B1_matches": true, "B2_wood": true, "B3_load": true, "B4_light": true },
+  "intro": { "ran": true, "seconds": 4.7, "start_expr": "sleepy", "end_expr": "happy", "face_ok": true, "shots": ["story_boot.png", "story_wake.png"] },
+  "pickup_seconds": 6.8,
+  "pickup_within_30s": true,
+  "bakery": { "seconds": 11.2, "auto_letter": true, "memory": true, "matches": true, "wood": true, "loaded": true, "lit": true, "stamp": true, "water_l1": true, "smoke": true, "fire_particles": 33, "smoke_particles": 42, "fire_visible": true, "smoke_visible": true, "shots": ["story_bakery_letter.png", "story_oven.png"] },
+  "save_reload": true,
+  "letter_open": true,
+  "move_locked": true,
+  "no_repeat": true,
+  "avg_fps": 289.4,
+  "errors": ""
+}

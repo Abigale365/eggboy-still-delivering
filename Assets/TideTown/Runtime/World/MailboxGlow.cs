@@ -4,6 +4,9 @@ using UnityEngine;
 public sealed class MailboxGlow : MonoBehaviour
 {
     public float Height = 1.6f;
+    public float OrbSize = 0.22f;      // 回忆线索用小一点的球
+    public float LightIntensity = 1.3f;
+    public bool UseLight = true;
 
     Light lamp;
     Transform orb;
@@ -21,7 +24,7 @@ public sealed class MailboxGlow : MonoBehaviour
             Destroy(orbGo.GetComponent<Collider>());
             orbGo.transform.SetParent(transform, false);
             orbGo.transform.localPosition = new Vector3(0f, Height + 0.25f, 0f);
-            orbGo.transform.localScale = Vector3.one * 0.22f;
+            orbGo.transform.localScale = Vector3.one * OrbSize;
             var mat = new Material(shader) { name = "MailboxGlowOrb" };
             var warm = new Color(1f, 0.78f, 0.36f, 1f);
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", warm);
@@ -33,11 +36,12 @@ public sealed class MailboxGlow : MonoBehaviour
         var lightGo = new GameObject("MailboxGlowLight");
         lightGo.transform.SetParent(transform, false);
         lightGo.transform.localPosition = new Vector3(0f, Height + 0.1f, 0f);
+        if (!UseLight) return;
         lamp = lightGo.AddComponent<Light>();
         lamp.type = LightType.Point;
         lamp.color = new Color(1f, 0.76f, 0.4f);
         lamp.range = 3.2f;
-        lamp.intensity = 1.3f;
+        lamp.intensity = LightIntensity;
         lamp.shadows = LightShadows.None;
     }
 
@@ -45,7 +49,7 @@ public sealed class MailboxGlow : MonoBehaviour
     {
         t += Time.deltaTime;
         float k = 0.5f + 0.5f * Mathf.Sin(t * 2.1f);
-        if (lamp != null) lamp.intensity = 1.0f + k * 0.7f;
-        if (orb != null) orb.localScale = Vector3.one * (0.18f + k * 0.06f);
+        if (lamp != null) lamp.intensity = (1.0f + k * 0.7f) * LightIntensity / 1.3f;
+        if (orb != null) orb.localScale = Vector3.one * OrbSize * (0.82f + k * 0.28f);
     }
 }

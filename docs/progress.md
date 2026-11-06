@@ -5,9 +5,9 @@
 | 工作包 | 内容 | 依赖 | 状态 | 负责 | 更新时间 | 备注 |
 |---|---|---|---|---|---|---|
 | WP-00 | 基线和版本管理 | 无 | done | A(agent) | 2026-11-06 12:52 | 基线 ba7236e；NATIVE_WINDOWS/NATIVE_WEBGL Succeeded errors=0；routeaudit passed 12/12；证据 docs/evidence/WP-00 |
-| WP-01 | 自动化工具 | WP-00 | doing | A(agent) | 2026-11-06 13:00 | |
-| WP-02 | 比例表和素材登记 | WP-00 | todo | B | | |
-| WP-03 | 素材瘦身 | WP-02 | todo | B | | |
+| WP-01 | 自动化工具 | WP-00 | done | A(agent) | 2026-11-06 13:20 | TideBuild.All 成功（场景哈希不变）；-shot preview 出图；routeaudit 12/12；证据 docs/evidence/WP-01 |
+| WP-02 | 比例表和素材登记 | WP-00 | done | B(agent) | 2026-11-06 13:10 | Data/scale_table.json 41/41 对上 town_assets；docs/assets.md 已建；B8/S10/D4N 记为缺失 |
+| WP-03 | 素材瘦身 | WP-02 | blocked | B | 2026-11-06 13:10 | 用户 2026-11-06 决定暂不减面 |
 | WP-04 | 世界布局数据 | WP-02 | todo | B | | |
 | WP-05 | 生成岛 | WP-01, WP-04 | todo | B | | |
 | WP-06 | 接入移动（M1） | WP-05 | todo | A | | |

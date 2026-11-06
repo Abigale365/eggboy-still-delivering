@@ -712,7 +712,72 @@ public static partial class IslandBuilder
         info.category = "Buildings";
         info.sourceFile = "greybox";
         info.size = new Vector3(w, h, d);
+        AttachBuildingVisual(b, go, parent, center, w, h, d, info);
         Debug.Log($"GREYBOX {b.instance} w={w:F2} h={h:F2} d={d:F2} pos=({center.x:F2},{center.z:F2})");
+    }
+
+    // 优化阶段4：保留灰盒碰撞和审计逻辑，真 prefab 只负责视觉。
+    // LODGroup：近景真模型（不减面，原网格不动），远景复用灰盒当 LOD1，压住同屏面数。
+    static void AttachBuildingVisual(Bld b, GameObject go, Transform parent, Vector3 center, float w, float h, float d, TownAssetInfo info)
+    {
+        string prefabPath = BuildingPrefabPath(b.instance);
+        var prefab = prefabPath != null ? AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) : null;
+        if (prefab == null) return;
+
+        var visualRoot = new GameObject(b.instance + "_visual");
+        visualRoot.transform.SetParent(parent, false);
+        visualRoot.transform.position = center;
+        var visual = (GameObject)PrefabUtility.InstantiatePrefab(prefab, visualRoot.transform);
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.identity;
+        if (b.mirror) visual.transform.localScale = new Vector3(-1f, 1f, 1f);
+        // 碰撞只由灰盒负责；prefab 自带的碰撞体会挡住取信/路线审计
+        foreach (var c in visual.GetComponentsInChildren<Collider>()) UnityEngine.Object.DestroyImmediate(c);
+
+        // 精修 GLB 里的 COL_* / invisible 是碰撞代理网格，不能渲染（否则立面变成黑盒子）
+        var rends = new List<Renderer>();
+        foreach (var r in visual.GetComponentsInChildren<Renderer>())
+        {
+            bool invisible = r.gameObject.name.StartsWith("COL", StringComparison.OrdinalIgnoreCase)
+                || r.gameObject.name.IndexOf("invisible", StringComparison.OrdinalIgnoreCase) >= 0
+                || (r.sharedMaterial != null && r.sharedMaterial.name.IndexOf("invisible", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (invisible) { r.enabled = false; continue; }
+            rends.Add(r);
+        }
+        if (rends.Count == 0) { UnityEngine.Object.DestroyImmediate(visualRoot); return; }
+        Bounds vb = rends[0].bounds;
+        foreach (var r in rends) vb.Encapsulate(r.bounds);
+        if (vb.size.y <= 0.001f) { UnityEngine.Object.DestroyImmediate(visualRoot); return; }
+
+        float s = h / vb.size.y;
+        if (vb.size.x * s > w * 1.15f) s = w * 1.15f / vb.size.x;
+        if (vb.size.z * s > d * 1.15f) s = d * 1.15f / vb.size.z;
+        visual.transform.localScale *= s;
+
+        vb = rends[0].bounds;
+        foreach (var r in rends) vb.Encapsulate(r.bounds);
+        visualRoot.transform.position += new Vector3(center.x - vb.center.x, (center.y - h * 0.5f) - vb.min.y, center.z - vb.center.z);
+
+        var lod = go.AddComponent<LODGroup>();
+        lod.SetLODS(new[] { new LOD(0.04f, rends.ToArray()), new LOD(0.005f, new[] { go.GetComponent<Renderer>() }) });
+        lod.RecalculateBounds();
+        info.sourceFile = prefabPath;
+    }
+
+    static string BuildingPrefabPath(string instance)
+    {
+        switch (instance)
+        {
+            case "B1_post_office": return ArtRoot + "/Buildings/B1_邮局_分享包版.prefab";
+            case "B2_bakery": return ArtRoot + "/Buildings/B2_面包店_分享包版.prefab";
+            case "B3_school": return ArtRoot + "/Buildings/B3_小学校舍_精修版.prefab";
+            case "B4_lighthouse": return ArtRoot + "/Buildings/B4_灯塔_分享包版.prefab";
+            case "B5_boathouse": return ArtRoot + "/Buildings/B5_船棚_分享包版.prefab";
+            case "B6_house14":
+            case "B6_house16": return ArtRoot + "/Buildings/B6_瓦房_分享包版.prefab";
+            case "B7_house15": return ArtRoot + "/Buildings/B7_木板房_分享包版.prefab";
+            default: return null;
+        }
     }
 
     static float Pitch() { return previewCam.euler[0] * Mathf.Deg2Rad; }

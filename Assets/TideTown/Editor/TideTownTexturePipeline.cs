@@ -131,6 +131,69 @@ public class TideTownTexturePipeline
         Debug.Log("TEX rebound prefabs " + rebound);
     }
 
+    // 性能优化（不减面）：只改导入设置、不重建材质。B 开头建筑保留 2K，其余小道具/街道纹理上限 1024。
+    [MenuItem("潮汐镇/资产/小道具贴图上限 1024（性能）")]
+    public static void CapPropTextures()
+    {
+        int capped = 0;
+        foreach (var dir in Directory.GetDirectories(ArtRoot + "/Textures"))
+        {
+            string id = Path.GetFileName(dir);
+            if (id.StartsWith("B")) continue;
+            foreach (var file in Directory.GetFiles(dir, "*.png"))
+            {
+                string path = file.Replace('\\', '/');
+                var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+                if (ti == null || ti.maxTextureSize <= 1024) continue;
+                ti.maxTextureSize = 1024;
+                ti.SaveAndReimport();
+                capped++;
+            }
+        }
+        Debug.Log($"TEX cap1024 done, changed={capped}");
+        AssetDatabase.Refresh();
+    }
+
+    // 部分 GLB 的立面是单面墙且法线朝内，外侧看是黑面；双面渲染修正（只改材质 _Cull，不动网格）
+    [MenuItem("潮汐镇/资产/建筑立面双面渲染修正")]
+    public static void DoubleSidedBuildingMaterials()
+    {
+        int changed = 0;
+        foreach (var path in Directory.GetFiles(ArtRoot + "/Materials", "*.mat", SearchOption.AllDirectories))
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) continue;
+            bool dirty = false;
+            if (mat.HasProperty("_Cull") && !Mathf.Approximately(mat.GetFloat("_Cull"), 0f)) { mat.SetFloat("_Cull", 0f); dirty = true; }
+            if (mat.HasProperty("_BUILTIN_CullMode") && !Mathf.Approximately(mat.GetFloat("_BUILTIN_CullMode"), 0f)) { mat.SetFloat("_BUILTIN_CullMode", 0f); dirty = true; }
+            if (!dirty) continue;
+            EditorUtility.SetDirty(mat);
+            changed++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"TEX doubleSided done, changed={changed}");
+    }
+
+    // 部分 GLB 省略 metallicFactor（glTF 默认=1 全金属），转换后立面发黑；建筑是非金属，直接归零
+    [MenuItem("潮汐镇/资产/建筑材质非金属化（修黑立面）")]
+    public static void NormalizeBuildingMaterials()
+    {
+        int changed = 0;
+        foreach (var path in Directory.GetFiles(ArtRoot + "/Materials", "*.mat", SearchOption.AllDirectories))
+        {
+            string dir = Path.GetFileName(Path.GetDirectoryName(path));
+            if (!dir.StartsWith("B")) continue;
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) continue;
+            if (mat.HasProperty("metallicFactor")) mat.SetFloat("metallicFactor", 0f);
+            if (mat.HasProperty("roughnessFactor")) mat.SetFloat("roughnessFactor", 0.85f);
+            EditorUtility.SetDirty(mat);
+            changed++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"TEX nonMetal done, changed={changed}");
+    }
+
     static void Mark(Model m, HashSet<string> set, int idx)
     {
         if (idx < 0) return;

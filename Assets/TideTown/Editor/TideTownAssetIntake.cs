@@ -25,6 +25,15 @@ public class TideTownAssetIntake
         Build(true);
     }
 
+    // 法线修复后的单件重建：只重新生成 B3/B6/B7 三个 prefab，其他资产不动
+    static string[] OnlyIds;
+    public static void BuildNormalsFixed()
+    {
+        OnlyIds = new[] { "B3_小学校舍_精修版", "B6_瓦房_分享包版", "B7_木板房_分享包版" };
+        Build(false);
+        OnlyIds = null;
+    }
+
     static void Build(bool testOnly)
     {
         EnsureDir(ArtRoot);
@@ -40,6 +49,7 @@ public class TideTownAssetIntake
             string rel = file.Replace('\\', '/');
             if (testOnly && !rel.Contains("/Test/")) continue;
             string id = Path.GetFileNameWithoutExtension(file);
+            if (OnlyIds != null && System.Array.IndexOf(OnlyIds, id) < 0) continue;
             string category = CategoryOf(id);
             if (category == "Characters")
             {

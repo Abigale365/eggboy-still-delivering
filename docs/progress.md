@@ -13,7 +13,7 @@
 | WP-06 | 接入移动（M1） | WP-05 | done | A(agent) | 2026-11-06 17:10 | 真实 Move 1 倍速 28/28、离地 0 帧；5.7 回归通过；证据 docs/evidence/WP-06。未验证：WebGL、镜头实跑、05 号鞋底截图被挡。详见 docs/handoff-wp06-20261106.md |
 | WP-07 | 互动、任务、存档 | WP-06 | done | A(agent) | 2026-11-06 17:45 | storyaudit passed：取信/读信锁/不重复/存档重开；旧扩展场景 routeaudit 12/12；证据 docs/evidence/WP-07 |
 | WP-08 | 海水和水位 | WP-06 | done | A(agent) | 2026-11-06 18:58 | wateraudit passed：五档 L0-L4 截图、4 s 涨水单调且镜头抬高 1.1 m、木箱区真实 Move 走通（waterFrames=0）、码头掉水 0 s 回安全点；L0 路线回归 28/28；Windows+WebGL 构建成功且 WebGL 编译了 TideTown/Water。证据 docs/evidence/WP-08。未验证：WebGL 浏览器实跑画面 |
-| WP-09 | 预留接口 | WP-07 | todo | A | | |
+| WP-09 | 预留接口 | WP-07 | done | A(agent) | 2026-11-06 19:20 | scanaudit passed：Features.scan=false 时站子不可见不注册，打开后可见、提示“暂未开放”；storyaudit 1.7 s 通过，路线回归 28/28；无联网代码；说明 docs/reserved-interfaces.md，证据 docs/evidence/WP-09 |
 | WP-10 | 序章 | WP-07, WP-08, WP-09 | todo | A | | |
 | WP-11 | 面包店（M3） | WP-10 | todo | A | | |
 | WP-12 | 小黑入工程 | WP-06 | todo | A | | |

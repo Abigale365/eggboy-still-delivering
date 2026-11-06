@@ -186,6 +186,8 @@ public class EggboyUI : MonoBehaviour
         if (goalText != null) goalText.text = text;
     }
 
+    public string PromptText => promptText != null && promptPanel != null && promptPanel.activeSelf ? promptText.text : "";
+
     public void SetPrompt(string text)
     {
         if (promptPanel == null) return;

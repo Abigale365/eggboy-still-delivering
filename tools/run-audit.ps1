@@ -4,7 +4,7 @@
 # Old result files are deleted first, so a result can only come from this run.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [ValidateSet('route','shot','water')][string]$Mode = 'route',
+    [ValidateSet('route','shot','water','scan','story')][string]$Mode = 'route',
     [string]$Shot = 'preview',
     [switch]$IdPass,
     [string]$OutDir = '',
@@ -26,6 +26,12 @@ try {
     } elseif ($Mode -eq 'water') {
         $argv += ' -wateraudit'
         $files = @('water-audit.json', 'shots\water_L0.png', 'shots\water_L1.png', 'shots\water_L2.png', 'shots\water_L3.png', 'shots\water_L4.png')
+    } elseif ($Mode -eq 'scan') {
+        $argv += ' -scanaudit'
+        $files = @('scan-audit.json')
+    } elseif ($Mode -eq 'story') {
+        $argv += ' -storyaudit -resetsave'
+        $files = @('story-audit.json')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")
@@ -84,6 +90,16 @@ try {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'water-audit.json'))
         Write-Host $content
         if ($content -notmatch '"status":"passed"') { exit 2 }
+    }
+    if ($Mode -eq 'scan') {
+        $content = [IO.File]::ReadAllText((Join-Path $dir 'scan-audit.json'))
+        Write-Host $content
+        if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
+    }
+    if ($Mode -eq 'story') {
+        $content = [IO.File]::ReadAllText((Join-Path $dir 'story-audit.json'))
+        Write-Host $content
+        if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
     }
 }
 finally { Exit-ProjectLock $lock }

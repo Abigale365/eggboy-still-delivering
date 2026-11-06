@@ -66,6 +66,7 @@ public static class IslandBuilder
         var trunk = Mat("IslandTrunk", new Color32(0x6b, 0x4d, 0x31, 255));
         var crate = Mat("IslandCrate", new Color32(0x8a, 0x66, 0x42, 255));
         var greybox = Mat("IslandBuildingGrey", new Color32(0xb4, 0xb4, 0xb4, 255));
+        var scanMat = Mat("IslandScan", new Color32(0xd8, 0xd2, 0xc4, 255));
 
         if (layout.coast != null)
             BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, grass, cliff);
@@ -82,6 +83,7 @@ public static class IslandBuilder
         footprints.Clear();
         if (layout.buildings != null)
             foreach (var b in layout.buildings) BuildBuilding(b, generated.transform, greybox);
+        BuildScanStation(layout, generated.transform, scanMat);
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
@@ -503,6 +505,31 @@ public static class IslandBuilder
             fc.size = size;
             Debug.Log($"CRATE {i} x={xs[i]:F3} bed={bed:F2}");
         }
+    }
+
+    static void BuildScanStation(Layout layout, Transform parent, Material mat)
+    {
+        // 工程书 WP-09：扫描站放邮局门口，显示与否由 Features.scan 决定。
+        Bld post = null;
+        if (layout.buildings != null)
+            foreach (var b in layout.buildings)
+                if (b.instance != null && b.instance.Contains("post_office")) { post = b; break; }
+        if (post == null) throw new Exception("没有 post_office，扫描站没地方放");
+        float x = post.x, z = post.z - 1.0f; // 邮局正面朝 -z，站位 07 在门前
+        float y = GroundY(x, z);
+        if (y <= 0.2f) throw new Exception($"扫描站没落到地面：{x:F2},{z:F2}");
+        var go = new GameObject("ScanStation");
+        go.transform.SetParent(parent, false);
+        go.transform.position = new Vector3(x, y, z);
+        var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        body.name = "Body";
+        body.transform.SetParent(go.transform, false);
+        body.transform.localPosition = new Vector3(0f, 0.55f, 0f);
+        body.transform.localScale = new Vector3(0.7f, 1.1f, 0.5f);
+        UnityEngine.Object.DestroyImmediate(body.GetComponent<BoxCollider>()); // 预留物，不挡路
+        body.GetComponent<Renderer>().sharedMaterial = mat;
+        go.AddComponent<ScanStation>();
+        Debug.Log($"SCANSTATION x={x:F2} y={y:F2} z={z:F2}");
     }
 
     // 工程书 WP-05 第 4 步：未减面时建筑先用灰盒。按预览图的建筑框反推世界尺寸与位置。

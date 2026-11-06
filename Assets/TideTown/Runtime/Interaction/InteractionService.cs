@@ -5,6 +5,7 @@ using UnityEngine;
 public interface IInteractable
 {
     string EntityId { get; }
+    Vector3 Position { get; }
     string Prompt(GameState s);      // 空串表示不显示
     bool CanInteract(GameState s);
     void Interact(GameState s, InteractionService svc);
@@ -27,6 +28,7 @@ public sealed class InteractionService : MonoBehaviour
     }
 
     public void Register(IInteractable item) { if (!items.Contains(item)) items.Add(item); }
+    public bool IsRegistered(IInteractable item) => items.Contains(item);
 
     void Update()
     {
@@ -38,9 +40,7 @@ public sealed class InteractionService : MonoBehaviour
         float bestD = range;
         foreach (var it in items)
         {
-            var mb = it as MailboxInteractable;
-            if (mb == null) continue;
-            float d = Vector3.Distance(player.transform.position, mb.Position);
+            float d = Vector3.Distance(player.transform.position, it.Position);
             if (d < bestD && !string.IsNullOrEmpty(it.Prompt(s)))
             {
                 bestD = d; best = it;
@@ -57,9 +57,7 @@ public sealed class InteractionService : MonoBehaviour
         IInteractable best = null; float bestD = range;
         foreach (var it in items)
         {
-            var mb = it as MailboxInteractable;
-            if (mb == null) continue;
-            float d = Vector3.Distance(player.transform.position, mb.Position);
+            float d = Vector3.Distance(player.transform.position, it.Position);
             if (d < bestD && it.CanInteract(s) && !string.IsNullOrEmpty(it.Prompt(s))) { bestD = d; best = it; }
         }
         if (best == null) return false;
@@ -70,7 +68,7 @@ public sealed class InteractionService : MonoBehaviour
 
 public sealed class MailboxInteractable : IInteractable
 {
-    public Vector3 Position;
+    public Vector3 Position { get; }
     StoryDirector director;
     public MailboxInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
     public string EntityId => "mailbox_03";

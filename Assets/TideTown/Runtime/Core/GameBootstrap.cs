@@ -71,10 +71,20 @@ public sealed class GameBootstrap : MonoBehaviour
                     }
         }
 
+        // WP-09：扫描站默认隐藏；-scan 打开时才注册到互动服务
+        var scan = FindObjectOfType<ScanStation>();
+        if (scan != null)
+        {
+            scan.SetEnabled(Features.scan);
+            if (Features.scan) service.Register(scan);
+        }
+
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-storyaudit"))
             gameObject.AddComponent<StoryAudit>().Begin(this);
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-wateraudit"))
             gameObject.AddComponent<WaterAudit>().Begin(this);
+        if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-scanaudit"))
+            gameObject.AddComponent<ScanAudit>().Begin(this);
         initialized = true;
     }
 }

@@ -545,10 +545,19 @@ public sealed class StoryDirector : MonoBehaviour
         if (water != null) water.SetLevel("L4", 4f);
         var chase = FindObjectOfType<ChaseCamera>();
         if (chase != null) chase.enabled = false;
+        // 回望是背光面，黎明主光只有 0.55 强度，灰盒房全黑；过场期间加一盏顺镜头的补光，结束即销毁
+        var fill = new GameObject("EndingFillLight");
+        var fillLight = fill.AddComponent<Light>();
+        fillLight.type = LightType.Directional;
+        fillLight.color = new Color32(255, 226, 196, 255);
+        fillLight.intensity = 0.45f;
+        fillLight.shadows = LightShadows.None;
+        fill.transform.rotation = Quaternion.LookRotation(new Vector3(4.0f, 0.8f, -3.0f) - new Vector3(-23.0f, 14.6f, 19.5f), Vector3.up);
         yield return MoveCamera(new Vector3(-23.0f, 14.6f, 19.5f), new Vector3(4.0f, 0.8f, -3.0f), 1.6f);
         Mark("E2cam");
         yield return new WaitForSecondsRealtime(8f);
         Mark("E2wait");
+        Destroy(fill);
         if (chase != null && player != null)
         {
             chase.enabled = true;

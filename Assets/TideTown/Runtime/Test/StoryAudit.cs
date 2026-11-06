@@ -128,6 +128,7 @@ public class StoryAudit : MonoBehaviour
         float bakeryAt = Time.realtimeSinceStartup;
         bool b0Auto = false, memoryOk = false, matchesOk = false, woodOk = false, loadOk = false;
         bool litOk = false, stampOk = false, waterOk = false, smokeOk = false;
+        bool fireVisibleOven = false, smokeVisibleOven = false;
         BakeryEffects fx = null;
         if (status == "passed")
         {
@@ -222,6 +223,8 @@ public class StoryAudit : MonoBehaviour
                 else { status = "load_failed"; error = "step=" + boot.state.step + " carry=" + boot.state.carrying; }
             }
             if (status == "passed") yield return SnapFrom("story_oven.png", new Vector3(0.5f, 6.2f, -11.5f), new Vector3(-2.2f, 4.8f, -1.5f));
+            // 火苗/烟的可见性必须在对准烤炉的镜头下采样；放到结尾采样时相机已离开，isVisible 恒为 false
+            if (fx != null) { fireVisibleOven = fx.FireVisible; smokeVisibleOven = fx.SmokeVisible; }
         }
 
         if (status == "passed" && !(litOk && stampOk && waterOk && smokeOk))
@@ -658,8 +661,8 @@ public class StoryAudit : MonoBehaviour
                   + ", \"smoke\": " + (smokeOk ? "true" : "false")
                   + ", \"fire_particles\": " + (fx != null ? fx.FireCount : 0)
                   + ", \"smoke_particles\": " + (fx != null ? fx.SmokeCount : 0)
-                  + ", \"fire_visible\": " + (fx != null && fx.FireVisible ? "true" : "false")
-                  + ", \"smoke_visible\": " + (fx != null && fx.SmokeVisible ? "true" : "false")
+                  + ", \"fire_visible\": " + (fireVisibleOven ? "true" : "false")
+                  + ", \"smoke_visible\": " + (smokeVisibleOven ? "true" : "false")
                   + ", \"shots\": [\"story_bakery_letter.png\", \"story_oven.png\"] },");
         sb.AppendLine("  \"school\": { \"seconds\": " + schoolSecs.ToString("F1")
                   + ", \"auto_letter\": " + (s0Auto ? "true" : "false")

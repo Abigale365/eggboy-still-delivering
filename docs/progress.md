@@ -26,7 +26,7 @@
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |
 | WP-20 | 声音 | WP-11 | todo | B | | |
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |
-| WP-22 | 全流程 QA | WP-15, WP-16 | todo | A+B | | |
+| WP-22 | 全流程 QA | WP-15, WP-16 | doing | A(agent) | 2026-11-07 02:00 | 接手自 TRAE 交接（基线 7d2c242）；先跑 story/route/map 回归，再做 WebGL 浏览器验证和 known-issues |
 | WP-23 | 部署（M7） | WP-21，用户确定位置 | todo | A | | |
 | WP-24 | 报告 | WP-15 | todo | B | | |
 | WP-25 | 视频和发布包（M8） | WP-22 | todo | B | | |

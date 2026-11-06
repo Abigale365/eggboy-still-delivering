@@ -112,7 +112,7 @@ public class ShotTool : MonoBehaviour
         Application.Quit();
     }
 
-    static IEnumerator Capture(Camera cam, int w, int h, string path)
+    public static IEnumerator Capture(Camera cam, int w, int h, string path)
     {
         var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB) { antiAliasing = 1 };
         cam.allowMSAA = false;

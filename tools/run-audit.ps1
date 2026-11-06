@@ -4,7 +4,7 @@
 # Old result files are deleted first, so a result can only come from this run.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [ValidateSet('route','shot')][string]$Mode = 'route',
+    [ValidateSet('route','shot','water')][string]$Mode = 'route',
     [string]$Shot = 'preview',
     [switch]$IdPass,
     [string]$OutDir = '',
@@ -23,12 +23,21 @@ try {
     if ($Mode -eq 'route') {
         $argv += ' -routeaudit2'
         $files = @('route-audit.json')
+    } elseif ($Mode -eq 'water') {
+        $argv += ' -wateraudit'
+        $files = @('water-audit.json', 'shots\water_L0.png', 'shots\water_L1.png', 'shots\water_L2.png', 'shots\water_L3.png', 'shots\water_L4.png')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")
         if ($IdPass) { $argv += ' -idpass'; $files += @("shots\${Shot}_id.png", "shots\${Shot}_id.json") }
     }
-    foreach ($f in $files) { $full = Join-Path $dir $f; if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Force } }
+    # 有些机器上 Remove-Item 会被拒（文件本身没锁），改用改名，效果一样：旧结果不能冒充这次的结果
+    foreach ($f in $files) {
+        $full = Join-Path $dir $f
+        if (-not (Test-Path -LiteralPath $full)) { continue }
+        try { Remove-Item -LiteralPath $full -Force }
+        catch { Move-Item -LiteralPath $full -Destination ($full + '.prev') -Force }
+    }
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $exe
@@ -68,6 +77,11 @@ try {
     }
     if ($Mode -eq 'route') {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'route-audit.json'))
+        Write-Host $content
+        if ($content -notmatch '"status":"passed"') { exit 2 }
+    }
+    if ($Mode -eq 'water') {
+        $content = [IO.File]::ReadAllText((Join-Path $dir 'water-audit.json'))
         Write-Host $content
         if ($content -notmatch '"status":"passed"') { exit 2 }
     }

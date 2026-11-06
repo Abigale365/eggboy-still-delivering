@@ -41,6 +41,8 @@ public static class IslandBuilder
     {
         var layout = JsonUtility.FromJson<Layout>(File.ReadAllText(LayoutPath));
         if (layout == null || layout.tiers == null) throw new Exception("world_layout.json 读取失败");
+        var route = JsonUtility.FromJson<RouteFile>(File.ReadAllText(RoutePath));
+        if (route == null || route.route == null) throw new Exception("route.json 读取失败");
         previewCam = null;
         if (layout.cameras != null)
             foreach (var c in layout.cameras) if (c.name == "preview") { previewCam = c; break; }
@@ -62,7 +64,7 @@ public static class IslandBuilder
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
         var trunk = Mat("IslandTrunk", new Color32(0x6b, 0x4d, 0x31, 255));
-        var sea = Mat("IslandSea", new Color32(0x2f, 0x7d, 0x9a, 255));
+        var crate = Mat("IslandCrate", new Color32(0x8a, 0x66, 0x42, 255));
         var greybox = Mat("IslandBuildingGrey", new Color32(0xb4, 0xb4, 0xb4, 255));
 
         if (layout.coast != null)
@@ -70,7 +72,12 @@ public static class IslandBuilder
         for (int i = 0; i < layout.tiers.Length; i++) BuildTier(layout.tiers[i], generated.transform, grass, cliff);
         if (layout.roads != null)
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);
-        BuildSea(generated.transform, sea);
+
+        // WP-08：海面、安全点、浮箱。顺序有讲究：安全点要在浮箱之前取地面，否则射线会打到箱顶
+        AlwaysIncludeWaterShader();
+        BuildSea(generated.transform, WaterMat(), layout);
+        BuildSafePoints(route, generated.transform);
+        BuildCrates(generated.transform, crate);
 
         footprints.Clear();
         if (layout.buildings != null)
@@ -86,7 +93,7 @@ public static class IslandBuilder
                 marker.transform.position = new Vector3(p.x, p.y, p.z);
             }
 
-        BuildWorld(layout, generated.transform);
+        BuildWorld(layout, route, generated.transform);
 
         ScatterRocksAndTrees(layout, generated.transform, rockMat, leaves, trunk);
         BuildCamera(layout, generated.transform);
@@ -309,18 +316,193 @@ public static class IslandBuilder
 
     // ---------- 海面 ----------
 
-    static void BuildSea(Transform parent, Material mat)
+    // WP-08 海面：顶点色 R = 离岸距离（0..8 米归一化），给泡沫带用；高度由 WaterLevel 移动这个平面。
+    static WaterLevel BuildSea(Transform parent, Material mat, Layout layout)
     {
         var go = new GameObject("Sea");
         go.transform.SetParent(parent, false);
         var mf = go.AddComponent<MeshFilter>();
         go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        var mesh = SeaMesh(layout.coast);
+        mf.sharedMesh = SaveMesh(mesh, "Assets/TideTown/Art/Meshes/Main_sea.asset");
+
+        var waterGO = new GameObject("WaterSystem");
+        waterGO.transform.SetParent(parent, false);
+        var water = waterGO.AddComponent<WaterLevel>();
+        water.sea = go.transform;
+        Debug.Log($"SEA verts={mesh.vertexCount} tris={mesh.triangles.Length / 3}");
+        return water;
+    }
+
+    static Mesh SeaMesh(Coast coast)
+    {
+        var verts = new List<Vector3>();
+        var cols = new List<Color32>();
+        var idx = new List<int>();
+        AddSeaGrid(verts, cols, idx, -48f, 48f, 1.5f, false, coast);    // 岛附近细
+        AddSeaGrid(verts, cols, idx, -400f, 400f, 16f, true, coast);   // 外海粗，盖到远处
         var mesh = new Mesh { name = "sea" };
-        mesh.vertices = new[] { new Vector3(-200, 0, -200), new Vector3(200, 0, -200), new Vector3(200, 0, 200), new Vector3(-200, 0, 200) };
-        mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+        mesh.SetVertices(verts);
+        mesh.SetColors(cols);
+        mesh.SetTriangles(idx, 0);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-        mf.sharedMesh = SaveMesh(mesh, "Assets/TideTown/Art/Meshes/Main_sea.asset");
+        return mesh;
+    }
+
+    static void AddSeaGrid(List<Vector3> verts, List<Color32> cols, List<int> idx,
+        float min, float max, float step, bool skipInner, Coast coast)
+    {
+        int n = Mathf.RoundToInt((max - min) / step);
+        int start = verts.Count;
+        for (int j = 0; j <= n; j++)
+            for (int i = 0; i <= n; i++)
+            {
+                float x = min + i * step, z = min + j * step;
+                verts.Add(new Vector3(x, 0f, z));
+                float d = CoastDistance(coast, x, z);
+                byte r = (byte)Mathf.Clamp(d / 8f * 255f, 0f, 255f);
+                byte g = (byte)Mathf.Clamp(Mathf.PerlinNoise(x * 0.11f + 3.7f, z * 0.11f + 9.1f) * 255f, 0f, 255f);
+                cols.Add(new Color32(r, g, 0, 255));
+            }
+        for (int j = 0; j < n; j++)
+            for (int i = 0; i < n; i++)
+            {
+                if (skipInner)
+                {
+                    float cx = min + (i + 0.5f) * step, cz = min + (j + 0.5f) * step;
+                    if (Mathf.Abs(cx) < 48f && Mathf.Abs(cz) < 48f) continue;
+                }
+                int a = start + j * (n + 1) + i, b = a + 1, c = a + n + 1, d = c + 1;
+                idx.AddRange(new[] { a, c, b, b, c, d });
+            }
+    }
+
+    static float CoastDistance(Coast c, float x, float z)
+    {
+        if (c == null || c.x == null || c.x.Length < 2) return 50f;
+        float best = float.MaxValue;
+        int n = c.x.Length;
+        for (int i = 0; i < n; i++)
+        {
+            int j = (i + 1) % n;
+            float ax = c.x[i], az = c.z[i], bx = c.x[j], bz = c.z[j];
+            float dx = bx - ax, dz = bz - az;
+            float len2 = dx * dx + dz * dz;
+            float t = len2 < 1e-6f ? 0f : Mathf.Clamp01(((x - ax) * dx + (z - az) * dz) / len2);
+            float px = ax + dx * t, pz = az + dz * t;
+            best = Mathf.Min(best, (x - px) * (x - px) + (z - pz) * (z - pz));
+        }
+        return Mathf.Sqrt(best);
+    }
+
+    static Material WaterMat()
+    {
+        string path = MatRoot + "/IslandWater.mat";
+        var shader = Shader.Find("TideTown/Water");
+        if (shader == null) throw new Exception("找不到 TideTown/Water 着色器（Assets/TideTown/Art/Shaders/Water.shader）");
+        var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (m == null)
+        {
+            m = new Material(shader);
+            AssetDatabase.CreateAsset(m, path);
+        }
+        else if (m.shader != shader)
+        {
+            m.shader = shader;
+        }
+        m.SetColor("_ShallowColor", new Color(0.33f, 0.72f, 0.72f, 1f));
+        m.SetColor("_DeepColor", new Color(0.10f, 0.33f, 0.47f, 1f));
+        m.SetColor("_FoamColor", new Color(0.94f, 0.98f, 0.96f, 1f));
+        m.SetFloat("_ShoreRange", 8f);
+        m.SetFloat("_FoamWidth", 1.4f);
+        m.SetFloat("_Alpha", 0.86f);
+        m.SetFloat("_WaveSpeed", 1f);
+        EditorUtility.SetDirty(m);
+        return m;
+    }
+
+    // 自定义着色器写进 Always Included，WebGL 构建不会因为没有变体被裁掉
+    static void AlwaysIncludeWaterShader()
+    {
+        var shader = Shader.Find("TideTown/Water");
+        if (shader == null) throw new Exception("找不到 TideTown/Water 着色器");
+        var assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset");
+        if (assets == null || assets.Length == 0)
+        {
+            Debug.LogWarning("WATER_SHADER 读不到 GraphicsSettings，只靠场景材质引用进包");
+            return;
+        }
+        var so = new SerializedObject(assets[0]);
+        var arr = so.FindProperty("m_AlwaysIncludedShaders");
+        if (arr == null) { Debug.LogWarning("WATER_SHADER 找不到 m_AlwaysIncludedShaders"); return; }
+        for (int i = 0; i < arr.arraySize; i++)
+            if (arr.GetArrayElementAtIndex(i).objectReferenceValue == shader) return;
+        arr.InsertArrayElementAtIndex(arr.arraySize);
+        arr.GetArrayElementAtIndex(arr.arraySize - 1).objectReferenceValue = shader;
+        so.ApplyModifiedProperties();
+        AssetDatabase.SaveAssets();
+        Debug.Log("WATER_SHADER always-included " + shader.name);
+    }
+
+    // ---------- WP-08 安全点与浮箱 ----------
+
+    static float GroundY(float x, float z)
+    {
+        Physics.SyncTransforms();
+        if (Physics.Raycast(new Vector3(x, 200f, z), Vector3.down, out var hit, 400f,
+                LayerMask.GetMask("Ground"), QueryTriggerInteraction.Ignore))
+            return hit.point.y;
+        return 0f;
+    }
+
+    static void BuildSafePoints(RouteFile route, Transform parent)
+    {
+        var go = new GameObject("SafePoints");
+        go.transform.SetParent(parent, false);
+        var sp = go.AddComponent<SafePoints>();
+        sp.points.Clear();
+        foreach (var p in route.route)
+        {
+            if (!p.stop) continue;
+            float y = GroundY(p.x, p.z);
+            if (y <= 0.2f) throw new Exception($"安全点没落到地面：{p.id} ({p.x:F2},{p.z:F2})");
+            sp.points.Add(new Vector3(p.x, y, p.z));
+        }
+        Debug.Log("SAFEPOINTS n=" + sp.points.Count);
+    }
+
+    static void BuildCrates(Transform parent, Material mat)
+    {
+        // 低洼段（工程书 5.3：22 和船棚之间约 3 米）。木箱铺在 L2 会淹掉的那段路上，
+        // 两头压在干路面，箱顶 = 水位 + 0.18，L2 时 1.33，两边都只差一步以内。
+        float[] xs = { 14.9f, 15.45f, 16.0f };
+        const float z = -6.55f;
+        var size = new Vector3(0.6f, 0.55f, 0.6f);
+        var root = new GameObject("Crates").transform;
+        root.SetParent(parent, false);
+        float bed = float.MaxValue;
+        foreach (var x in xs)
+        {
+            float g = GroundY(x, z);
+            if (g <= 0.2f) throw new Exception($"浮箱没落到地面：{x:F2},{z:F2}");
+            bed = Mathf.Min(bed, g);
+        }
+        for (int i = 0; i < xs.Length; i++)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "Crate_" + i;
+            go.transform.SetParent(root, false);
+            go.transform.position = new Vector3(xs[i], bed + size.y * 0.5f, z);
+            go.transform.localScale = size;
+            go.layer = 6; // Ground：GroundAt 的射线要能打到箱顶
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            var fc = go.AddComponent<FloatingCrate>();
+            fc.bedY = bed;
+            fc.phase = i * 1.3f;
+            fc.size = size;
+            Debug.Log($"CRATE {i} x={xs[i]:F3} bed={bed:F2}");
+        }
     }
 
     // 工程书 WP-05 第 4 步：未减面时建筑先用灰盒。按预览图的建筑框反推世界尺寸与位置。
@@ -493,7 +675,7 @@ public static class IslandBuilder
 
     // ---------- 世界 ----------
 
-    static void BuildWorld(Layout layout, Transform parent)
+    static void BuildWorld(Layout layout, RouteFile route, Transform parent)
     {
         var go = new GameObject("IslandWorld");
         go.transform.SetParent(parent, false);
@@ -508,7 +690,6 @@ public static class IslandBuilder
                 world.walkPolys.Add(new WalkPoly { id = a.id, y = a.y, points = poly.ToArray() });
             }
         // P_xx 是预览图标签，可能贴在建筑上；出生点用 route.json 的第一站（站位）
-        var route = JsonUtility.FromJson<RouteFile>(File.ReadAllText(RoutePath));
         var spawnGO = new GameObject("SpawnPoint");
         spawnGO.transform.SetParent(go.transform, false);
         spawnGO.transform.position = new Vector3(route.route[0].x, 3f, route.route[0].z);

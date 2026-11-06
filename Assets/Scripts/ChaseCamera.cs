@@ -14,6 +14,7 @@ public class ChaseCamera : MonoBehaviour
     static readonly float PitchMin = -12f * Mathf.Deg2Rad, PitchMax = 55f * Mathf.Deg2Rad;
 
     public float yaw; // 弧度，0 = 看向 +Z
+    public float extraLift; // WP-08 涨水过场时额外抬高，默认 0
     float pitch = 14f * Mathf.Deg2Rad, yawGoal, pitchGoal = 14f * Mathf.Deg2Rad;
     float dist = DistDefault, distGoal = DistDefault, wallDist = DistDefault;
     float sinceBlocked = 99f, idleMouse;
@@ -54,7 +55,7 @@ public class ChaseCamera : MonoBehaviour
         if (wheel != 0f) distGoal = Mathf.Clamp(distGoal * Mathf.Exp(-wheel * 0.12f), DistMin, DistMax);
 
         // 跟随点平滑追上角色
-        target = Vector3.Lerp(target, new Vector3(pos.x, pos.y + Height, pos.z), Damp(12f, dt));
+        target = Vector3.Lerp(target, new Vector3(pos.x, pos.y + Height + extraLift, pos.z), Damp(12f, dt));
 
         // 走着又没动鼠标：慢慢绕回背后，角度差越大越弱
         idleMouse += dt;

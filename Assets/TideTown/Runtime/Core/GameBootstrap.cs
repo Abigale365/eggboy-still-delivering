@@ -15,6 +15,7 @@ public sealed class GameBootstrap : MonoBehaviour
     public ControlGate gate;
     public InteractionService service;
     public StoryDirector director;
+    public WaterLevel water;
 
     bool initialized;
 
@@ -42,6 +43,14 @@ public sealed class GameBootstrap : MonoBehaviour
         state = store.Load();
         if (state == null) { state = new GameState(); state.step = "P0_boot"; }
 
+        // WP-08：水位跟存档走；-water 命令行优先
+        water = FindObjectOfType<WaterLevel>();
+        if (water != null)
+        {
+            water.OnSettled = y => { state.waterLevel = y; store.Save(state); };
+            if (!water.CliOverride && state.waterLevel > 0.01f) water.SetInstant(state.waterLevel);
+        }
+
         gate = new ControlGate();
         service = gameObject.AddComponent<InteractionService>();
         service.Init(player, ui, gate, () => state);
@@ -64,6 +73,8 @@ public sealed class GameBootstrap : MonoBehaviour
 
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-storyaudit"))
             gameObject.AddComponent<StoryAudit>().Begin(this);
+        if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-wateraudit"))
+            gameObject.AddComponent<WaterAudit>().Begin(this);
         initialized = true;
     }
 }

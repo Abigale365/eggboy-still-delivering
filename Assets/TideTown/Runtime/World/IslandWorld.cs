@@ -23,6 +23,11 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
     readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
 
     public IReadOnlyList<EggboyCollider> Colliders => colliders;
+
+    // WP-08：水位由 WaterLevel 管，IslandWorld 只读它
+    public float WaterY => WaterLevel.Main != null ? WaterLevel.Main.Y : waterLevel;
+    public void AddCollider(EggboyCollider c) { if (c != null && !colliders.Contains(c)) colliders.Add(c); }
+    public void RemoveCollider(EggboyCollider c) { if (c != null) colliders.Remove(c); }
     public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
     public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
 
@@ -62,7 +67,7 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
         if (walkPolys.Count == 0) return true;
         if (!InWalkArea(x, z)) return false;
         // 工程书 5.4：地面低于水位 0.05 就走进水里了
-        return GroundAt(x, z) >= waterLevel - 0.05f;
+        return GroundAt(x, z) >= WaterY - 0.05f;
     }
 
     public bool InWalkArea(float x, float z)

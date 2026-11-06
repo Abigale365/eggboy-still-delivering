@@ -11,7 +11,7 @@
 | WP-04 | 世界布局数据 | WP-02 | done | B(agent) | 2026-11-06 13:35 | world_layout.json + 高度/可走/分区 bytes 已生成；zones_overlay.jpg 已核对；5 个机位已写入；坡度 p99 62.7° 记入 human-queue |
 | WP-05 | 生成岛 | WP-01, WP-04 | done | B(agent) | 2026-11-06 14:10 | TideTown_Main 白盒：岸线底座 + 9 台地 + 崖壁 + 6 路 + 8 栋灰盒；5.7 布局 0px / 轮廓 0.984 / 建筑全过；重建两次对象集合一致；证据 docs/evidence/WP-05 |
 | WP-06 | 接入移动（M1） | WP-05 | done | A(agent) | 2026-11-06 17:10 | 真实 Move 1 倍速 28/28、离地 0 帧；5.7 回归通过；证据 docs/evidence/WP-06。未验证：WebGL、镜头实跑、05 号鞋底截图被挡。详见 docs/handoff-wp06-20261106.md |
-| WP-07 | 互动、任务、存档 | WP-06 | todo | A | | |
+| WP-07 | 互动、任务、存档 | WP-06 | done | A(agent) | 2026-11-06 17:45 | storyaudit passed：取信/读信锁/不重复/存档重开；旧扩展场景 routeaudit 12/12；证据 docs/evidence/WP-07 |
 | WP-08 | 海水和水位 | WP-06 | todo | A | | |
 | WP-09 | 预留接口 | WP-07 | todo | A | | |
 | WP-10 | 序章 | WP-07, WP-08, WP-09 | todo | A | | |

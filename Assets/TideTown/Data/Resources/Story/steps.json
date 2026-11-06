@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "id": "P0_boot",
+      "goal": "目标：去山口的红色邮筒取信",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "P1_mailbox",
+      "goal": "目标：读林阿婆的信",
+      "letter": "lin_oven",
+      "next": "B0_arrive"
+    },
+    {
+      "id": "B0_arrive",
+      "goal": "目标：去面包店",
+      "letter": "",
+      "next": ""
+    }
+  ]
+}

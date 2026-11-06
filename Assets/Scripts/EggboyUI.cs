@@ -10,6 +10,7 @@ public class EggboyUI : MonoBehaviour
     public Action<ExprId> OnExpressionPicked;
     public Action OnLetterClosed;
     public bool LetterOpen { get; private set; }
+    Text letterTitle, letterBody, letterSign;
 
     const int RefW = 1280, RefH = 720;
     EggboyPlayer player;
@@ -72,6 +73,7 @@ public class EggboyUI : MonoBehaviour
         var look = Panel(root, -18, -14, 150, 32, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
         lookText = Label(look.transform, "渲染：v2", 14, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleCenter, 0, 0, 130, 28, false);
         SetRect(lookText.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 130, 28);
+        if (!Features.debugUi) look.gameObject.SetActive(false);
 
         // 表情面板：点标题折叠/展开，和网页版 #faces-toggle 一致
         var faceTitle = Panel(root, -18, -54, 248, 30, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
@@ -171,11 +173,11 @@ public class EggboyUI : MonoBehaviour
 
         Label(paper.transform, "你从邮筒里取出了三封信：", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 30, -24, 500, 24, false);
         Label(paper.transform, "· 致 面包店的烤炉\n· 致 小黑\n· 致 灯塔", 14, new Color32(0x8a, 0x6a, 0x4a, 255), TextAnchor.UpperLeft, 44, -50, 480, 62, false);
-        Label(paper.transform, "面包店的烤炉", 24, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 30, -120, 500, 34, true);
-        Label(paper.transform,
+        letterTitle = Label(paper.transform, "面包店的烤炉", 24, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 30, -120, 500, 34, true);
+        letterBody = Label(paper.transform,
             "老伙计：\n\n四十二年，你每天早上五点就热起来，比我还早。\n搬家的卡车装不下你，我只带走了你烤的最后一炉面包，路上就吃完了。\n新城的面包都用电炉烤，没有味道。\n\n邮差，如果你读到这里，请帮我再生一次火。\n不用烤什么，让它暖一暖就好。",
             18, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 30, -162, 500, 320, false);
-        Label(paper.transform, "——林阿婆", 19, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperRight, 30, -486, 500, 30, false);
+        letterSign = Label(paper.transform, "——林阿婆", 19, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperRight, 30, -486, 500, 30, false);
         Label(paper.transform, "点一下或按 E 收起信", 12, new Color32(0xa0, 0x8a, 0x6a, 255), TextAnchor.MiddleCenter, 30, -572, 500, 24, false);
     }
 
@@ -213,6 +215,15 @@ public class EggboyUI : MonoBehaviour
         letterOverlay.SetActive(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+    }
+
+    // WP-07：信正文从 Resources/Story/letters.json 读，旧场景仍可调无参版本
+    public void ShowLetter(string title, string body, string sign)
+    {
+        if (letterTitle != null && !string.IsNullOrEmpty(title)) letterTitle.text = title;
+        if (letterBody != null && !string.IsNullOrEmpty(body)) letterBody.text = body;
+        if (letterSign != null && !string.IsNullOrEmpty(sign)) letterSign.text = sign;
+        ShowLetter();
     }
 
     public void CloseLetter()

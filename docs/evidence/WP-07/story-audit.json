@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "steps": { "P1_mailbox": true },
+  "save_reload": true,
+  "letter_open": true,
+  "seconds": 1.7,
+  "avg_fps": 297.1,
+  "errors": ""
+}

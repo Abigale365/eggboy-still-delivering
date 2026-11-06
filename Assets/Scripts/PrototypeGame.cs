@@ -34,9 +34,12 @@ public class PrototypeGame : MonoBehaviour
         (KeyCode.Alpha4, "look", 1), (KeyCode.Alpha5, "sad", int.MaxValue),
     };
 
+    bool frameworkMode;
+
     void Start()
     {
         Application.runInBackground = true;
+        frameworkMode = FindObjectOfType<GameBootstrap>() != null;
         var cliArgs = System.Environment.GetCommandLineArgs();
         for (int i = 0; i + 1 < cliArgs.Length; i++)
             if (cliArgs[i] == "-expr" && System.Enum.TryParse<ExprId>(cliArgs[i + 1], true, out var expr))
@@ -193,7 +196,7 @@ public class PrototypeGame : MonoBehaviour
 
         foreach (var e in Emotes) if (Input.GetKeyDown(e.key)) player.PlayEmote(e.emote, e.repeat);
 
-        if (Input.GetKeyDown(KeyCode.E) && Vector3.Distance(world.MailboxPos, player.transform.position) < 1.4f && !gotLetter)
+        if (!frameworkMode && Input.GetKeyDown(KeyCode.E) && Vector3.Distance(world.MailboxPos, player.transform.position) < 1.4f && !gotLetter)
         {
             gotLetter = true;
             if (ui != null) ui.SetLetterTaken(true);

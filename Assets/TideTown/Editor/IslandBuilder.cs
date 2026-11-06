@@ -94,6 +94,7 @@ public static class IslandBuilder
         var game = new GameObject("Game");
         game.transform.SetParent(generated.transform, false);
         game.AddComponent<PrototypeGame>();
+        game.AddComponent<GameBootstrap>();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, ScenePath);

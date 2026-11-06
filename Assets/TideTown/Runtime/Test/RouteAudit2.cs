@@ -123,7 +123,8 @@ public class RouteAudit2 : MonoBehaviour
             }
             else
             {
-                float gap = Mathf.Abs(now.y - groundNow);
+                // 只算悬空（人比地面高）；上坡时人短暂低于地面是正常的迈步平滑，不算问题
+                float gap = now.y - groundNow;
                 if (gap > maxGroundGap)
                 {
                     maxGroundGap = gap;

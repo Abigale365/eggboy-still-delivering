@@ -134,6 +134,11 @@ public sealed class GameBootstrap : MonoBehaviour
         }
         service.Register(new LighthouseDoorInteractable(LighthouseData.Point(light.door), director));
         service.Register(new LampHeadInteractable(LighthouseData.Point(light.lamp), director));
+        service.Register(new LighthouseDownInteractable(LighthouseData.Point(light.deck), director));
+
+        // WP-15：邮局门口的课桌和老周的信，山那边的新城灯光
+        var ending = EndingData.Load();
+        service.Register(new EndingDeskInteractable(EndingData.Point(ending.desk), director));
 
         // 存档里已经点过灯，重开时天光和光束、山那边的手电都要还在
         if (state.flags.Contains("beam_lit"))
@@ -144,6 +149,19 @@ public sealed class GameBootstrap : MonoBehaviour
             if (beacon != null) beacon.TurnOn();
             var reply = FindObjectOfType<FlashlightReply>();
             if (reply != null) reply.SetDoneInstant();
+        }
+        // 存档已经天亮或已到结局，就保持黎明和山顶那份画面
+        if (state.flags.Contains("dawn_shown") || state.flags.Contains("ending_done"))
+        {
+            var dimmer = FindObjectOfType<SkyDimmer>();
+            if (dimmer != null) dimmer.SetDawnInstant();
+        }
+        if (state.flags.Contains("ending_done"))
+        {
+            var city = FindObjectOfType<CityGlow>();
+            if (city != null) city.Show();
+            ui.ShowSubtitle("所有的信，都送到了。");
+            ui.SetGoal("");
         }
 
         // WP-12/13：小黑在 S3 前不在场，球放进碗后从滑梯下探头，S4 读完信才开始跟随

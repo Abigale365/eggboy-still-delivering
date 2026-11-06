@@ -326,9 +326,16 @@ public sealed class StoryDirector : MonoBehaviour
 
     const float FadeSeconds = 0.55f;
     bool climbing;
+    bool cutscene;
+    object endLock;
     UnityEngine.UI.Image fade;
 
     public bool Climbing => climbing;
+    public bool Cutscene => cutscene;
+    public bool Ended { get; private set; }
+    public string EndingDebug = "";
+
+    void Mark(string s) { EndingDebug += s + "[" + Time.realtimeSinceStartup.ToString("F1") + "];"; }
 
     public void TakeOil()
     {
@@ -469,6 +476,141 @@ public sealed class StoryDirector : MonoBehaviour
         fade.raycastTarget = false;
     }
 
+    // ---- WP-15 结局 ----
+
+    // 塔顶读完灯以后要下塔；下塔和上塔一样是一次淡入淡出的短过场
+    public void DescendTower()
+    {
+        if (!ready || cutscene) return;
+        if (State.step != "L5_reply" && State.step != "E0_back") return;
+        StartCoroutine(DescendTowerRoutine());
+    }
+
+    System.Collections.IEnumerator DescendTowerRoutine()
+    {
+        cutscene = true;
+        if (player != null) player.locked = true;
+        yield return FadeTo(1f, FadeSeconds);
+
+        var data = LighthouseData.Load();
+        var door = LighthouseData.Point(data.door);
+        if (door.y <= 0.1f) door = new Vector3(21.5f, 5.0f, 1.45f);
+        if (player != null)
+        {
+            player.transform.position = door;
+            player.vel = Vector3.zero;
+            player.grounded = true;
+            player.yaw = Mathf.PI; // 面向回镇的路
+            player.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+        var chase = FindObjectOfType<ChaseCamera>();
+        if (chase != null) chase.SnapBehind(door, Mathf.PI);
+        var dog = FindObjectOfType<DogFollower>();
+        if (dog != null) dog.Follow(); // 小黑在塔下等了一路，重新跟上来
+        yield return null;
+        yield return null;
+        if (State.step == "L5_reply") AdvanceTo("E0_back");
+        yield return FadeTo(0f, FadeSeconds);
+        if (player != null) player.locked = false;
+        cutscene = false;
+    }
+
+    public void ReadEndingLetter()
+    {
+        if (!ready || State.step != "E1_read" || State.flags.Contains("ending_letter_read")) return;
+        State.flags.Add("ending_letter_read");
+        store.Save(State);
+        var letter = FindLetter("zhou_eggboy");
+        letterLock = gate != null ? gate.Acquire("endingletter") : null;
+        if (letterLock != null && player != null) player.locked = true;
+        if (game != null) game.SetExpression(ExprId.surprised);
+        if (letter != null) ui.ShowLetterDetail(letter.title, letter.body, letter.signature);
+        else ui.ShowLetter();
+        StartCoroutine(EndingLetterMood());
+    }
+
+    // 表情从惊讶慢慢变成笑
+    System.Collections.IEnumerator EndingLetterMood()
+    {
+        yield return new WaitForSecondsRealtime(4.5f);
+        if (ui != null && ui.LetterOpen && game != null) game.SetExpression(ExprId.happy);
+    }
+
+    // E2：水位到 L4，镜头回望小镇，灯塔还在转
+    System.Collections.IEnumerator E2Sequence()
+    {
+        cutscene = true;
+        Mark("E2a");
+        if (player != null) { player.locked = true; player.FaceTowards(new Vector3(0f, 2f, -6f)); }
+        if (water != null) water.SetLevel("L4", 4f);
+        var chase = FindObjectOfType<ChaseCamera>();
+        if (chase != null) chase.enabled = false;
+        yield return MoveCamera(new Vector3(-23.0f, 14.6f, 19.5f), new Vector3(4.0f, 0.8f, -3.0f), 1.6f);
+        Mark("E2cam");
+        yield return new WaitForSecondsRealtime(8f);
+        Mark("E2wait");
+        if (chase != null && player != null)
+        {
+            chase.enabled = true;
+            chase.SnapBehind(player.transform.position, player.yaw);
+        }
+        if (player != null) player.locked = false;
+        cutscene = false;
+        AdvanceTo("E3_end");
+        Mark("E3go");
+        StartCoroutine(E3Sequence());
+    }
+
+    // E3：山顶看新城灯光，挥手，字幕，停在画面上
+    System.Collections.IEnumerator E3Sequence()
+    {
+        cutscene = true;
+        Mark("E3a");
+        if (player != null) player.locked = true;
+        var chase = FindObjectOfType<ChaseCamera>();
+        if (chase != null) chase.enabled = false;
+        var city = FindObjectOfType<CityGlow>();
+        if (city != null) city.Show();
+        if (game != null) game.SetExpression(ExprId.happy);
+        ui.SetGoal("");
+        ui.ShowSubtitle("所有的信，都送到了。");
+        yield return MoveCamera(new Vector3(-19.6f, 9.0f, 13.7f), new Vector3(-60.0f, 5.8f, 3.0f), 2.2f);
+        Mark("E3cam");
+        yield return new WaitForSecondsRealtime(1.6f);
+        if (player != null) player.PlayEmote("wave", 3);
+        if (!State.flags.Contains("ending_done"))
+        {
+            State.flags.Add("ending_done");
+            store.Save(State);
+        }
+        Ended = true;
+        endLock = gate != null ? gate.Acquire("ending") : null;
+        cutscene = false;
+        Mark("E3done");
+    }
+
+    System.Collections.IEnumerator MoveCamera(Vector3 from, Vector3 look, float seconds)
+    {
+        var cam = Camera.main;
+        if (cam == null) yield break;
+        var p0 = cam.transform.position;
+        var r0 = cam.transform.rotation;
+        float f0 = cam.fieldOfView;
+        var r1 = Quaternion.LookRotation(look - from, Vector3.up);
+        float t = 0f;
+        while (t < seconds)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / seconds));
+            cam.transform.position = Vector3.Lerp(p0, from, k);
+            cam.transform.rotation = Quaternion.Slerp(r0, r1, k);
+            cam.fieldOfView = Mathf.Lerp(f0, 40f, k);
+            yield return null;
+        }
+        cam.transform.SetPositionAndRotation(from, r1);
+        cam.fieldOfView = 40f;
+    }
+
     void OnLetterClosed()
     {
         if (gate != null && letterLock != null) gate.Release(letterLock);
@@ -477,6 +619,7 @@ public sealed class StoryDirector : MonoBehaviour
 
         if (readingSchool) { readingSchool = false; ApplyStepGoal(); return; }
         if (readingMemory) { readingMemory = false; ApplyStepGoal(); return; }
+        if (State.step == "E1_read" && game != null) game.SetExpression(ExprId.happy);
 
         var st = Step(State.step);
         if (st != null && !string.IsNullOrEmpty(st.next)) AdvanceTo(st.next);
@@ -506,6 +649,12 @@ public sealed class StoryDirector : MonoBehaviour
         DebugAuto = "step=" + State.step + " auto=" + (st != null && st.auto) + " at=" + (st != null ? st.at : "")
             + " gate=" + gate.Locked + " letter=" + ui.LetterOpen + " arrived=" + arrivedStep;
         if (gate.Locked || ui.LetterOpen) return;
+        // 老陈的信如果在外面被提前合上（没收起事件），补一次推进，别把玩家卡在 L3
+        if (State.step == "L3_oil" && State.flags.Contains("lamp_oiled") && !ui.LetterOpen)
+        {
+            AdvanceTo("L4_light");
+            return;
+        }
         if (st == null || !st.auto || string.IsNullOrEmpty(st.at) || arrivedStep == st.id) return;
         var pts = RoutePoints();
         if (!pts.ContainsKey(st.at)) return;
@@ -514,8 +663,22 @@ public sealed class StoryDirector : MonoBehaviour
         float dx = pp.x - pos.x, dz = pp.z - pos.z;
         DebugAuto += $" d={Mathf.Sqrt(dx * dx + dz * dz):F2}";
         if (dx * dx + dz * dz > 1.4f * 1.4f) return;
-
         arrivedStep = st.id;
+        // E2 是过场：到山顶出口直接进回望镜头
+        if (st.id == "E2_climb")
+        {
+            if (!cutscene) StartCoroutine(E2Sequence());
+            return;
+        }
+        // E0 回到邮局：天快亮，桌上多一封信，小黑重新跟上
+        if (st.id == "E0_back")
+        {
+            if (dog != null) dog.Follow();
+            var dimmer = FindObjectOfType<SkyDimmer>();
+            if (dimmer != null) dimmer.Dawn(6f);
+            if (!State.flags.Contains("dawn_shown")) { State.flags.Add("dawn_shown"); store.Save(State); }
+            ui.ShowToast("桌上多了一封信。");
+        }
         // 不带信纸的到点步骤（L0 踩木箱到船棚）直接推进，不锁人
         if (string.IsNullOrEmpty(st.letter))
         {

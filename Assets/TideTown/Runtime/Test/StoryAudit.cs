@@ -19,7 +19,12 @@ public class StoryAudit : MonoBehaviour
     DogFollower dog;
     float dogMax, dogMinClear = 999f;
 
-    public void Begin(GameBootstrap b) { boot = b; StartCoroutine(Run()); }
+    public void Begin(GameBootstrap b)
+    {
+        boot = b;
+        if (boot.ui != null) boot.ui.SetAuditMode(true);
+        StartCoroutine(Run());
+    }
 
     IEnumerator Run()
     {
@@ -58,7 +63,7 @@ public class StoryAudit : MonoBehaviour
         var asset = Resources.Load<TextAsset>("World/route");
         var route = JsonUtility.FromJson<RouteList>(asset.text).route;
         int i03 = -1, i11 = -1, i12 = -1, i13 = -1, i20 = -1, i21 = -1;
-        int i22 = -1, i22b = -1, i25 = -1, i30 = -1;
+        int i22 = -1, i22b = -1, i25 = -1, i30 = -1, i30b = -1, i07 = -1, i06 = -1;
         for (int i = 0; i < route.Length; i++)
         {
             if (i03 < 0 && route[i].id == "03") i03 = i;
@@ -67,9 +72,12 @@ public class StoryAudit : MonoBehaviour
             else if (i13 < 0 && route[i].id == "13") i13 = i;
             else if (i20 < 0 && route[i].id == "20") i20 = i;
             else if (i21 < 0 && route[i].id == "21") i21 = i;
+            // 回程用第二个 07（路线末尾那个），不是起点
+            if (route[i].id == "07") i07 = i;
+            if (route[i].id == "06") i06 = i;
             if (route[i].id == "22") { if (i22 < 0) i22 = i; else if (i22b < 0) i22b = i; }
             if (i25 < 0 && route[i].id == "25") i25 = i;
-            if (i30 < 0 && route[i].id == "30") i30 = i;
+            if (route[i].id == "30") { if (i30 < 0) i30 = i; else if (i30b < 0) i30b = i; }
         }
 
         // 07 → 03 取信
@@ -504,6 +512,106 @@ public class StoryAudit : MonoBehaviour
             new SaveStore().Clear();
         }
 
+        // WP-15：下塔回邮局 → 老周的信 → 上山回望 → 新城灯光与字幕
+        float endingAt = Time.realtimeSinceStartup;
+        bool downOk = false, e0Ok = false, e1Open = false, exprSurprised = false, exprHappy = false;
+        bool lookBack = false, waterL4 = false, ended = false, cityShown = false, subtitleOk = false;
+        string subtitleText = "";
+        float dogFinal = 999f;
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("lighthouse_down")) { status = "down_failed"; error = "descent not in range"; }
+            else
+            {
+                float t0 = Time.realtimeSinceStartup;
+                while (boot.director.Cutscene && Time.realtimeSinceStartup - t0 < 8f) yield return null;
+                yield return new WaitForSecondsRealtime(0.3f);
+                var pp = boot.player.transform.position;
+                downOk = pp.y < 6f;
+                if (!downOk) { status = "down_failed"; error = $"y={pp.y:F2} step={boot.state.step}"; }
+                else
+                {
+                    yield return WalkRoute(route, i30b + 1, i07);
+                    if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+                }
+            }
+        }
+
+        if (status == "passed")
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (boot.state.step != "E1_read" && Time.realtimeSinceStartup - t0 < 5f) yield return null;
+            e0Ok = boot.state.step == "E1_read" && boot.state.flags.Contains("dawn_shown");
+            if (!e0Ok) { status = "e0_failed"; error = "step=" + boot.state.step + " [" + boot.director.DebugAuto + "]"; }
+            else
+            {
+                yield return new WaitForSecondsRealtime(3.6f); // 让天亮一点再拍课桌
+                yield return SnapFrom("story_ending_desk.png",
+                    new Vector3(-17.0f, 5.4f, -8.6f), new Vector3(-17.0f, 3.4f, -5.6f));
+            }
+        }
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("ending_desk")) { status = "e1_failed"; error = "desk not in range"; }
+            else
+            {
+                for (int i = 0; i < 90 && !boot.ui.LetterOpen; i++) yield return null;
+                e1Open = boot.ui.LetterOpen;
+                exprSurprised = p.pose != null && p.pose.expr == ExprId.surprised;
+                if (!(e1Open && exprSurprised)) { status = "e1_failed"; error = $"open={e1Open} expr={(p.pose != null ? p.pose.expr.ToString() : "-")}"; }
+                else
+                {
+                    yield return Snap("story_ending_letter.png");
+                    yield return new WaitForSecondsRealtime(4.6f);
+                    exprHappy = p.pose != null && p.pose.expr == ExprId.happy;
+                    boot.ui.CloseLetter();
+                    yield return new WaitForSeconds(0.3f);
+                    if (!exprHappy) { status = "e1_mood_failed"; error = p.pose != null ? p.pose.expr.ToString() : "-"; }
+                    else if (boot.state.step != "E2_climb") { status = "e2_missing"; error = "step=" + boot.state.step; }
+                }
+            }
+        }
+
+        if (status == "passed")
+        {
+            yield return WalkRoute(route, i07, i06);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            float t0 = Time.realtimeSinceStartup;
+            while (!boot.director.Cutscene && Time.realtimeSinceStartup - t0 < 4f) yield return null;
+            lookBack = boot.director.Cutscene;
+            yield return new WaitForSecondsRealtime(5f);
+            waterL4 = boot.water != null && Mathf.Abs(boot.water.Y - 3.05f) <= 0.08f;
+            if (lookBack) yield return Snap("story_ending_lookback.png");
+            if (status == "passed" && !(lookBack && waterL4)) { status = "e2_failed"; error = $"lookback={lookBack} water={waterL4} dbg={boot.director.EndingDebug} step={boot.state.step} t={(Time.realtimeSinceStartup - endingAt):F1}"; }
+        }
+
+        if (status == "passed")
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (!boot.director.Ended && Time.realtimeSinceStartup - t0 < 30f) yield return null;
+            ended = boot.director.Ended;
+            subtitleText = boot.ui.SubtitleText;
+            subtitleOk = subtitleText == "所有的信，都送到了。";
+            var city = FindObjectOfType<CityGlow>();
+            cityShown = city != null && city.Shown;
+            yield return new WaitForSecondsRealtime(1.2f);
+            var dp = dog != null ? dog.transform.position : Vector3.zero;
+            var pp = p != null ? p.transform.position : Vector3.zero;
+            dogFinal = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
+            if (status == "passed")
+            {
+                if (!(ended && subtitleOk && cityShown)) { status = "e3_failed"; error = $"ended={ended} subtitle={subtitleText} city={cityShown} dbg={boot.director.EndingDebug}"; }
+                else if (dog == null || !dog.Following || !dog.Visible || dogFinal > 5.0f) { status = "e3_dog_failed"; error = $"dog={dogFinal:F2}"; }
+                else yield return Snap("story_ending_city.png");
+            }
+        }
+
+        float endingSecs = Time.realtimeSinceStartup - endingAt;
+        // 结局会再写一次存档（水位 L4），别留给后面的路线审计
+        new SaveStore().Clear();
+
         float secs = Time.realtimeSinceStartup - bakeryAt;
         var sb = new StringBuilder();
         sb.AppendLine("{");
@@ -525,7 +633,11 @@ public class StoryAudit : MonoBehaviour
                   + ", \"L2_door\": " + (climbOk ? "true" : "false")
                   + ", \"L3_oil\": " + (oilLetter ? "true" : "false")
                   + ", \"L4_light\": " + (beamOk ? "true" : "false")
-                  + ", \"L5_reply\": " + (replyOk ? "true" : "false") + " },");
+                  + ", \"L5_reply\": " + (replyOk ? "true" : "false")
+                  + ", \"E0_back\": " + (e0Ok ? "true" : "false")
+                  + ", \"E1_read\": " + (e1Open && exprHappy ? "true" : "false")
+                  + ", \"E2_climb\": " + (lookBack && waterL4 ? "true" : "false")
+                  + ", \"E3_end\": " + (ended ? "true" : "false") + " },");
         sb.AppendLine("  \"intro\": { \"ran\": " + (introRan ? "true" : "false")
                   + ", \"seconds\": " + introSeconds.ToString("F1")
                   + ", \"start_expr\": \"" + exprStart + "\""
@@ -576,6 +688,19 @@ public class StoryAudit : MonoBehaviour
                   + ", \"stamp\": " + (stamp3 ? "true" : "false")
                   + ", \"water_l3\": " + (waterL3 ? "true" : "false")
                   + ", \"shots\": [\"story_lighthouse_crates.png\", \"story_lighthouse_door.png\", \"story_lighthouse_letter.png\", \"story_lighthouse_beam.png\", \"story_lighthouse_reply.png\"] },");
+        sb.AppendLine("  \"ending\": { \"seconds\": " + endingSecs.ToString("F1")
+                  + ", \"descent\": " + (downOk ? "true" : "false")
+                  + ", \"back_at_post\": " + (e0Ok ? "true" : "false")
+                  + ", \"letter\": " + (e1Open ? "true" : "false")
+                  + ", \"mood_surprised\": " + (exprSurprised ? "true" : "false")
+                  + ", \"mood_happy\": " + (exprHappy ? "true" : "false")
+                  + ", \"look_back\": " + (lookBack ? "true" : "false")
+                  + ", \"water_l4\": " + (waterL4 ? "true" : "false")
+                  + ", \"ended\": " + (ended ? "true" : "false")
+                  + ", \"city\": " + (cityShown ? "true" : "false")
+                  + ", \"subtitle\": \"" + subtitleText + "\""
+                  + ", \"dog_end\": " + dogFinal.ToString("F2")
+                  + ", \"shots\": [\"story_ending_desk.png\", \"story_ending_letter.png\", \"story_ending_lookback.png\", \"story_ending_city.png\"] },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         var visual = dog != null ? dog.GetComponent<DogVisual>() : null;
         sb.AppendLine("  \"dog\": { \"followed\": " + (dogFollowed ? "true" : "false")
@@ -593,6 +718,7 @@ public class StoryAudit : MonoBehaviour
         sb.AppendLine("  \"move_locked\": " + (lockedMove ? "true" : "false") + ",");
         sb.AppendLine("  \"no_repeat\": " + (noRepeat ? "true" : "false") + ",");
         sb.AppendLine("  \"avg_fps\": " + (frames > 0 ? (sumFps / frames).ToString("F1") : "0") + ",");
+        sb.AppendLine("  \"total_seconds\": " + (Time.realtimeSinceStartup - bootAt).ToString("F1") + ",");
         sb.AppendLine("  \"errors\": \"" + error + "\"");
         sb.AppendLine("}");
         File.WriteAllText(Path.Combine(Application.dataPath, "..", "story-audit.json"), sb.ToString(), new UTF8Encoding(false));
@@ -638,8 +764,8 @@ public class StoryAudit : MonoBehaviour
         float t0 = Time.realtimeSinceStartup;
         while (true)
         {
-            // 到点自动读信会锁人，停在半径外也算到达
-            if (boot.ui.LetterOpen) yield break;
+            // 到点自动读信或进过场会锁人，停在半径外也算到达
+            if (boot.ui.LetterOpen || boot.director.Cutscene) yield break;
             var pos = boot.player.transform.position;
             float dx = x - pos.x, dz = z - pos.z;
             float d = Mathf.Sqrt(dx * dx + dz * dz);

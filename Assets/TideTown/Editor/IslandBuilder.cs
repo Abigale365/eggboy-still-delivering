@@ -95,6 +95,7 @@ public static class IslandBuilder
         BuildBakeryProps(generated.transform);
         BuildSchoolProps(generated.transform);
         BuildLighthouseProps(generated.transform);
+        BuildEndingProps(generated.transform);
         BuildDog(route, generated.transform, dogFur, dogMuzzle, dogCollar, dogEye);
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
@@ -1013,6 +1014,62 @@ public static class IslandBuilder
         m.renderQueue = 3000;
         EditorUtility.SetDirty(m);
         return m;
+    }
+
+    // ---------- WP-15 结局 ----------
+    // 邮局门口的课桌（老周的信）和山那边的新城灯光；真正的远景物贴图留到 WP-17。
+    static void BuildEndingProps(Transform parent)
+    {
+        var data = EndingData.Load();
+        var wood = Mat("EndingWood", new Color32(0x8a, 0x62, 0x3e, 255));
+        var dark = Mat("EndingDark", new Color32(0x2e, 0x2e, 0x30, 255));
+        var paper = Mat("EndingPaper", new Color32(0xf3, 0xe6, 0xc8, 255));
+        var windowMat = EmissiveMat("CityWindow", new Color32(0xff, 0xd2, 0x8a, 255));
+        var signalMat = EmissiveMat("CitySignal", new Color32(0xff, 0xf2, 0xc8, 255));
+
+        var deskPos = EndingData.Point(data.desk);
+        var desk = new GameObject("EndingDesk");
+        desk.transform.SetParent(parent, false);
+        desk.transform.position = deskPos;
+        Cube(desk.transform, "top", new Vector3(0f, 0.72f, 0f), new Vector3(0.7f, 0.06f, 0.45f), wood);
+        foreach (var x in new[] { -0.3f, 0.3f })
+            foreach (var z in new[] { -0.18f, 0.18f })
+                Cube(desk.transform, "leg", new Vector3(x, 0.35f, z), new Vector3(0.05f, 0.7f, 0.05f), dark);
+        Cube(desk.transform, "letter", new Vector3(0.08f, 0.755f, 0.02f), new Vector3(0.24f, 0.012f, 0.16f), paper);
+        Cube(desk.transform, "seal", new Vector3(0.15f, 0.762f, 0.05f), new Vector3(0.05f, 0.014f, 0.04f), dark);
+
+        var cityPos = EndingData.Point(data.city);
+        var cityGo = new GameObject("CityGlow");
+        cityGo.transform.SetParent(parent, false);
+        cityGo.transform.position = cityPos;
+        var city = cityGo.AddComponent<CityGlow>();
+        var dots = new List<Renderer>();
+        for (int i = 0; i < 24; i++)
+        {
+            float x = -14f + i * 1.2f;
+            float z = -7f + Mathf.Sin(i * 0.9f) * 7f;
+            float y = -3.8f + (i % 5) * 1.6f + Mathf.Sin(i * 0.7f) * 0.5f;
+            var d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            UnityEngine.Object.DestroyImmediate(d.GetComponent<Collider>());
+            d.name = "city_" + i;
+            d.transform.SetParent(cityGo.transform, false);
+            d.transform.localPosition = new Vector3(x, y, z);
+            d.transform.localScale = Vector3.one * 0.3f;
+            d.GetComponent<Renderer>().sharedMaterial = windowMat;
+            dots.Add(d.GetComponent<Renderer>());
+        }
+        city.windows = dots.ToArray();
+
+        var sig = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        UnityEngine.Object.DestroyImmediate(sig.GetComponent<Collider>());
+        sig.name = "city_signal";
+        sig.transform.SetParent(cityGo.transform, false);
+        sig.transform.localPosition = new Vector3(4f, 3.2f, 3f);
+        sig.transform.localScale = Vector3.one * 0.5f;
+        sig.GetComponent<Renderer>().sharedMaterial = signalMat;
+        city.signal = sig.transform;
+
+        Debug.Log($"ENDING desk=({deskPos.x:F2},{deskPos.y:F2},{deskPos.z:F2}) city=({cityPos.x:F2},{cityPos.z:F2}) windows={dots.Count}");
     }
 
     // WP-12：小黑先用灰盒顶着。导入 小黑_绑骨.glb 后，把 DogVisualGreybox 换成 DogVisualGlb 即可，

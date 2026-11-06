@@ -19,7 +19,7 @@
 | WP-12 | 小黑入工程 | WP-06 | done | A(agent) | 2026-11-06 23:00 | 模型未导入，按用户决定先做灰盒占位并预留 `DogVisual` 接口（换模型只改 `BuildDog`）：跟随身后 1.2 m、贴地、走/小跑/摇尾；storyaudit passed，dog follow_max 2.94 m、收尾 1.26 m、ground_error 0、behind true；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-12，接口说明 docs/reserved-interfaces.md。未验证：WebGL 浏览器实跑画面、真实小黑 GLB |
 | WP-13 | 学校（M4） | WP-11, WP-12 | done | A(agent) | 2026-11-06 23:35 | storyaudit passed：B4→S0 自动读信、爪印一路到操场、拖鞋→红球→狗碗、S4 逐行 5/5 与面屏 sad→sad→curious→curious→happy、邮戳 2/3、水位 L2、重开恢复；小黑 S3 探头（滑梯旁）S4 接回身后；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-13。C1–C8 灰盒待 WP-17。未验证：WebGL 浏览器实跑画面、读信蹲下（当前无 crouch 接口） |
 | WP-14 | 灯塔（M5） | WP-13 | done | A(agent) | 2026-11-07 00:36 | storyaudit passed：L0 踩木箱到船棚、油壶、塔门淡出登塔、加油读老陈的信、点灯（天光约 20 s 转暗 + 光束扫海）、山那边 40 个手电、邮戳 3/3、水位 L3、重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-14。顺带修两个底层问题：头顶平台会把 GroundAt 抬到 12 m 高、同文件多 MonoBehaviour 导致 level0 反序列化损坏。塔身/灯头仍灰盒待 WP-17；小黑上塔前留在塔下。未验证：WebGL 浏览器实跑画面、这段情绪高潮的录像 |
-| WP-15 | 结局（M6） | WP-14 | todo | A | | |
+| WP-15 | 结局（M6） | WP-14 | done | A(agent) | 2026-11-07 01:25 | storyaudit passed：22 步全过；塔顶下塔回邮局、天光转黎明、课桌老周的信（惊讶→笑）、上山到 06、回望镜头 + 水位 L4、新城 40 个光点与字幕“所有的信，都送到了。”；小黑一路跟到 1.26 m；save_reload；总时长 96.6 s（审计加速，非真人时长）；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-15。停在最终画面，标题/暂停留 WP-16；新城灯光仍是光点占位。未验证：WebGL 浏览器实跑画面、真人从头通关一遍并记录卡点 |
 | WP-16 | 界面收尾 | WP-11 | todo | A | | |
 | WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | todo | B | | |
 | WP-18 | 环境素材 | WP-17，用户批准生成单 | todo | B | | |

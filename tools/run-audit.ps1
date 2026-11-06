@@ -37,7 +37,9 @@ try {
                    'shots\story_playground.png', 'shots\story_school_read.png',
                    'shots\story_lighthouse_crates.png', 'shots\story_lighthouse_door.png',
                    'shots\story_lighthouse_letter.png', 'shots\story_lighthouse_beam.png',
-                   'shots\story_lighthouse_reply.png')
+                   'shots\story_lighthouse_reply.png',
+                   'shots\story_ending_desk.png', 'shots\story_ending_letter.png',
+                   'shots\story_ending_lookback.png', 'shots\story_ending_city.png')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")

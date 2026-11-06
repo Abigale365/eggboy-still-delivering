@@ -11,6 +11,9 @@ public class EggboyUI : MonoBehaviour
     public Action OnLetterClosed;
     public bool LetterOpen { get; private set; }
     public bool legacyPrompt = true;   // 旧 Prototype 场景自己管邮筒提示；新框架交给 InteractionService
+    // 自动测试时关掉键盘/点击收信，避免系统误触把逐行读信打断
+    public bool inputClose = true;
+    Button letterCloseBtn;
     Text letterTitle, letterBody, letterSign, letterIntro1, letterIntro2, letterHint;
 
     const int RefW = 1280, RefH = 720;
@@ -18,8 +21,8 @@ public class EggboyUI : MonoBehaviour
     IEggboyWorld world;
     Font font;
     Canvas canvas;
-    Text goalText, promptText, lookText, tutorialText, carryText, toastText;
-    GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel;
+    Text goalText, promptText, lookText, tutorialText, carryText, toastText, subtitleText;
+    GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel, subtitlePanel;
     float toastUntil;
     readonly System.Collections.Generic.List<Image> faceBg = new System.Collections.Generic.List<Image>();
     readonly System.Collections.Generic.List<Text> faceLabel = new System.Collections.Generic.List<Text>();
@@ -163,6 +166,14 @@ public class EggboyUI : MonoBehaviour
         toastPanel = toast.gameObject;
         toastPanel.SetActive(false);
 
+        // WP-15 结局字幕：停在画面上，不自动收
+        var sub = Panel(root, 0, 0, 900, 64, new Color32(0x1a, 0x14, 0x10, 205), true, true);
+        SetRect(sub.rectTransform, 0.5f, 0f, 0.5f, 0f, 0, 214, 900, 64);
+        subtitleText = Label(sub.transform, "", 22, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleCenter, 0, 0, 860, 56, false);
+        SetRect(subtitleText.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 860, 56);
+        subtitlePanel = sub.gameObject;
+        subtitlePanel.SetActive(false);
+
         BuildLetter(root);
     }
 
@@ -175,6 +186,7 @@ public class EggboyUI : MonoBehaviour
         overlayBtn.targetGraphic = overlay;
         overlayBtn.transition = Selectable.Transition.None;
         overlayBtn.onClick.AddListener(CloseLetter);
+        letterCloseBtn = overlayBtn;
         letterOverlay.SetActive(false);
 
         var paper = Panel(overlay.transform, 0, 0, 560, 620, new Color32(0xfb, 0xf3, 0xe2, 255), true, false);
@@ -205,7 +217,10 @@ public class EggboyUI : MonoBehaviour
 
     public void SetGoal(string text)
     {
-        if (goalText != null) goalText.text = text;
+        if (goalText == null) return;
+        goalText.text = text;
+        if (goalText.transform.parent != null)
+            goalText.transform.parent.gameObject.SetActive(!string.IsNullOrEmpty(text));
     }
 
     // 序章教学一行；空串即隐藏
@@ -247,6 +262,17 @@ public class EggboyUI : MonoBehaviour
         bool on = !string.IsNullOrEmpty(text);
         if (on && carryText != null) carryText.text = text;
         carryPanel.SetActive(on);
+    }
+
+    // WP-15：结局字幕
+    public string SubtitleText => subtitleText != null && subtitlePanel != null && subtitlePanel.activeSelf ? subtitleText.text : "";
+
+    public void ShowSubtitle(string text)
+    {
+        if (subtitlePanel == null) return;
+        bool on = !string.IsNullOrEmpty(text);
+        if (on && subtitleText != null) subtitleText.text = text;
+        subtitlePanel.SetActive(on);
     }
 
     public void ShowToast(string text)
@@ -313,6 +339,13 @@ public class EggboyUI : MonoBehaviour
         OnLetterClosed?.Invoke();
     }
 
+    // 自动测试用：信纸只由剧情代码收，不会被键盘或点击误关
+    public void SetAuditMode(bool on)
+    {
+        inputClose = !on;
+        if (letterCloseBtn != null) letterCloseBtn.interactable = !on;
+    }
+
     void Update()
     {
         if (toastPanel != null && toastPanel.activeSelf && Time.unscaledTime >= toastUntil)
@@ -320,7 +353,7 @@ public class EggboyUI : MonoBehaviour
         if (player == null || world == null) return;
         if (LetterOpen)
         {
-            if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
+            if (inputClose && (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)))
                 CloseLetter();
             return;
         }

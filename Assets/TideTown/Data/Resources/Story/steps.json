@@ -112,6 +112,34 @@
       "id": "L5_reply",
       "goal": "目标：第三站完成，山那边亮了",
       "letter": "",
+      "next": "E0_back"
+    },
+    {
+      "id": "E0_back",
+      "goal": "目标：下塔回邮局，桌上有一封信",
+      "letter": "",
+      "next": "E1_read",
+      "at": "07",
+      "auto": true
+    },
+    {
+      "id": "E1_read",
+      "goal": "目标：读老周的信",
+      "letter": "zhou_eggboy",
+      "next": "E2_climb"
+    },
+    {
+      "id": "E2_climb",
+      "goal": "目标：上山，到山顶出口",
+      "letter": "",
+      "next": "",
+      "at": "06",
+      "auto": true
+    },
+    {
+      "id": "E3_end",
+      "goal": "",
+      "letter": "",
       "next": ""
     }
   ]

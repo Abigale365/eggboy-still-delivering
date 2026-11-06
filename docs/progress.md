@@ -26,7 +26,7 @@
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |
 | WP-20 | 声音 | WP-11 | todo | B | | |
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |
-| WP-22 | 全流程 QA | WP-15, WP-16 | doing | A(agent) | 2026-11-07 02:00 | 接手自 TRAE 交接（基线 7d2c242）；先跑 story/route/map 回归，再做 WebGL 浏览器验证和 known-issues |
+| WP-22 | 全流程 QA | WP-15, WP-16 | done | A(agent) | 2026-11-07 02:30 | 自动部分全绿：story 22/22（total 96.5 s）、route 28/28（airFrames 0、maxGroundGap 0.039）、map 5 点对位 + 互斥 true；无头 Chrome WebGL 冒烟通过（加载完成、0 error、标题/地图/HUD 中文正常，证据 docs/evidence/WP-22/webgl）；known-issues.md 已建（11 条）；真人项已入 human-queue（通关计时、两人试玩、标题点击、真显卡浏览器、核显机）。未验证：真显卡 Chrome/Edge 全流程、10 分钟内存、真人试玩——见 human-queue |
 | WP-23 | 部署（M7） | WP-21，用户确定位置 | todo | A | | |
 | WP-24 | 报告 | WP-15 | todo | B | | |
 | WP-25 | 视频和发布包（M8） | WP-22 | todo | B | | |

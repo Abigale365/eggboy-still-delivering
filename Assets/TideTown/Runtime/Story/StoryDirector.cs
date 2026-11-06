@@ -19,11 +19,19 @@ public sealed class StoryDirector : MonoBehaviour
     SaveStore store;
     ControlGate gate;
     WaterLevel water;
+    PrototypeGame game;
+    DogFollower dog;
+    SchoolBall ball;
     object letterLock;
     bool ready;
     bool readingMemory;
+    bool readingSchool;
     string arrivedStep = "";
     GameObject woodVisual;
+
+    public int SchoolLinesShown { get; private set; }
+    public int SchoolLinesTotal { get; private set; }
+    public string SchoolExprTrace { get; private set; } = "";
 
     Dictionary<string, Vector3> routePoints;
     LetterData[] letters = new LetterData[0];
@@ -32,6 +40,9 @@ public sealed class StoryDirector : MonoBehaviour
     public void Init(EggboyPlayer p, EggboyUI u, GameState s, SaveStore st, ControlGate g, WaterLevel w)
     {
         player = p; ui = u; State = s; store = st; gate = g; water = w;
+        game = FindObjectOfType<PrototypeGame>();
+        dog = FindObjectOfType<DogFollower>();
+        ball = FindObjectOfType<SchoolBall>();
         LoadData();
         ready = true;
         ApplyStepGoal();
@@ -84,6 +95,7 @@ public sealed class StoryDirector : MonoBehaviour
         if (State == null) return "";
         if (State.carrying == "matches") return "邮包 · 火柴盒";
         if (State.carrying == "wood") return "手上 · 柴火捆";
+        if (State.carrying == "ball") return "手上 · 红球";
         return "";
     }
 
@@ -166,8 +178,8 @@ public sealed class StoryDirector : MonoBehaviour
         if (fx != null) fx.Light();
         if (water != null) water.SetLevel("L1", 2f);
         if (player != null) player.PlayEmote("hop");
-        ui.SetGoal("目标：第一站完成，烟囱冒烟了");
         ui.ShowToast("邮戳 1/3 · 面包店");
+        AdvanceTo("S0_arrive");
     }
 
     public bool ShowMemory(string id, string title, string text)
@@ -197,12 +209,123 @@ public sealed class StoryDirector : MonoBehaviour
         if (!on && woodVisual != null) { Destroy(woodVisual); woodVisual = null; }
     }
 
+    // ---- WP-13 学校 ----
+
+    public void InspectSlipper()
+    {
+        if (!ready || State.step != "S1_slipper") return;
+        if (game != null) game.SetExpression(ExprId.curious);
+        ui.ShowToast("拖鞋上有小黑的牙印，爪印一直通到操场");
+        AdvanceTo("S2_ball");
+    }
+
+    public void TakeBall()
+    {
+        if (!ready || State.step != "S2_ball" || State.flags.Contains("ball_taken")) return;
+        State.flags.Add("ball_taken");
+        State.carrying = "ball";
+        store.Save(State);
+        if (ball != null && player != null) ball.Take(player.transform);
+        if (game != null) game.SetExpression(ExprId.happy);
+        else if (player != null) player.PlayEmote("hop");
+        ui.SetCarried(CarryLabel());
+        ui.ShowToast("红球上有小黑的牙印");
+        AdvanceTo("S3_bowl");
+    }
+
+    public void PutBallInBowl()
+    {
+        if (!ready || State.step != "S3_bowl" || State.carrying != "ball") return;
+        State.flags.Add("ball_in_bowl");
+        State.carrying = "";
+        store.Save(State);
+        if (ball != null) ball.PlaceInBowl();
+        ui.SetCarried("");
+        if (game != null) game.SetExpression(ExprId.surprised);
+        else if (player != null) player.PlayEmote("look");
+        ui.ShowToast("碗里多了个红球。滑梯下面有动静。");
+        if (dog != null) dog.ShowAt(dog.PeekPoint);
+        AdvanceTo("S4_read");
+        StartCoroutine(ReadSchoolLetter());
+    }
+
+    // S4：不锁输入也能读，玩家提前按 E 合上信就当成读完；每行换一次面屏
+    System.Collections.IEnumerator ReadSchoolLetter()
+    {
+        if (State.flags.Contains("school_read")) { ApplyStepGoal(); yield break; }
+        readingSchool = true;
+        SchoolLinesShown = 0;
+        SchoolLinesTotal = 0;
+        SchoolExprTrace = "";
+        var st = Step("S4_read");
+        var letter = FindLetter(st != null ? st.letter : "");
+        if (letter == null)
+        {
+            readingSchool = false;
+            FinishSchoolRead();
+            yield break;
+        }
+
+        yield return new WaitForSecondsRealtime(1.4f); // 先让小黑从滑梯下探头
+        if (dog != null) dog.Follow(); // 信纸挡住画面时接回身后，读完就能看见它
+
+        var lines = SplitLines(letter.body);
+        SchoolLinesTotal = lines.Length;
+        letterLock = gate != null ? gate.Acquire("schoolread") : null;
+        if (letterLock != null && player != null) player.locked = true;
+
+        string shown = "";
+        for (int i = 0; i < lines.Length; i++)
+        {
+            shown = i == 0 ? lines[i] : shown + "\n" + lines[i];
+            var expr = i < 2 ? ExprId.sad : (i < 4 ? ExprId.curious : (i == lines.Length - 1 ? ExprId.happy : ExprId.sad));
+            if (game != null) game.SetExpression(expr);
+            SchoolExprTrace += (i == 0 ? "" : ">") + expr;
+            ui.ShowLetterDetail(letter.title, shown, i == lines.Length - 1 ? letter.signature : "");
+            SchoolLinesShown = i + 1;
+            yield return new WaitForSecondsRealtime(1.15f);
+            if (ui != null && !ui.LetterOpen) break;
+        }
+
+        readingSchool = false;
+        if (gate != null && letterLock != null) gate.Release(letterLock);
+        letterLock = null;
+        if (player != null) player.locked = false;
+        if (ui != null && ui.LetterOpen) ui.CloseLetter();
+        FinishSchoolRead();
+    }
+
+    void FinishSchoolRead()
+    {
+        if (State.flags.Contains("school_read")) { ApplyStepGoal(); return; }
+        State.flags.Add("school_read");
+        if (!State.stamps.Contains("school")) State.stamps.Add("school");
+        State.carrying = "";
+        store.Save(State);
+        if (water != null) water.SetLevel("L2", 2.5f);
+        if (dog != null) dog.Follow();
+        if (game != null) game.SetExpression(ExprId.happy);
+        else if (player != null) player.PlayEmote("hop");
+        ui.SetCarried("");
+        ui.SetGoal("目标：第二站完成，小黑跟上了");
+        ui.ShowToast("邮戳 2/3 · 学校");
+    }
+
+    static string[] SplitLines(string body)
+    {
+        var lines = new List<string>();
+        foreach (var raw in body.Split('\n'))
+            if (!string.IsNullOrWhiteSpace(raw)) lines.Add(raw.Trim());
+        return lines.ToArray();
+    }
+
     void OnLetterClosed()
     {
         if (gate != null && letterLock != null) gate.Release(letterLock);
         letterLock = null;
         if (player != null) player.locked = false;
 
+        if (readingSchool) { readingSchool = false; ApplyStepGoal(); return; }
         if (readingMemory) { readingMemory = false; ApplyStepGoal(); return; }
 
         var st = Step(State.step);
@@ -249,7 +372,8 @@ public sealed class StoryDirector : MonoBehaviour
         {
             player.locked = true;
             player.FaceTowards(pos);
-            player.PlayEmote("look");
+            if (st.id == "S0_arrive" && game != null) game.SetExpression(ExprId.sad);
+            else player.PlayEmote("look");
         }
         var letter = FindLetter(st.letter);
         if (letter != null) ui.ShowLetterDetail(letter.title, letter.body, letter.signature);

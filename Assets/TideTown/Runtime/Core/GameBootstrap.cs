@@ -100,9 +100,38 @@ public sealed class GameBootstrap : MonoBehaviour
         // 存档里已经点过火，重开时炉火和烟要还在
         if (effects != null && state.flags.Contains("oven_lit")) effects.Light();
 
-        // WP-12：小黑跟随；模型还没导入，先由场景里的灰盒视觉顶着
+        // WP-13：学校后门狗碗/狗窝，操场红球/拖鞋和两条回忆线索
+        var school = SchoolData.Load();
+        var schoolBall = FindObjectOfType<SchoolBall>();
+        foreach (var item in school.items)
+        {
+            var pos = new Vector3(item.x, item.y, item.z);
+            switch (item.id)
+            {
+                case "bowl": service.Register(new BowlInteractable(pos, director)); break;
+                case "ball": service.Register(new BallInteractable(pos, director)); break;
+                case "slipper": service.Register(new SlipperInteractable(pos, director)); break;
+                default:
+                    if (!string.IsNullOrEmpty(item.text))
+                        service.Register(new MemoryInteractable(pos, director, item.id, item.label, item.text));
+                    break;
+            }
+        }
+        if (schoolBall != null)
+        {
+            if (state.flags.Contains("ball_in_bowl")) schoolBall.PlaceInBowl();
+            else if (state.carrying == "ball") schoolBall.Take(player.transform);
+        }
+
+        // WP-12/13：小黑在 S3 前不在场，球放进碗后从滑梯下探头，S4 读完信才开始跟随
         var dog = FindObjectOfType<DogFollower>();
-        if (dog != null) dog.Bind(player, world, state);
+        if (dog != null)
+        {
+            dog.Bind(player, world, state);
+            if (state.flags.Contains("school_read")) dog.Follow();
+            else if (state.flags.Contains("ball_in_bowl")) dog.ShowAt(dog.PeekPoint);
+            else dog.Hide();
+        }
 
         // WP-09：扫描站默认隐藏；-scan 打开时才注册到互动服务
         var scan = FindObjectOfType<ScanStation>();

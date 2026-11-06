@@ -8,6 +8,7 @@ public class DogFollower : MonoBehaviour
     public float sideOffset = 0.4f;     // 略靠一侧，避免正好挡住镜头中心
     public float maxSpeed = 3.4f;
     public float snapDistance = 8f;     // 被墙卡住、掉队太远时直接回到身后
+    public Vector3 PeekPoint;           // WP-13：S3 时从滑梯下面探头的点
 
     EggboyPlayer player;
     IslandWorld world;
@@ -21,9 +22,42 @@ public class DogFollower : MonoBehaviour
     bool hasLastPlayer;
 
     public bool Bound => bound;
+    public bool Following { get; private set; } = true;
+    public bool Visible { get; private set; } = true;
     public bool Happy { get; private set; }
     public float WagHz { get; private set; }
     public float LastGroundError { get; private set; }
+
+    // 剧情开始前小黑不在场；S3 从滑梯下探头；S4 读信后才跟着走
+    public void Hide()
+    {
+        Following = false;
+        SetVisible(false);
+    }
+
+    public void ShowAt(Vector3 p)
+    {
+        Following = false;
+        Snap(p);
+        SetVisible(true);
+    }
+
+    public void Follow()
+    {
+        if (Following) { SetVisible(true); return; }
+        Following = true;
+        lastPlayerPos = player != null ? player.transform.position : transform.position;
+        hasLastPlayer = player != null;
+        // 读信时画面被信纸盖住，这里把小黑直接接回身后，避免它从滑梯绕半个学校
+        if (bound) Snap(TargetPoint());
+        SetVisible(true);
+    }
+
+    void SetVisible(bool on)
+    {
+        Visible = on;
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = on;
+    }
 
     // GameBootstrap 在场景加载后把玩家和世界接进来
     public void Bind(EggboyPlayer p, IslandWorld w, GameState s)
@@ -41,7 +75,7 @@ public class DogFollower : MonoBehaviour
 
     void LateUpdate()
     {
-        if (!bound || player == null || world == null) return;
+        if (!bound || !Following || player == null || world == null) return;
         float dt = Mathf.Min(0.05f, Time.deltaTime);
         if (dt <= 0f) return;
 
@@ -101,7 +135,8 @@ public class DogFollower : MonoBehaviour
         yaw += diff * Mathf.Min(1f, dt * 8f);
         transform.rotation = Quaternion.Euler(0f, yaw * Mathf.Rad2Deg, 0f);
 
-        Happy = state != null && (state.flags.Contains("oven_lit") || (player.CurrentEmote != null && player.CurrentEmote == "hop"));
+        Happy = state != null && (state.flags.Contains("oven_lit") || state.flags.Contains("school_read")
+            || (player.CurrentEmote != null && player.CurrentEmote == "hop"));
         WagHz = Happy ? 4.6f : (speed < 0.2f ? 2.4f : 1.3f);
         if (visual != null) visual.ApplyMotion(dt, speed, trot, WagHz, Happy);
     }

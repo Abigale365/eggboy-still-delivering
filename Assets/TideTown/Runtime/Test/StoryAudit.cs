@@ -57,13 +57,15 @@ public class StoryAudit : MonoBehaviour
 
         var asset = Resources.Load<TextAsset>("World/route");
         var route = JsonUtility.FromJson<RouteList>(asset.text).route;
-        int i03 = -1, i11 = -1, i12 = -1, i13 = -1;
+        int i03 = -1, i11 = -1, i12 = -1, i13 = -1, i20 = -1, i21 = -1;
         for (int i = 0; i < route.Length; i++)
         {
             if (i03 < 0 && route[i].id == "03") i03 = i;
             else if (i11 < 0 && route[i].id == "11") i11 = i;
             else if (i12 < 0 && route[i].id == "12") i12 = i;
             else if (i13 < 0 && route[i].id == "13") i13 = i;
+            else if (i20 < 0 && route[i].id == "20") i20 = i;
+            else if (i21 < 0 && route[i].id == "21") i21 = i;
         }
 
         // 07 → 03 取信
@@ -111,7 +113,6 @@ public class StoryAudit : MonoBehaviour
         }
 
         // 面包店：B0 到点自动读信 → 回忆线索 → 火柴 → 柴火 → 装炉 → 点火
-        if (status == "passed") yield return SnapDog("story_dog.png");
         float bakeryAt = Time.realtimeSinceStartup;
         bool b0Auto = false, memoryOk = false, matchesOk = false, woodOk = false, loadOk = false;
         bool litOk = false, stampOk = false, waterOk = false, smokeOk = false;
@@ -217,37 +218,170 @@ public class StoryAudit : MonoBehaviour
             error = $"lit={litOk} stamp={stampOk} water={waterOk} smoke={smokeOk}";
         }
 
+        // WP-13：学校后门读信 → 拖鞋 → 操场红球 → 放回狗碗 → 逐行再读 → 小黑跟随
+        float schoolAt = Time.realtimeSinceStartup;
+        bool s0Auto = false, slipperOk = false, ballOk = false, bowlOk = false, schoolRead = false;
+        bool stamp2 = false, waterL2 = false, ballInBowl = false, dogPeek = false;
+        int linesShown = 0, linesTotal = 0;
+        string exprTrace = "";
+
+        if (status == "passed")
+        {
+            yield return WalkRoute(route, i13 + 1, i20);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+
+            for (int i = 0; i < 120 && status == "passed"; i++)
+            {
+                if (boot.ui.LetterOpen) { s0Auto = true; break; }
+                yield return null;
+            }
+            if (status == "passed" && !s0Auto) { status = "s0_not_auto"; error = "letter did not open at 20 [" + boot.director.DebugAuto + "]"; }
+            else if (s0Auto)
+            {
+                yield return Snap("story_school_letter.png");
+                if (boot.state.step != "S0_arrive" || boot.state.flags.Contains("ball_in_bowl"))
+                { status = "s0_wrong"; error = "step=" + boot.state.step; }
+                boot.ui.CloseLetter();
+                yield return new WaitForSeconds(0.3f);
+                if (status == "passed" && boot.state.step != "S1_slipper") { status = "s1_missing"; error = "step=" + boot.state.step; }
+            }
+        }
+
+        if (status == "passed") yield return SnapFrom("story_pawprints.png", new Vector3(11.8f, 6.1f, 6.9f), new Vector3(14.3f, 3.3f, 0.6f));
+
+        // S1：爪印尽头的拖鞋
+        if (status == "passed")
+        {
+            var slipper = SchoolFind("slipper");
+            if (slipper == null) { status = "school_data"; error = "slipper missing"; }
+            else
+            {
+                yield return WalkTo(slipper.x, slipper.z, "slipper");
+                if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+                else if (!boot.service.TryInteract("slipper")) { status = "slipper_failed"; error = "slipper not in range"; }
+                else
+                {
+                    yield return new WaitForSeconds(0.25f);
+                    slipperOk = boot.state.step == "S2_ball";
+                    if (!slipperOk) { status = "slipper_failed"; error = "step=" + boot.state.step; }
+                }
+            }
+        }
+
+        // S2：操场秋千下的红球
+        if (status == "passed")
+        {
+            yield return WalkRoute(route, i20, i21);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            else
+            {
+                var ball = SchoolFind("ball");
+                if (ball == null) { status = "school_data"; error = "ball missing"; }
+                else
+                {
+                    yield return WalkTo(ball.x, ball.z, "ball");
+                    if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+                    else
+                    {
+                        // 先拍秋千下的红球，再拿走，截图才有“球在秋千下”的证据
+                        if (status == "passed") yield return SnapFrom("story_playground.png", new Vector3(13.8f, 5.8f, -8.6f), new Vector3(9.8f, 3.4f, -4.8f));
+                        if (!boot.service.TryInteract("ball")) { status = "ball_failed"; error = "ball not in range"; }
+                        else
+                        {
+                            yield return new WaitForSeconds(0.25f);
+                            ballOk = boot.state.step == "S3_bowl" && boot.state.carrying == "ball";
+                            if (!ballOk) { status = "ball_failed"; error = "step=" + boot.state.step + " carry=" + boot.state.carrying; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // S3：把球放回学校后门的狗碗
+        if (status == "passed")
+        {
+            yield return WalkRouteBack(route, i21, i20);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            else
+            {
+                var bowl = SchoolFind("bowl");
+                if (bowl == null) { status = "school_data"; error = "bowl missing"; }
+                else
+                {
+                    yield return WalkTo(bowl.x, bowl.z, "bowl");
+                    if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+                    else if (!boot.service.TryInteract("bowl")) { status = "bowl_failed"; error = "bowl not in range"; }
+                    else
+                    {
+                        yield return new WaitForSeconds(0.25f);
+                        bowlOk = boot.state.step == "S4_read" && boot.state.carrying == "" && boot.state.flags.Contains("ball_in_bowl");
+                        var ballComp = FindObjectOfType<SchoolBall>();
+                        ballInBowl = ballComp != null && ballComp.InBowl;
+                        dogPeek = dog != null && dog.Visible && !dog.Following;
+                        // 逐行读信：等信纸打开、前两行出现后再拍
+                        yield return new WaitForSecondsRealtime(2.8f);
+                        if (status == "passed") yield return Snap("story_school_read.png");
+                    }
+                }
+            }
+        }
+
+        if (status == "passed" && !(bowlOk && ballInBowl && dogPeek))
+        {
+            status = "school_failed";
+            error = $"bowl={bowlOk} ball={ballInBowl} peek={dogPeek}";
+        }
+
+        // S4：读完信、盖第二枚邮戳、水位 L2、小黑开始跟随
+        if (status == "passed")
+        {
+            float t0 = Time.realtimeSinceStartup;
+            while (!boot.state.flags.Contains("school_read") && Time.realtimeSinceStartup - t0 < 22f) yield return null;
+            schoolRead = boot.state.flags.Contains("school_read");
+            stamp2 = boot.state.stamps.Contains("school");
+            linesShown = boot.director.SchoolLinesShown;
+            linesTotal = boot.director.SchoolLinesTotal;
+            exprTrace = boot.director.SchoolExprTrace;
+            yield return new WaitForSecondsRealtime(3.2f);
+            waterL2 = boot.water != null && Mathf.Abs(boot.water.Y - 1.15f) <= 0.06f;
+            if (status == "passed" && !(schoolRead && stamp2 && waterL2)) { status = "s4_failed"; error = $"read={schoolRead} stamp={stamp2} water={waterL2}"; }
+        }
+
+        if (status == "passed") yield return SnapDog("story_dog.png");
+
         bool saveOk = false;
         if (status == "passed")
         {
             var loaded = new SaveStore().Load();
-            saveOk = loaded != null && loaded.step == "B4_light" && loaded.flags.Contains("oven_lit")
+            saveOk = loaded != null && loaded.step == "S4_read" && loaded.flags.Contains("school_read")
+                && loaded.flags.Contains("ball_in_bowl") && loaded.flags.Contains("oven_lit")
                 && loaded.flags.Contains("letters_taken") && loaded.stamps.Contains("bakery")
-                && loaded.seenMemories.Contains("basket");
+                && loaded.stamps.Contains("school") && loaded.seenMemories.Contains("basket");
             if (!saveOk) { status = "save_failed"; error = "reload mismatch"; }
             // 恢复现场，避免审计把玩家存档带偏
             new SaveStore().Clear();
         }
 
-        // WP-12：小黑全程跟随、贴地、收尾时在身后
+        // WP-12：小黑从 S4 开始跟随、贴地、收尾时在身后
         float dogEnd = 999f;
         bool dogBehind = false;
         bool dogOk = false;
-        if (dog != null && dog.Bound && p != null)
+        if (dog != null && dog.Bound && dog.Following && p != null)
         {
             Vector3 dp = dog.transform.position, pp = p.transform.position;
             dogEnd = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
             var fwd = new Vector3(Mathf.Sin(p.yaw), 0f, Mathf.Cos(p.yaw));
             dogBehind = Vector3.Dot(new Vector3(dp.x - pp.x, 0f, dp.z - pp.z), fwd) < 0.05f;
-            dogOk = dogMax <= 4.0f && dogMinClear >= -0.05f && dogEnd <= 3.0f && dogBehind;
+            dogOk = dog.Visible && dogMax <= 4.0f && dogMinClear >= -0.05f && dogEnd <= 3.0f && dogBehind;
         }
         if (status == "passed" && !dogOk)
         {
             status = "dog_failed";
-            error = $"max={dogMax:F2} end={dogEnd:F2} clear={dogMinClear:F2} behind={dogBehind}";
+            error = $"follow={dog != null && dog.Following} max={dogMax:F2} end={dogEnd:F2} clear={dogMinClear:F2} behind={dogBehind}";
         }
 
         float secs = Time.realtimeSinceStartup - bakeryAt;
+        float schoolSecs = Time.realtimeSinceStartup - schoolAt;
         var sb = new StringBuilder();
         sb.AppendLine("{");
         sb.AppendLine("  \"status\": \"" + status + "\",");
@@ -257,7 +391,12 @@ public class StoryAudit : MonoBehaviour
                   + ", \"B1_matches\": " + (matchesOk ? "true" : "false")
                   + ", \"B2_wood\": " + (woodOk ? "true" : "false")
                   + ", \"B3_load\": " + (loadOk ? "true" : "false")
-                  + ", \"B4_light\": " + (litOk ? "true" : "false") + " },");
+                  + ", \"B4_light\": " + (litOk ? "true" : "false")
+                  + ", \"S0_arrive\": " + (s0Auto ? "true" : "false")
+                  + ", \"S1_slipper\": " + (slipperOk ? "true" : "false")
+                  + ", \"S2_ball\": " + (ballOk ? "true" : "false")
+                  + ", \"S3_bowl\": " + (bowlOk ? "true" : "false")
+                  + ", \"S4_read\": " + (schoolRead ? "true" : "false") + " },");
         sb.AppendLine("  \"intro\": { \"ran\": " + (introRan ? "true" : "false")
                   + ", \"seconds\": " + introSeconds.ToString("F1")
                   + ", \"start_expr\": \"" + exprStart + "\""
@@ -281,9 +420,24 @@ public class StoryAudit : MonoBehaviour
                   + ", \"fire_visible\": " + (fx != null && fx.FireVisible ? "true" : "false")
                   + ", \"smoke_visible\": " + (fx != null && fx.SmokeVisible ? "true" : "false")
                   + ", \"shots\": [\"story_bakery_letter.png\", \"story_oven.png\"] },");
+        sb.AppendLine("  \"school\": { \"seconds\": " + schoolSecs.ToString("F1")
+                  + ", \"auto_letter\": " + (s0Auto ? "true" : "false")
+                  + ", \"slipper\": " + (slipperOk ? "true" : "false")
+                  + ", \"ball\": " + (ballOk ? "true" : "false")
+                  + ", \"bowl\": " + (bowlOk ? "true" : "false")
+                  + ", \"ball_in_bowl\": " + (ballInBowl ? "true" : "false")
+                  + ", \"peek\": " + (dogPeek ? "true" : "false")
+                  + ", \"read\": " + (schoolRead ? "true" : "false")
+                  + ", \"line_by_line\": " + (linesShown == linesTotal && linesTotal > 0 ? "true" : "false")
+                  + ", \"lines_shown\": " + linesShown + "/" + linesTotal
+                  + ", \"expr_trace\": \"" + exprTrace + "\""
+                  + ", \"stamp\": " + (stamp2 ? "true" : "false")
+                  + ", \"water_l2\": " + (waterL2 ? "true" : "false")
+                  + ", \"shots\": [\"story_school_letter.png\", \"story_pawprints.png\", \"story_playground.png\", \"story_school_read.png\"] },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         var visual = dog != null ? dog.GetComponent<DogVisual>() : null;
-        sb.AppendLine("  \"dog\": { \"followed\": " + (dog != null && dog.Bound ? "true" : "false")
+        sb.AppendLine("  \"dog\": { \"followed\": " + (dog != null && dog.Following ? "true" : "false")
+                  + ", \"visible\": " + (dog != null && dog.Visible ? "true" : "false")
                   + ", \"follow_max\": " + dogMax.ToString("F2")
                   + ", \"distance_end\": " + dogEnd.ToString("F2")
                   + ", \"behind\": " + (dogBehind ? "true" : "false")
@@ -310,12 +464,27 @@ public class StoryAudit : MonoBehaviour
         return null;
     }
 
+    SchoolItem SchoolFind(string id)
+    {
+        foreach (var it in SchoolData.Load().items) if (it.id == id) return it;
+        return null;
+    }
+
     IEnumerator WalkRoute(Wp[] route, int from, int to)
     {
         if (to < 0) { walkFail = "route_index"; yield break; }
         for (int i = Mathf.Max(0, from); i <= to; i++)
         {
             yield return WalkTo(route[i].x, route[i].z, route[i].id);
+            if (walkFail != "" || boot.ui.LetterOpen) yield break;
+        }
+    }
+
+    IEnumerator WalkRouteBack(Wp[] route, int from, int to)
+    {
+        for (int i = from - 1; i >= to; i--)
+        {
+            yield return WalkTo(route[i].x, route[i].z, route[i].id + "r");
             if (walkFail != "" || boot.ui.LetterOpen) yield break;
         }
     }
@@ -383,7 +552,7 @@ public class StoryAudit : MonoBehaviour
     void Update()
     {
         if (Time.deltaTime > 0f) { sumFps += 1f / Time.deltaTime; frames++; }
-        if (dog != null && dog.Bound && boot != null && boot.player != null && boot.world != null)
+        if (dog != null && dog.Bound && dog.Following && boot != null && boot.player != null && boot.world != null)
         {
             var dp = dog.transform.position;
             var pp = boot.player.transform.position;

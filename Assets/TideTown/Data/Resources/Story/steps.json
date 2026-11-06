@@ -42,6 +42,38 @@
       "id": "B4_light",
       "goal": "目标：点燃烤炉，让它暖一暖",
       "letter": "",
+      "next": "S0_arrive"
+    },
+    {
+      "id": "S0_arrive",
+      "goal": "目标：走到学校后门，读阿萤的信",
+      "letter": "ying_dog",
+      "next": "S1_slipper",
+      "at": "20",
+      "auto": true
+    },
+    {
+      "id": "S1_slipper",
+      "goal": "目标：看看爪印尽头的拖鞋",
+      "letter": "",
+      "next": "S2_ball"
+    },
+    {
+      "id": "S2_ball",
+      "goal": "目标：到秋千下捡起红球",
+      "letter": "",
+      "next": "S3_bowl"
+    },
+    {
+      "id": "S3_bowl",
+      "goal": "目标：把红球放回狗碗",
+      "letter": "",
+      "next": "S4_read"
+    },
+    {
+      "id": "S4_read",
+      "goal": "目标：再读一遍阿萤的信",
+      "letter": "ying_dog",
       "next": ""
     }
   ]

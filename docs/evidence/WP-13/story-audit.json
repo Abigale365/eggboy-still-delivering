@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "steps": { "P0_boot": true, "P1_mailbox": true, "B0_arrive": true, "B1_matches": true, "B2_wood": true, "B3_load": true, "B4_light": true, "S0_arrive": true, "S1_slipper": true, "S2_ball": true, "S3_bowl": true, "S4_read": true },
+  "intro": { "ran": true, "seconds": 4.7, "start_expr": "sleepy", "end_expr": "happy", "face_ok": true, "shots": ["story_boot.png", "story_wake.png"] },
+  "pickup_seconds": 6.8,
+  "pickup_within_30s": true,
+  "bakery": { "seconds": 29.4, "auto_letter": true, "memory": true, "matches": true, "wood": true, "loaded": true, "lit": true, "stamp": true, "water_l1": true, "smoke": true, "fire_particles": 33, "smoke_particles": 101, "fire_visible": true, "smoke_visible": true, "shots": ["story_bakery_letter.png", "story_oven.png"] },
+  "school": { "seconds": 18.2, "auto_letter": true, "slipper": true, "ball": true, "bowl": true, "ball_in_bowl": true, "peek": true, "read": true, "line_by_line": true, "lines_shown": 5/5, "expr_trace": "sad>sad>curious>curious>happy", "stamp": true, "water_l2": true, "shots": ["story_school_letter.png", "story_pawprints.png", "story_playground.png", "story_school_read.png"] },
+  "save_reload": true,
+  "dog": { "followed": true, "visible": true, "follow_max": 1.26, "distance_end": 1.26, "behind": true, "ground_error_min": 0.00, "wag_hz": 4.6, "visual": "DogVisualGreybox", "shots": ["story_dog.png"] },
+  "letter_open": true,
+  "move_locked": true,
+  "no_repeat": true,
+  "avg_fps": 287.7,
+  "errors": ""
+}

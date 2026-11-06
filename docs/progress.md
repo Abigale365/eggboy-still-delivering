@@ -8,7 +8,7 @@
 | WP-01 | 自动化工具 | WP-00 | done | A(agent) | 2026-11-06 13:20 | TideBuild.All 成功（场景哈希不变）；-shot preview 出图；routeaudit 12/12；证据 docs/evidence/WP-01 |
 | WP-02 | 比例表和素材登记 | WP-00 | done | B(agent) | 2026-11-06 13:10 | Data/scale_table.json 41/41 对上 town_assets；docs/assets.md 已建；B8/S10/D4N 记为缺失 |
 | WP-03 | 素材瘦身 | WP-02 | blocked | B | 2026-11-06 13:10 | 用户 2026-11-06 决定暂不减面 |
-| WP-04 | 世界布局数据 | WP-02 | todo | B | 2026-11-06 13:25 | 工程书只读；交接修正记入 human-queue；待跑 build_layout.py 生成 world_layout.json 并叠图核对 |
+| WP-04 | 世界布局数据 | WP-02 | done | B(agent) | 2026-11-06 13:35 | world_layout.json + 高度/可走/分区 bytes 已生成；zones_overlay.jpg 已核对；5 个机位已写入；坡度 p99 62.7° 记入 human-queue |
 | WP-05 | 生成岛 | WP-01, WP-04 | todo | B | | |
 | WP-06 | 接入移动（M1） | WP-05 | todo | A | | |
 | WP-07 | 互动、任务、存档 | WP-06 | todo | A | | |

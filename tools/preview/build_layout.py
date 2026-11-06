@@ -194,8 +194,28 @@ def main():
                      "width": b.get("width", 0.0), "height": b.get("height", 0.0), "mirror": b.get("mirror", False)})
     plats = [{"id": p["id"], "y": p["y"], "walk": p["walk"], "x": [round(q[0], 3) for q in p["xz"]], "z": [round(q[1], 3) for q in p["xz"]]} for p in platforms]
     camdef = json.loads((WORLD / "preview_camera.json").read_text(encoding="utf-8"))
+    by_id = {p["id"]: p for p in pts}
+    by_name = {b["name"]: b for b in blds}
+
+    def named(name, pid, target, eye=1.6, fov=55):
+        a = by_id[pid]
+        ex, ey, ez = a["x"], a["y"] + eye, a["z"]
+        dx, dy, dz = target[0] - ex, target[1] - ey, target[2] - ez
+        yaw = math.degrees(math.atan2(dx, dz))
+        pitch = math.degrees(math.atan2(-dy, math.hypot(dx, dz)))
+        return {"name": name, "pos": [round(ex, 2), round(ey, 2), round(ez, 2)],
+                "euler": [round(pitch, 1), round(yaw, 1), 0.0], "fov": fov, "width": 1774, "height": 887}
+
+    def bpos(key):
+        b = by_name[key]
+        return (b["x"], b["y"] + 2.0, b["z"])
+
     out = {"grid": {"x0": round(x0, 4), "z0": round(z0, 4), "cell": CELL, "nx": nx, "nz": nz}, "points": pts, "buildings": blds, "platforms": plats,
-           "cameras": [{"name": "preview", "pos": camdef["pos"], "euler": camdef["euler"], "fov": camdef["fov"], "width": camdef["width"], "height": camdef["height"]}]}
+           "cameras": [{"name": "preview", "pos": camdef["pos"], "euler": camdef["euler"], "fov": camdef["fov"], "width": camdef["width"], "height": camdef["height"]},
+                       named("street", "10", (by_id["13"]["x"], by_id["13"]["y"] + 1.6, by_id["13"]["z"]), fov=60),
+                       named("bakery", "11", bpos("bakery")),
+                       named("school", "19", bpos("school")),
+                       named("lighthouse", "30", bpos("lighthouse"))]}
     (WORLD / "world_layout.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # 叠回预览图

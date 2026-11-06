@@ -3,7 +3,9 @@
   "steps": { "P1_mailbox": true },
   "save_reload": true,
   "letter_open": true,
-  "seconds": 1.7,
-  "avg_fps": 297.1,
+  "move_locked": true,
+  "no_repeat": true,
+  "seconds": 1.8,
+  "avg_fps": 299.7,
   "errors": ""
 }

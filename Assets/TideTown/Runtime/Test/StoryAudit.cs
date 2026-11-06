@@ -63,13 +63,21 @@ public class StoryAudit : MonoBehaviour
         }
 
         bool stepOk = false;
+        bool lockedMove = false;
+        bool noRepeat = false;
         if (status == "passed")
         {
             stepOk = boot.state.step == "P1_mailbox" && boot.state.flags.Contains("letters_taken");
+            var before = p.transform.position;
+            p.Move(0.05f, 1f, 0f, false, false);
+            lockedMove = (p.transform.position - before).magnitude < 0.01f;
             boot.ui.CloseLetter();
             yield return new WaitForSeconds(0.3f);
+            noRepeat = !boot.service.TryInteractNearest();
             if (!stepOk) { status = "state_wrong"; error = "step=" + boot.state.step; }
             else if (p.locked) { status = "still_locked"; error = "player.locked true"; }
+            else if (!lockedMove) { status = "move_while_reading"; error = "player moved with letter open"; }
+            else if (!noRepeat) { status = "repeat_interact"; error = "mailbox still interactable"; }
         }
 
         bool saveOk = false;
@@ -89,6 +97,8 @@ public class StoryAudit : MonoBehaviour
         sb.AppendLine("  \"steps\": { \"P1_mailbox\": " + (stepOk ? "true" : "false") + " },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         sb.AppendLine("  \"letter_open\": " + (opened ? "true" : "false") + ",");
+        sb.AppendLine("  \"move_locked\": " + (lockedMove ? "true" : "false") + ",");
+        sb.AppendLine("  \"no_repeat\": " + (noRepeat ? "true" : "false") + ",");
         sb.AppendLine("  \"seconds\": " + secs.ToString("F1") + ",");
         sb.AppendLine("  \"avg_fps\": " + (frames > 0 ? (sumFps / frames).ToString("F1") : "0") + ",");
         sb.AppendLine("  \"errors\": \"" + error + "\"");

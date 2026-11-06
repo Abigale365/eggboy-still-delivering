@@ -5,7 +5,7 @@
 | 工作包 | 内容 | 依赖 | 状态 | 负责 | 更新时间 | 备注 |
 |---|---|---|---|---|---|---|
 | WP-00 | 基线和版本管理 | 无 | done | A(agent) | 2026-11-06 12:52 | 基线 ba7236e；NATIVE_WINDOWS/NATIVE_WEBGL Succeeded errors=0；routeaudit passed 12/12；证据 docs/evidence/WP-00 |
-| WP-01 | 自动化工具 | WP-00 | todo | A | | |
+| WP-01 | 自动化工具 | WP-00 | doing | A(agent) | 2026-11-06 13:00 | |
 | WP-02 | 比例表和素材登记 | WP-00 | todo | B | | |
 | WP-03 | 素材瘦身 | WP-02 | todo | B | | |
 | WP-04 | 世界布局数据 | WP-02 | todo | B | | |

@@ -22,7 +22,7 @@ public sealed class GameBootstrap : MonoBehaviour
     static readonly string[] SkipIntroArgs =
     {
         "-noIntro", "-routeaudit", "-routeaudit2", "-wateraudit", "-scanaudit",
-        "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture",
+        "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture", "-mapaudit",
     };
 
 
@@ -182,16 +182,36 @@ public sealed class GameBootstrap : MonoBehaviour
             if (Features.scan) service.Register(scan);
         }
 
-        // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过
+        // WP-16：地图（预览图 + 投影红点）和 Esc 暂停菜单
+        var map = gameObject.AddComponent<TownMap>();
+        map.Init(player, ui, director, gate);
+        gameObject.AddComponent<MenuController>().Init(ui, map, director);
+
+        // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过；WP-16 真实开局先给标题画面
         var args = Environment.GetCommandLineArgs();
-        if (state.step == "P0_boot" && !Array.Exists(args, a => Array.IndexOf(SkipIntroArgs, a) >= 0))
+        bool introMode = state.step == "P0_boot" && !Array.Exists(args, a => Array.IndexOf(SkipIntroArgs, a) >= 0);
+        if (introMode)
         {
-            intro = gameObject.AddComponent<IntroSequence>();
-            intro.Begin(this);
+            if (Array.Exists(args, a => a == "-storyaudit") || Array.Exists(args, a => a == "-notitle"))
+            {
+                intro = gameObject.AddComponent<IntroSequence>();
+                intro.Begin(this);
+            }
+            else
+            {
+                player.locked = true;
+                ui.ShowTitle(() =>
+                {
+                    intro = gameObject.AddComponent<IntroSequence>();
+                    intro.Begin(this);
+                });
+            }
         }
 
         if (Array.Exists(args, a => a == "-storyaudit"))
             gameObject.AddComponent<StoryAudit>().Begin(this);
+        if (Array.Exists(args, a => a == "-mapaudit"))
+            gameObject.AddComponent<MapAudit>().Begin(this);
         if (Array.Exists(args, a => a == "-wateraudit"))
             gameObject.AddComponent<WaterAudit>().Begin(this);
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-scanaudit"))

@@ -20,7 +20,7 @@
 | WP-13 | 学校（M4） | WP-11, WP-12 | done | A(agent) | 2026-11-06 23:35 | storyaudit passed：B4→S0 自动读信、爪印一路到操场、拖鞋→红球→狗碗、S4 逐行 5/5 与面屏 sad→sad→curious→curious→happy、邮戳 2/3、水位 L2、重开恢复；小黑 S3 探头（滑梯旁）S4 接回身后；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-13。C1–C8 灰盒待 WP-17。未验证：WebGL 浏览器实跑画面、读信蹲下（当前无 crouch 接口） |
 | WP-14 | 灯塔（M5） | WP-13 | done | A(agent) | 2026-11-07 00:36 | storyaudit passed：L0 踩木箱到船棚、油壶、塔门淡出登塔、加油读老陈的信、点灯（天光约 20 s 转暗 + 光束扫海）、山那边 40 个手电、邮戳 3/3、水位 L3、重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-14。顺带修两个底层问题：头顶平台会把 GroundAt 抬到 12 m 高、同文件多 MonoBehaviour 导致 level0 反序列化损坏。塔身/灯头仍灰盒待 WP-17；小黑上塔前留在塔下。未验证：WebGL 浏览器实跑画面、这段情绪高潮的录像 |
 | WP-15 | 结局（M6） | WP-14 | done | A(agent) | 2026-11-07 01:25 | storyaudit passed：22 步全过；塔顶下塔回邮局、天光转黎明、课桌老周的信（惊讶→笑）、上山到 06、回望镜头 + 水位 L4、新城 40 个光点与字幕“所有的信，都送到了。”；小黑一路跟到 1.26 m；save_reload；总时长 96.6 s（审计加速，非真人时长）；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-15。停在最终画面，标题/暂停留 WP-16；新城灯光仍是光点占位。未验证：WebGL 浏览器实跑画面、真人从头通关一遍并记录卡点 |
-| WP-16 | 界面收尾 | WP-11 | todo | A | | |
+| WP-16 | 界面收尾 | WP-11 | done | A(agent) | 2026-11-07 01:42 | mapaudit passed：5 个点（03/07/11/20/31）红点按预览相机投影对位、读信时地图打不开、地图开着来信会自动让位；地图改用 world_layout + preview.png，带目标与邮戳；标题画面、Esc 暂停、音量滑杆（PlayerPrefs 记忆）；中文字体统一 NotoSansSC，调试标签默认隐藏；storyaudit 22 步仍全过、route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-16。未验证：真人点击标题/暂停/拖音量、WebGL 浏览器实跑 |
 | WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | todo | B | | |
 | WP-18 | 环境素材 | WP-17，用户批准生成单 | todo | B | | |
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |

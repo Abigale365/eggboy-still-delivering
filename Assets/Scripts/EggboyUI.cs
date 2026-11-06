@@ -23,6 +23,14 @@ public class EggboyUI : MonoBehaviour
     Canvas canvas;
     Text goalText, promptText, lookText, tutorialText, carryText, toastText, subtitleText;
     GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel, subtitlePanel;
+    GameObject titlePanel, pausePanel;
+    Slider volumeBar1, volumeBar2;
+    Text volumeText1, volumeText2;
+    System.Action onTitleStart;
+    bool titleShowing;
+    public bool Paused { get; private set; }
+    public bool TitleShowing => titleShowing;
+    float volume = 1f;
     float toastUntil;
     readonly System.Collections.Generic.List<Image> faceBg = new System.Collections.Generic.List<Image>();
     readonly System.Collections.Generic.List<Text> faceLabel = new System.Collections.Generic.List<Text>();
@@ -175,6 +183,7 @@ public class EggboyUI : MonoBehaviour
         subtitlePanel.SetActive(false);
 
         BuildLetter(root);
+        BuildMenus(root);
     }
 
     void BuildLetter(RectTransform root)
@@ -215,6 +224,121 @@ public class EggboyUI : MonoBehaviour
         letterHint = Label(paper.transform, "点一下或按 E 收起信", 12, new Color32(0xa0, 0x8a, 0x6a, 255), TextAnchor.MiddleCenter, 30, -572, 500, 24, false);
     }
 
+    // WP-16：标题画面、暂停、音量
+    void BuildMenus(RectTransform root)
+    {
+        volume = PlayerPrefs.GetFloat("tidetown.volume", 1f);
+        AudioListener.volume = volume;
+
+        var title = Panel(root, 0, 0, 860, 460, new Color32(0x1a, 0x14, 0x10, 242), true, true);
+        SetRect(title.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 860, 460);
+        CenterLabel(title.transform, "EGGBOY · Still Delivering", 32, new Color32(0xfb, 0xef, 0xd9, 255), 128, 46, true);
+        CenterLabel(title.transform, "潮汐镇 · 最后一位邮差", 18, new Color32(0xe8, 0xd6, 0xb4, 255), 78, 30, false);
+        var start = CenterPanel(title.transform, 260, 50, 8, new Color32(0xff, 0x9a, 0x4d, 255));
+        var startBtn = start.gameObject.AddComponent<Button>();
+        startBtn.targetGraphic = start;
+        startBtn.transition = Selectable.Transition.None;
+        startBtn.onClick.AddListener(StartFromTitle);
+        CenterLabel(start.transform, "按 Enter 开始", 18, new Color32(0xff, 0xf8, 0xec, 255), 0, 40, true);
+        volumeText1 = CenterLabel(title.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -86, 24, false);
+        volumeBar1 = BuildVolume(title.transform, -118);
+        titlePanel = title.gameObject;
+        titlePanel.SetActive(false);
+
+        var pause = Panel(root, 0, 0, 520, 320, new Color32(0x1a, 0x14, 0x10, 242), true, true);
+        SetRect(pause.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 520, 320);
+        CenterLabel(pause.transform, "暂停", 28, new Color32(0xfb, 0xef, 0xd9, 255), 110, 40, true);
+        var resume = CenterPanel(pause.transform, 220, 46, 44, new Color32(0xff, 0x9a, 0x4d, 255));
+        var resumeBtn = resume.gameObject.AddComponent<Button>();
+        resumeBtn.targetGraphic = resume;
+        resumeBtn.transition = Selectable.Transition.None;
+        resumeBtn.onClick.AddListener(() => SetPaused(false));
+        CenterLabel(resume.transform, "继续", 17, new Color32(0xff, 0xf8, 0xec, 255), 0, 36, true);
+        volumeText2 = CenterLabel(pause.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -34, 24, false);
+        volumeBar2 = BuildVolume(pause.transform, -66);
+        CenterLabel(pause.transform, "Esc 继续", 12, new Color32(0xa0, 0x8a, 0x6a, 255), -120, 20, false);
+        pausePanel = pause.gameObject;
+        pausePanel.SetActive(false);
+        ApplyVolume(volume);
+    }
+
+    Text CenterLabel(Transform parent, string text, int size, Color32 color, float y, float h, bool bold)
+    {
+        var t = Label(parent, text, size, color, TextAnchor.MiddleCenter, 0, 0, 720, h, bold);
+        SetRect(t.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, y, 720, h);
+        return t;
+    }
+
+    Image CenterPanel(Transform parent, float w, float h, float y, Color32 color)
+    {
+        var img = Panel(parent, 0, 0, w, h, color, true, false);
+        SetRect(img.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, y, w, h);
+        return img;
+    }
+
+    Slider BuildVolume(Transform parent, float y)
+    {
+        var bar = CenterPanel(parent, 300, 14, y, new Color32(0x3b, 0x2a, 0x1a, 255));
+        var fill = CenterPanel(bar.transform, 290, 8, 0, new Color32(0xff, 0x9a, 0x4d, 255));
+        var handle = CenterPanel(bar.transform, 22, 22, 0, new Color32(0xff, 0xf8, 0xec, 255));
+        var slider = bar.gameObject.AddComponent<Slider>();
+        slider.fillRect = fill.rectTransform;
+        slider.handleRect = handle.rectTransform;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = 0f;
+        slider.maxValue = 1f;
+        slider.value = volume;
+        slider.onValueChanged.AddListener(ApplyVolume);
+        return slider;
+    }
+
+    void ApplyVolume(float v)
+    {
+        volume = Mathf.Clamp01(v);
+        AudioListener.volume = volume;
+        PlayerPrefs.SetFloat("tidetown.volume", volume);
+        PlayerPrefs.Save();
+        if (volumeBar1 != null && Mathf.Abs(volumeBar1.value - volume) > 0.001f) volumeBar1.SetValueWithoutNotify(volume);
+        if (volumeBar2 != null && Mathf.Abs(volumeBar2.value - volume) > 0.001f) volumeBar2.SetValueWithoutNotify(volume);
+        var label = "音量 " + Mathf.RoundToInt(volume * 100f) + "%";
+        if (volumeText1 != null) volumeText1.text = label;
+        if (volumeText2 != null) volumeText2.text = label;
+    }
+
+    public void ShowTitle(System.Action onStart)
+    {
+        onTitleStart = onStart;
+        titleShowing = true;
+        if (titlePanel != null) titlePanel.SetActive(true);
+        ApplyVolume(volume);
+    }
+
+    void StartFromTitle()
+    {
+        if (!titleShowing) return;
+        titleShowing = false;
+        if (titlePanel != null) titlePanel.SetActive(false);
+        var cb = onTitleStart;
+        onTitleStart = null;
+        if (cb != null) cb();
+    }
+
+    public void SetPaused(bool on)
+    {
+        if (Paused == on) return;
+        Paused = on;
+        if (pausePanel != null) pausePanel.SetActive(on);
+        if (on) ApplyVolume(volume);
+        Time.timeScale = on ? 0f : 1f;
+        if (player != null) player.locked = on;
+        if (on)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
+
     public void SetGoal(string text)
     {
         if (goalText == null) return;
@@ -222,6 +346,8 @@ public class EggboyUI : MonoBehaviour
         if (goalText.transform.parent != null)
             goalText.transform.parent.gameObject.SetActive(!string.IsNullOrEmpty(text));
     }
+
+    public string GoalText => goalText != null ? goalText.text : "";
 
     // 序章教学一行；空串即隐藏
     public void SetTutorial(string text)
@@ -350,6 +476,13 @@ public class EggboyUI : MonoBehaviour
     {
         if (toastPanel != null && toastPanel.activeSelf && Time.unscaledTime >= toastUntil)
             toastPanel.SetActive(false);
+        if (titleShowing)
+        {
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+                StartFromTitle();
+            return;
+        }
+        if (Paused) return;
         if (player == null || world == null) return;
         if (LetterOpen)
         {

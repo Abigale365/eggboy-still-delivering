@@ -4,7 +4,7 @@
 # Old result files are deleted first, so a result can only come from this run.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [ValidateSet('route','shot','water','scan','story')][string]$Mode = 'route',
+    [ValidateSet('route','shot','water','scan','story','map')][string]$Mode = 'route',
     [string]$Shot = 'preview',
     [switch]$IdPass,
     [string]$OutDir = '',
@@ -40,6 +40,10 @@ try {
                    'shots\story_lighthouse_reply.png',
                    'shots\story_ending_desk.png', 'shots\story_ending_letter.png',
                    'shots\story_ending_lookback.png', 'shots\story_ending_city.png')
+    } elseif ($Mode -eq 'map') {
+        $argv += ' -mapaudit -resetsave'
+        $files = @('map-audit.json', 'shots\map_03.png', 'shots\map_07.png', 'shots\map_11.png',
+                   'shots\map_20.png', 'shots\map_31.png', 'shots\map_letter_blocked.png')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")
@@ -106,6 +110,11 @@ try {
     }
     if ($Mode -eq 'story') {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'story-audit.json'))
+        Write-Host $content
+        if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
+    }
+    if ($Mode -eq 'map') {
+        $content = [IO.File]::ReadAllText((Join-Path $dir 'map-audit.json'))
         Write-Host $content
         if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
     }

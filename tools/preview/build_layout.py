@@ -191,7 +191,8 @@ def main():
     for name, b in zones["buildings"].items():
         x, z = cam.unproject(*b["foot"], b["y"])
         blds.append({"name": name, "instance": b["instance"], "asset": b["asset"], "x": round(x, 3), "y": b["y"], "z": round(z, 3),
-                     "width": b.get("width", 0.0), "height": b.get("height", 0.0), "mirror": b.get("mirror", False)})
+                     "width": b.get("width", 0.0), "height": b.get("height", 0.0), "mirror": b.get("mirror", False),
+                     "box": b["box"], "foot": b["foot"]})
     plats = [{"id": p["id"], "y": p["y"], "walk": p["walk"], "x": [round(q[0], 3) for q in p["xz"]], "z": [round(q[1], 3) for q in p["xz"]]} for p in platforms]
     camdef = json.loads((WORLD / "preview_camera.json").read_text(encoding="utf-8"))
     by_id = {p["id"]: p for p in pts}
@@ -210,12 +211,31 @@ def main():
         b = by_name[key]
         return (b["x"], b["y"] + 2.0, b["z"])
 
-    out = {"grid": {"x0": round(x0, 4), "z0": round(z0, 4), "cell": CELL, "nx": nx, "nz": nz}, "points": pts, "buildings": blds, "platforms": plats,
-           "cameras": [{"name": "preview", "pos": camdef["pos"], "euler": camdef["euler"], "fov": camdef["fov"], "width": camdef["width"], "height": camdef["height"]},
-                       named("street", "10", (by_id["13"]["x"], by_id["13"]["y"] + 1.6, by_id["13"]["z"]), fov=60),
-                       named("bakery", "11", bpos("bakery")),
-                       named("school", "19", bpos("school")),
-                       named("lighthouse", "30", bpos("lighthouse"))]}
+    walk_areas = []
+    for t in tiers:
+        if t.get("walk"):
+            walk_areas.append({"id": t["id"], "y": t["y"], "x": [round(q[0], 3) for q in t["xz"]], "z": [round(q[1], 3) for q in t["xz"]]})
+    for p in platforms:
+        if p.get("walk"):
+            walk_areas.append({"id": p["id"], "y": p["y"], "x": [round(q[0], 3) for q in p["xz"]], "z": [round(q[1], 3) for q in p["xz"]]})
+
+    out = {
+        "points": pts,
+        "coast": {"x": [round(q[0], 3) for q in land_xz[0]], "z": [round(q[1], 3) for q in land_xz[0]]},
+        "tiers": [{"id": t["id"], "y": t["y"], "walk": t.get("walk", False),
+                   "x": [round(q[0], 3) for q in t["xz"]], "z": [round(q[1], 3) for q in t["xz"]]} for t in tiers],
+        "roads": [{"id": r["id"], "kind": r["kind"], "width": r["width"], "walk": r.get("walk", False),
+                   "x": [round(n[0], 3) for n in r["xyz"]], "y": [round(n[1], 3) for n in r["xyz"]],
+                   "z": [round(n[2], 3) for n in r["xyz"]]} for r in roads],
+        "walk": walk_areas,
+        "buildings": blds,
+        "props": [],
+        "cameras": [{"name": "preview", "pos": camdef["pos"], "euler": camdef["euler"], "fov": camdef["fov"], "width": camdef["width"], "height": camdef["height"]},
+                    named("street", "10", (by_id["13"]["x"], by_id["13"]["y"] + 1.6, by_id["13"]["z"]), fov=60),
+                    named("bakery", "11", bpos("bakery")),
+                    named("school", "19", bpos("school")),
+                    named("lighthouse", "30", bpos("lighthouse"))]
+    }
     (WORLD / "world_layout.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 
     # 叠回预览图

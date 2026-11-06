@@ -95,12 +95,14 @@ public class ShotTool : MonoBehaviour
             for (int i = 0; i < info.Count; i++) sb.Append(i == 0 ? "" : ", ").Append('"').Append(info[i]).Append("\": ").Append((i + 1) * 20);
             sb.Append("},\n  \"points\": {");
             bool first = true;
+            // 截图用的是 RenderTexture；这里按同一画幅的视图坐标换算，避免落到屏幕分辨率上
+            cam.aspect = (float)w / h;
             foreach (var t in FindObjectsOfType<Transform>())
             {
                 if (!t.name.StartsWith("P_")) continue;
-                var s = cam.WorldToScreenPoint(t.position);
+                var s = cam.WorldToViewportPoint(t.position);
                 sb.Append(first ? "" : ", ").Append('"').Append(t.name.Substring(2)).Append("\": [")
-                  .Append(s.x.ToString("F1")).Append(", ").Append((h - s.y).ToString("F1")).Append("]");
+                  .Append((s.x * w).ToString("F1")).Append(", ").Append(((1f - s.y) * h).ToString("F1")).Append("]");
                 first = false;
             }
             sb.Append("}\n}\n");

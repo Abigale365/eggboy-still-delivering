@@ -18,7 +18,7 @@
 | WP-11 | 面包店（M3） | WP-10 | done | A(agent) | 2026-11-06 21:25 | storyaudit passed：B0 到点自动读信、A4/A5/A6/A7/A8 回忆线索（抽测面包篮）、火柴→柴火→装炉→点火全链、邮戳 1/3、水位 L1、烟囱粒子和炉火可见；面包店 11.2 s，重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-11。占位灰盒待 WP-17，A1–A8 未减面（WP-03 blocked） |
 | WP-12 | 小黑入工程 | WP-06 | done | A(agent) | 2026-11-06 23:00 | 模型未导入，按用户决定先做灰盒占位并预留 `DogVisual` 接口（换模型只改 `BuildDog`）：跟随身后 1.2 m、贴地、走/小跑/摇尾；storyaudit passed，dog follow_max 2.94 m、收尾 1.26 m、ground_error 0、behind true；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-12，接口说明 docs/reserved-interfaces.md。未验证：WebGL 浏览器实跑画面、真实小黑 GLB |
 | WP-13 | 学校（M4） | WP-11, WP-12 | done | A(agent) | 2026-11-06 23:35 | storyaudit passed：B4→S0 自动读信、爪印一路到操场、拖鞋→红球→狗碗、S4 逐行 5/5 与面屏 sad→sad→curious→curious→happy、邮戳 2/3、水位 L2、重开恢复；小黑 S3 探头（滑梯旁）S4 接回身后；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-13。C1–C8 灰盒待 WP-17。未验证：WebGL 浏览器实跑画面、读信蹲下（当前无 crouch 接口） |
-| WP-14 | 灯塔（M5） | WP-13 | todo | A | | |
+| WP-14 | 灯塔（M5） | WP-13 | done | A(agent) | 2026-11-07 00:36 | storyaudit passed：L0 踩木箱到船棚、油壶、塔门淡出登塔、加油读老陈的信、点灯（天光约 20 s 转暗 + 光束扫海）、山那边 40 个手电、邮戳 3/3、水位 L3、重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-14。顺带修两个底层问题：头顶平台会把 GroundAt 抬到 12 m 高、同文件多 MonoBehaviour 导致 level0 反序列化损坏。塔身/灯头仍灰盒待 WP-17；小黑上塔前留在塔下。未验证：WebGL 浏览器实跑画面、这段情绪高潮的录像 |
 | WP-15 | 结局（M6） | WP-14 | todo | A | | |
 | WP-16 | 界面收尾 | WP-11 | todo | A | | |
 | WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | todo | B | | |

@@ -4,11 +4,13 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 // 圆或轴对齐矩形。top：能站上去的台子；water：水坑，走不进去，只能跳过去
+// minY：只在这个高度以上挡人（塔顶栏杆），高于 0 时才生效
 public class EggboyCollider
 {
     public float x, z;
     public float? r, hw, hd, top;
     public bool water;
+    public float minY;
 }
 
 public class EggboyWorld : MonoBehaviour, IEggboyWorld
@@ -237,6 +239,8 @@ public class EggboyWorld : MonoBehaviour, IEggboyWorld
     }
 
     // 脚下地面高度：码头木板面 13 cm，台子按台面
+    public float GroundAt(float x, float z, float aboveY) => GroundAt(x, z);
+
     public float GroundAt(float x, float z)
     {
         float y = x > PierX0 && x < PierX1 && z > PierZ0 && z < PierZ1 ? 0.13f : 0f;

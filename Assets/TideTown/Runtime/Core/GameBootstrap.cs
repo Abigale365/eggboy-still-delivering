@@ -123,6 +123,29 @@ public sealed class GameBootstrap : MonoBehaviour
             else if (state.carrying == "ball") schoolBall.Take(player.transform);
         }
 
+        // WP-14：船棚油壶、灯塔塔门、灯头和塔顶三件回忆
+        var light = LighthouseData.Load();
+        foreach (var item in light.items)
+        {
+            var pos = new Vector3(item.x, item.y, item.z);
+            if (item.id == "oil") service.Register(new OilCanInteractable(pos, director));
+            else if (!string.IsNullOrEmpty(item.text))
+                service.Register(new MemoryInteractable(pos, director, item.id, item.label, item.text));
+        }
+        service.Register(new LighthouseDoorInteractable(LighthouseData.Point(light.door), director));
+        service.Register(new LampHeadInteractable(LighthouseData.Point(light.lamp), director));
+
+        // 存档里已经点过灯，重开时天光和光束、山那边的手电都要还在
+        if (state.flags.Contains("beam_lit"))
+        {
+            var dimmer = FindObjectOfType<SkyDimmer>();
+            if (dimmer != null) dimmer.SetDimmedInstant();
+            var beacon = FindObjectOfType<BeaconLight>();
+            if (beacon != null) beacon.TurnOn();
+            var reply = FindObjectOfType<FlashlightReply>();
+            if (reply != null) reply.SetDoneInstant();
+        }
+
         // WP-12/13：小黑在 S3 前不在场，球放进碗后从滑梯下探头，S4 读完信才开始跟随
         var dog = FindObjectOfType<DogFollower>();
         if (dog != null)

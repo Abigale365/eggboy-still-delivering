@@ -96,6 +96,7 @@ public sealed class StoryDirector : MonoBehaviour
         if (State.carrying == "matches") return "邮包 · 火柴盒";
         if (State.carrying == "wood") return "手上 · 柴火捆";
         if (State.carrying == "ball") return "手上 · 红球";
+        if (State.carrying == "oil") return "手上 · 油壶";
         return "";
     }
 
@@ -307,8 +308,10 @@ public sealed class StoryDirector : MonoBehaviour
         if (game != null) game.SetExpression(ExprId.happy);
         else if (player != null) player.PlayEmote("hop");
         ui.SetCarried("");
-        ui.SetGoal("目标：第二站完成，小黑跟上了");
         ui.ShowToast("邮戳 2/3 · 学校");
+        // S4 读完信后才接上灯塔段；提前合上信也走这里，避免停在 S4_read
+        if (State.step == "S4_read") AdvanceTo("L0_cross");
+        else ApplyStepGoal();
     }
 
     static string[] SplitLines(string body)
@@ -317,6 +320,153 @@ public sealed class StoryDirector : MonoBehaviour
         foreach (var raw in body.Split('\n'))
             if (!string.IsNullOrWhiteSpace(raw)) lines.Add(raw.Trim());
         return lines.ToArray();
+    }
+
+    // ---- WP-14 灯塔 ----
+
+    const float FadeSeconds = 0.55f;
+    bool climbing;
+    UnityEngine.UI.Image fade;
+
+    public bool Climbing => climbing;
+
+    public void TakeOil()
+    {
+        if (!ready || State.step != "L1_shed" || State.flags.Contains("oil_taken")) return;
+        State.flags.Add("oil_taken");
+        State.carrying = "oil";
+        store.Save(State);
+        if (player != null) player.PlayEmote("give");
+        ui.SetCarried(CarryLabel());
+        ui.ShowToast("油壶里还剩小半壶。");
+        AdvanceTo("L2_door");
+    }
+
+    public void ClimbTower()
+    {
+        if (!ready || State.step != "L2_door" || climbing) return;
+        StartCoroutine(ClimbTowerRoutine());
+    }
+
+    // 工程书 L2：淡出、爬楼梯的短过场，再淡入到塔顶平台
+    System.Collections.IEnumerator ClimbTowerRoutine()
+    {
+        climbing = true;
+        if (player != null) player.locked = true;
+        var dog = FindObjectOfType<DogFollower>();
+        if (dog != null) dog.Hide(); // 小黑不会爬塔，留在塔下
+        yield return FadeTo(1f, FadeSeconds);
+
+        var data = LighthouseData.Load();
+        var deck = LighthouseData.Point(data.deck);
+        if (deck.y <= 0.1f) deck = new Vector3(22.18f, 16.98f, 3.3f);
+        var lamp = LighthouseData.Point(data.lamp);
+        float yaw = Mathf.Atan2(lamp.x - deck.x, lamp.z - deck.z);
+        if (player != null)
+        {
+            player.transform.position = deck;
+            player.vel = Vector3.zero;
+            player.grounded = true;
+            player.yaw = yaw;
+            player.transform.rotation = Quaternion.Euler(0f, yaw * Mathf.Rad2Deg, 0f);
+        }
+        var chase = FindObjectOfType<ChaseCamera>();
+        if (chase != null) chase.SnapBehind(deck, yaw);
+        yield return null;
+        yield return null;
+        AdvanceTo("L3_oil");
+        yield return FadeTo(0f, FadeSeconds);
+        if (player != null) player.locked = false;
+        climbing = false;
+    }
+
+    public void OilLamp()
+    {
+        if (!ready || State.step != "L3_oil" || State.flags.Contains("lamp_oiled")) return;
+        State.flags.Add("lamp_oiled");
+        State.carrying = "";
+        store.Save(State);
+        ui.SetCarried("");
+        if (game != null) game.SetExpression(ExprId.thinking);
+        var st = Step("L3_oil");
+        var letter = FindLetter(st != null ? st.letter : "");
+        letterLock = gate != null ? gate.Acquire("lighthouse") : null;
+        if (letterLock != null && player != null) player.locked = true;
+        if (letter != null) ui.ShowLetterDetail(letter.title, letter.body, letter.signature);
+        else ui.ShowLetter();
+    }
+
+    public void LightLamp()
+    {
+        if (!ready || State.step != "L4_light" || State.flags.Contains("beam_lit")) return;
+        State.flags.Add("beam_lit");
+        store.Save(State);
+        if (game != null) game.SetExpression(ExprId.excited);
+        if (player != null) player.PlayEmote("hop");
+        var dimmer = FindObjectOfType<SkyDimmer>();
+        if (dimmer != null) dimmer.Dim(20f);
+        var beacon = FindObjectOfType<BeaconLight>();
+        if (beacon != null) beacon.TurnOn();
+        var reply = FindObjectOfType<FlashlightReply>();
+        if (reply != null) reply.Begin();
+        ui.ShowToast("灯塔亮了。");
+        StartCoroutine(FinishLighthouse(reply));
+    }
+
+    System.Collections.IEnumerator FinishLighthouse(FlashlightReply reply)
+    {
+        float t0 = Time.realtimeSinceStartup;
+        while (reply != null && !reply.Done && Time.realtimeSinceStartup - t0 < 30f) yield return null;
+        FinishLighthouseNow();
+    }
+
+    // 山那边的手电亮完：盖第三枚邮戳，水位到 L3
+    public void FinishLighthouseNow()
+    {
+        if (State.flags.Contains("lighthouse_done")) return;
+        State.flags.Add("lighthouse_done");
+        if (!State.stamps.Contains("lighthouse")) State.stamps.Add("lighthouse");
+        store.Save(State);
+        if (water != null) water.SetLevel("L3", 2.5f);
+        if (game != null) game.SetExpression(ExprId.happy);
+        AdvanceTo("L5_reply");
+        ui.ShowToast("邮戳 3/3 · 灯塔");
+    }
+
+    System.Collections.IEnumerator FadeTo(float alpha, float seconds)
+    {
+        EnsureFade();
+        float from = fade.color.a;
+        float t = 0f;
+        while (t < seconds)
+        {
+            t += Time.unscaledDeltaTime;
+            var c = fade.color;
+            c.a = Mathf.Lerp(from, alpha, Mathf.Clamp01(t / seconds));
+            fade.color = c;
+            yield return null;
+        }
+        var end = fade.color;
+        end.a = alpha;
+        fade.color = end;
+    }
+
+    void EnsureFade()
+    {
+        if (fade != null) return;
+        var go = new GameObject("WP14 Fade", typeof(Canvas), typeof(UnityEngine.UI.Image));
+        go.transform.SetParent(transform, false);
+        var canvas = go.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 40;
+        var rect = go.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        fade = go.GetComponent<UnityEngine.UI.Image>();
+        fade.color = new Color(0f, 0f, 0f, 0f);
+        fade.raycastTarget = false;
     }
 
     void OnLetterClosed()
@@ -366,6 +516,13 @@ public sealed class StoryDirector : MonoBehaviour
         if (dx * dx + dz * dz > 1.4f * 1.4f) return;
 
         arrivedStep = st.id;
+        // 不带信纸的到点步骤（L0 踩木箱到船棚）直接推进，不锁人
+        if (string.IsNullOrEmpty(st.letter))
+        {
+            if (!string.IsNullOrEmpty(st.next)) AdvanceTo(st.next);
+            else ApplyStepGoal();
+            return;
+        }
         letterLock = gate.Acquire("letter");
         if (letterLock == null) return;
         if (player != null)

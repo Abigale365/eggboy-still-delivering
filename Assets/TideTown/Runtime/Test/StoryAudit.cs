@@ -58,6 +58,7 @@ public class StoryAudit : MonoBehaviour
         var asset = Resources.Load<TextAsset>("World/route");
         var route = JsonUtility.FromJson<RouteList>(asset.text).route;
         int i03 = -1, i11 = -1, i12 = -1, i13 = -1, i20 = -1, i21 = -1;
+        int i22 = -1, i22b = -1, i25 = -1, i30 = -1;
         for (int i = 0; i < route.Length; i++)
         {
             if (i03 < 0 && route[i].id == "03") i03 = i;
@@ -66,6 +67,9 @@ public class StoryAudit : MonoBehaviour
             else if (i13 < 0 && route[i].id == "13") i13 = i;
             else if (i20 < 0 && route[i].id == "20") i20 = i;
             else if (i21 < 0 && route[i].id == "21") i21 = i;
+            if (route[i].id == "22") { if (i22 < 0) i22 = i; else if (i22b < 0) i22b = i; }
+            if (i25 < 0 && route[i].id == "25") i25 = i;
+            if (i30 < 0 && route[i].id == "30") i30 = i;
         }
 
         // 07 → 03 取信
@@ -349,30 +353,21 @@ public class StoryAudit : MonoBehaviour
 
         if (status == "passed") yield return SnapDog("story_dog.png");
 
-        bool saveOk = false;
-        if (status == "passed")
-        {
-            var loaded = new SaveStore().Load();
-            saveOk = loaded != null && loaded.step == "S4_read" && loaded.flags.Contains("school_read")
-                && loaded.flags.Contains("ball_in_bowl") && loaded.flags.Contains("oven_lit")
-                && loaded.flags.Contains("letters_taken") && loaded.stamps.Contains("bakery")
-                && loaded.stamps.Contains("school") && loaded.seenMemories.Contains("basket");
-            if (!saveOk) { status = "save_failed"; error = "reload mismatch"; }
-            // 恢复现场，避免审计把玩家存档带偏
-            new SaveStore().Clear();
-        }
-
-        // WP-12：小黑从 S4 开始跟随、贴地、收尾时在身后
+        // WP-12：小黑从 S4 开始跟随、贴地、收尾时在身后（上塔前结算，塔顶小黑留在塔下）
         float dogEnd = 999f;
         bool dogBehind = false;
         bool dogOk = false;
+        bool dogFollowed = false;
+        float dogMaxCheck = 0f;
         if (dog != null && dog.Bound && dog.Following && p != null)
         {
             Vector3 dp = dog.transform.position, pp = p.transform.position;
             dogEnd = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
             var fwd = new Vector3(Mathf.Sin(p.yaw), 0f, Mathf.Cos(p.yaw));
             dogBehind = Vector3.Dot(new Vector3(dp.x - pp.x, 0f, dp.z - pp.z), fwd) < 0.05f;
+            dogMaxCheck = dogMax;
             dogOk = dog.Visible && dogMax <= 4.0f && dogMinClear >= -0.05f && dogEnd <= 3.0f && dogBehind;
+            dogFollowed = dog.Visible;
         }
         if (status == "passed" && !dogOk)
         {
@@ -380,8 +375,136 @@ public class StoryAudit : MonoBehaviour
             error = $"follow={dog != null && dog.Following} max={dogMax:F2} end={dogEnd:F2} clear={dogMinClear:F2} behind={dogBehind}";
         }
 
-        float secs = Time.realtimeSinceStartup - bakeryAt;
         float schoolSecs = Time.realtimeSinceStartup - schoolAt;
+
+        // WP-14：踩木箱到船棚 → 油壶 → 塔门 → 加油读信 → 点灯 → 天暗/光束 → 手电回应
+        float lightAt = Time.realtimeSinceStartup;
+        bool l0Auto = false, oilOk = false, climbOk = false, oilLetter = false;
+        bool beamOk = false, dimOk = false, beaconOk = false, replyOk = false, stamp3 = false, waterL3 = false;
+        int replyCount = 0;
+
+        if (status == "passed")
+        {
+            // 学校后门原路回 20，再沿路线穿过低洼段的木箱到船棚
+            yield return WalkTo(route[i20].x, route[i20].z, "20_back");
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            else yield return WalkRoute(route, i20, i25);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            l0Auto = boot.state.step == "L1_shed";
+            if (status == "passed" && !l0Auto) { status = "l0_failed"; error = "step=" + boot.state.step + " [" + boot.director.DebugAuto + "]"; }
+            if (status == "passed") yield return SnapFrom("story_lighthouse_crates.png",
+                new Vector3(15.5f, 5.8f, -8.9f), new Vector3(15.5f, 1.3f, -6.5f));
+        }
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("oil")) { status = "oil_failed"; error = "oil not in range"; }
+            else
+            {
+                yield return new WaitForSeconds(0.25f);
+                oilOk = boot.state.step == "L2_door" && boot.state.carrying == "oil";
+                if (!oilOk) { status = "oil_failed"; error = "step=" + boot.state.step + " carry=" + boot.state.carrying; }
+            }
+        }
+
+        // 原路回 22，再走台阶到 30 号塔门
+        if (status == "passed")
+        {
+            yield return WalkRouteBack(route, i25 + 1, i22);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            else yield return WalkRoute(route, i22b + 1, i30);
+            if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
+            if (status == "passed") yield return SnapFrom("story_lighthouse_door.png",
+                new Vector3(19.6f, 8.0f, -1.4f), new Vector3(21.5f, 5.9f, 1.9f));
+        }
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("lighthouse_door")) { status = "door_failed"; error = "door not in range"; }
+            else
+            {
+                float t0 = Time.realtimeSinceStartup;
+                while (boot.state.step != "L3_oil" && Time.realtimeSinceStartup - t0 < 10f) yield return null;
+                // 等淡入结束，否则信纸会被黑色过场盖住
+                while (boot.director.Climbing && Time.realtimeSinceStartup - t0 < 12f) yield return null;
+                yield return new WaitForSecondsRealtime(0.2f);
+                climbOk = boot.state.step == "L3_oil" && boot.player.transform.position.y > 16f;
+                if (!climbOk) { status = "climb_failed"; error = $"step={boot.state.step} y={boot.player.transform.position.y:F2}"; }
+            }
+        }
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("lamp_head")) { status = "oilletter_failed"; error = "lamp not in range"; }
+            else
+            {
+                for (int i = 0; i < 90 && !boot.ui.LetterOpen; i++) yield return null;
+                oilLetter = boot.state.flags.Contains("lamp_oiled") && boot.ui.LetterOpen;
+                if (!oilLetter) { status = "oilletter_failed"; error = "letter not open"; }
+                else
+                {
+                    yield return Snap("story_lighthouse_letter.png");
+                    boot.ui.CloseLetter();
+                    yield return new WaitForSeconds(0.3f);
+                    if (status == "passed" && boot.state.step != "L4_light") { status = "l4_missing"; error = "step=" + boot.state.step; }
+                }
+            }
+        }
+
+        if (status == "passed")
+        {
+            if (!boot.service.TryInteract("lamp_head")) { status = "light_failed"; error = "lamp not in range"; }
+            else
+            {
+                yield return new WaitForSecondsRealtime(10f);
+                beamOk = boot.state.flags.Contains("beam_lit");
+                var dimmer = FindObjectOfType<SkyDimmer>();
+                var beacon = FindObjectOfType<BeaconLight>();
+                dimOk = dimmer != null && dimmer.Lit && dimmer.Progress > 0.3f;
+                beaconOk = beacon != null && beacon.On;
+                if (!(beamOk && dimOk && beaconOk)) { status = "light_failed"; error = $"beam={beamOk} dim={dimOk} beacon={beaconOk}"; }
+                else yield return SnapFrom("story_lighthouse_beam.png",
+                    new Vector3(10.0f, 13.5f, 12.0f), new Vector3(21.58f, 17.6f, 2.7f));
+            }
+        }
+
+        if (status == "passed")
+        {
+            var reply = FindObjectOfType<FlashlightReply>();
+            float t0 = Time.realtimeSinceStartup;
+            while (boot.state.step != "L5_reply" && Time.realtimeSinceStartup - t0 < 34f) yield return null;
+            replyOk = boot.state.step == "L5_reply" && reply != null && reply.Done && reply.LitCount == 40;
+            replyCount = reply != null ? reply.LitCount : 0;
+            stamp3 = boot.state.stamps.Contains("lighthouse");
+            if (!(replyOk && stamp3)) { status = "reply_failed"; error = $"step={boot.state.step} lit={replyCount} stamp={stamp3}"; }
+            else
+            {
+                yield return new WaitForSecondsRealtime(3.2f);
+                waterL3 = boot.water != null && Mathf.Abs(boot.water.Y - 1.60f) <= 0.06f;
+                if (!waterL3) { status = "l3_failed"; error = "water=" + (boot.water != null ? boot.water.Y.ToString("F2") : "-"); }
+                else yield return SnapFrom("story_lighthouse_reply.png",
+                    new Vector3(21.6f, 19.4f, 5.6f), new Vector3(-12f, 11.6f, 25f));
+            }
+        }
+
+        float lightSecs = Time.realtimeSinceStartup - lightAt;
+
+        bool saveOk = false;
+        if (status == "passed")
+        {
+            var loaded = new SaveStore().Load();
+            saveOk = loaded != null && loaded.step == "L5_reply" && loaded.flags.Contains("school_read")
+                && loaded.flags.Contains("lighthouse_done") && loaded.flags.Contains("beam_lit")
+                && loaded.flags.Contains("lamp_oiled") && loaded.flags.Contains("ball_in_bowl")
+                && loaded.flags.Contains("letters_taken") && loaded.stamps.Contains("bakery")
+                && loaded.stamps.Contains("school") && loaded.stamps.Contains("lighthouse")
+                && loaded.seenMemories.Contains("basket") && Mathf.Abs(loaded.waterLevel - 1.60f) <= 0.06f;
+            if (!saveOk) { status = "save_failed"; error = "reload mismatch"; }
+            // 恢复现场，避免审计把玩家存档带偏
+            new SaveStore().Clear();
+        }
+
+        float secs = Time.realtimeSinceStartup - bakeryAt;
         var sb = new StringBuilder();
         sb.AppendLine("{");
         sb.AppendLine("  \"status\": \"" + status + "\",");
@@ -396,7 +519,13 @@ public class StoryAudit : MonoBehaviour
                   + ", \"S1_slipper\": " + (slipperOk ? "true" : "false")
                   + ", \"S2_ball\": " + (ballOk ? "true" : "false")
                   + ", \"S3_bowl\": " + (bowlOk ? "true" : "false")
-                  + ", \"S4_read\": " + (schoolRead ? "true" : "false") + " },");
+                  + ", \"S4_read\": " + (schoolRead ? "true" : "false")
+                  + ", \"L0_cross\": " + (l0Auto ? "true" : "false")
+                  + ", \"L1_shed\": " + (oilOk ? "true" : "false")
+                  + ", \"L2_door\": " + (climbOk ? "true" : "false")
+                  + ", \"L3_oil\": " + (oilLetter ? "true" : "false")
+                  + ", \"L4_light\": " + (beamOk ? "true" : "false")
+                  + ", \"L5_reply\": " + (replyOk ? "true" : "false") + " },");
         sb.AppendLine("  \"intro\": { \"ran\": " + (introRan ? "true" : "false")
                   + ", \"seconds\": " + introSeconds.ToString("F1")
                   + ", \"start_expr\": \"" + exprStart + "\""
@@ -434,11 +563,26 @@ public class StoryAudit : MonoBehaviour
                   + ", \"stamp\": " + (stamp2 ? "true" : "false")
                   + ", \"water_l2\": " + (waterL2 ? "true" : "false")
                   + ", \"shots\": [\"story_school_letter.png\", \"story_pawprints.png\", \"story_playground.png\", \"story_school_read.png\"] },");
+        sb.AppendLine("  \"lighthouse\": { \"seconds\": " + lightSecs.ToString("F1")
+                  + ", \"crates\": " + (l0Auto ? "true" : "false")
+                  + ", \"oil\": " + (oilOk ? "true" : "false")
+                  + ", \"climb\": " + (climbOk ? "true" : "false")
+                  + ", \"read\": " + (oilLetter ? "true" : "false")
+                  + ", \"beam\": " + (beamOk ? "true" : "false")
+                  + ", \"dim\": " + (dimOk ? "true" : "false")
+                  + ", \"beacon\": " + (beaconOk ? "true" : "false")
+                  + ", \"reply\": " + (replyOk ? "true" : "false")
+                  + ", \"reply_lights\": " + replyCount
+                  + ", \"stamp\": " + (stamp3 ? "true" : "false")
+                  + ", \"water_l3\": " + (waterL3 ? "true" : "false")
+                  + ", \"shots\": [\"story_lighthouse_crates.png\", \"story_lighthouse_door.png\", \"story_lighthouse_letter.png\", \"story_lighthouse_beam.png\", \"story_lighthouse_reply.png\"] },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         var visual = dog != null ? dog.GetComponent<DogVisual>() : null;
-        sb.AppendLine("  \"dog\": { \"followed\": " + (dog != null && dog.Following ? "true" : "false")
-                  + ", \"visible\": " + (dog != null && dog.Visible ? "true" : "false")
-                  + ", \"follow_max\": " + dogMax.ToString("F2")
+        sb.AppendLine("  \"dog\": { \"followed\": " + (dogFollowed ? "true" : "false")
+                  + ", \"visible\": " + (dogFollowed ? "true" : "false")
+                  + ", \"left_at_tower\": " + (dog != null && !dog.Visible ? "true" : "false")
+                  + ", \"follow_max\": " + dogMaxCheck.ToString("F2")
+                  + ", \"follow_max_all\": " + dogMax.ToString("F2")
                   + ", \"distance_end\": " + dogEnd.ToString("F2")
                   + ", \"behind\": " + (dogBehind ? "true" : "false")
                   + ", \"ground_error_min\": " + dogMinClear.ToString("F2")
@@ -558,7 +702,7 @@ public class StoryAudit : MonoBehaviour
             var pp = boot.player.transform.position;
             float gap = new Vector2(dp.x - pp.x, dp.z - pp.z).magnitude;
             if (Time.timeScale > 0f) dogMax = Mathf.Max(dogMax, gap);
-            dogMinClear = Mathf.Min(dogMinClear, dp.y - boot.world.GroundAt(dp.x, dp.z));
+            dogMinClear = Mathf.Min(dogMinClear, dp.y - boot.world.GroundAt(dp.x, dp.z, dp.y));
         }
     }
 }

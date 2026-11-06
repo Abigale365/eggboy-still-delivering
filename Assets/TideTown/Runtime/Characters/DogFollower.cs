@@ -119,7 +119,7 @@ public class DogFollower : MonoBehaviour
         }
 
         // 贴地：GroundAt 与玩家同一套地面层，不靠物理重力，避免掉进缝里
-        float ground = world.GroundAt(pos.x, pos.z);
+        float ground = world.GroundAt(pos.x, pos.z, pos.y);
         pos.y = ground;
         LastGroundError = pos.y - ground;
         transform.position = pos;
@@ -186,7 +186,7 @@ public class DogFollower : MonoBehaviour
 
     void Snap(Vector3 at)
     {
-        float y = world.GroundAt(at.x, at.z);
+        float y = world.GroundAt(at.x, at.z, float.PositiveInfinity);
         transform.position = new Vector3(at.x, y, at.z);
         vel = Vector3.zero;
     }

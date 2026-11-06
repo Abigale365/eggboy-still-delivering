@@ -188,6 +188,7 @@ public class EggboyPlayer : MonoBehaviour
                 continue;
             }
             float rad = Radius;
+            if (c.minY > 0f && p.y < c.minY - 0.03f) continue;
             if (c.top.HasValue)
             {
                 if (p.y >= c.top.Value - 0.03f || (grounded && c.top.Value - p.y <= Step)) continue;
@@ -215,7 +216,7 @@ public class EggboyPlayer : MonoBehaviour
         else vel = Vector3.zero;
 
         // 竖直方向
-        float ground = world.GroundAt(p.x, p.z);
+        float ground = world.GroundAt(p.x, p.z, p.y);
         float vyPrev = J.vy;
         if (J.phase == JumpPhase.crouch && J.t >= J.dur)
         {

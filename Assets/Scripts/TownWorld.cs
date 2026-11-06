@@ -66,6 +66,8 @@ public class TownWorld : MonoBehaviour, IEggboyWorld
     }
 
     // 先用预采样的高度网格，命中后再用射线校正；没有地面数据时退回 0。
+    public float GroundAt(float x, float z, float aboveY) => GroundAt(x, z);
+
     public float GroundAt(float x, float z)
     {
         if (groundCache != null)

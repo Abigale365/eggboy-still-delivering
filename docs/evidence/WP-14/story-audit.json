@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "steps": { "P0_boot": true, "P1_mailbox": true, "B0_arrive": true, "B1_matches": true, "B2_wood": true, "B3_load": true, "B4_light": true, "S0_arrive": true, "S1_slipper": true, "S2_ball": true, "S3_bowl": true, "S4_read": true, "L0_cross": true, "L1_shed": true, "L2_door": true, "L3_oil": true, "L4_light": true, "L5_reply": true },
+  "intro": { "ran": true, "seconds": 4.7, "start_expr": "sleepy", "end_expr": "happy", "face_ok": true, "shots": ["story_boot.png", "story_wake.png"] },
+  "pickup_seconds": 6.7,
+  "pickup_within_30s": true,
+  "bakery": { "seconds": 55.0, "auto_letter": true, "memory": true, "matches": true, "wood": true, "loaded": true, "lit": true, "stamp": true, "water_l1": true, "smoke": true, "fire_particles": 33, "smoke_particles": 101, "fire_visible": false, "smoke_visible": true, "shots": ["story_bakery_letter.png", "story_oven.png"] },
+  "school": { "seconds": 18.1, "auto_letter": true, "slipper": true, "ball": true, "bowl": true, "ball_in_bowl": true, "peek": true, "read": true, "line_by_line": true, "lines_shown": 5/5, "expr_trace": "sad>sad>curious>curious>happy", "stamp": true, "water_l2": true, "shots": ["story_school_letter.png", "story_pawprints.png", "story_playground.png", "story_school_read.png"] },
+  "lighthouse": { "seconds": 25.5, "crates": true, "oil": true, "climb": true, "read": true, "beam": true, "dim": true, "beacon": true, "reply": true, "reply_lights": 40, "stamp": true, "water_l3": true, "shots": ["story_lighthouse_crates.png", "story_lighthouse_door.png", "story_lighthouse_letter.png", "story_lighthouse_beam.png", "story_lighthouse_reply.png"] },
+  "save_reload": true,
+  "dog": { "followed": true, "visible": true, "left_at_tower": true, "follow_max": 1.26, "follow_max_all": 9.12, "distance_end": 1.26, "behind": true, "ground_error_min": 0.00, "wag_hz": 4.6, "visual": "DogVisualGreybox", "shots": ["story_dog.png"] },
+  "letter_open": true,
+  "move_locked": true,
+  "no_repeat": true,
+  "avg_fps": 291.5,
+  "errors": ""
+}

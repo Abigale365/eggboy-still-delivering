@@ -55,7 +55,7 @@ public sealed class SafePoints : MonoBehaviour
         bool found = false;
         foreach (var q in points)
         {
-            float g = world != null ? world.GroundAt(q.x, q.z) : q.y;
+            float g = world != null ? world.GroundAt(q.x, q.z, q.y) : q.y;
             if (g < WaterLevel.StaticY - 0.05f) continue;   // 涨水后不往水里送
             float d = (new Vector2(q.x - from.x, q.z - from.z)).sqrMagnitude;
             if (d < bestD) { bestD = d; best = new Vector3(q.x, g + 0.02f, q.z); found = true; }

@@ -109,7 +109,7 @@ public class RouteAudit2 : MonoBehaviour
             player.Move(dt, dx / dist, dz / dist, true, false);
 
             var now = player.transform.position;
-            float groundNow = world.GroundAt(now.x, now.z);
+            float groundNow = world.GroundAt(now.x, now.z, now.y);
             if (!player.grounded)
             {
                 airFrames++;

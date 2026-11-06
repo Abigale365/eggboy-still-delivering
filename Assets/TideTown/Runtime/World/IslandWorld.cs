@@ -79,9 +79,21 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
 
     public float GroundAt(float x, float z)
     {
-        if (Physics.Raycast(new Vector3(x, 200f, z), Vector3.down, out var hit, 400f, groundMask, QueryTriggerInteraction.Ignore))
-            return hit.point.y;
-        return 0f;
+        return GroundAt(x, z, float.PositiveInfinity);
+    }
+
+    // aboveY：只认这个高度附近及以下的地面。塔顶平台在塔门正上方，
+    // 不带上限的话从塔下打射线会直接打到 12 米高的平台，把人抬上去。
+    public float GroundAt(float x, float z, float aboveY)
+    {
+        float best = -1f;
+        var hits = Physics.RaycastAll(new Vector3(x, 200f, z), Vector3.down, 400f, groundMask, QueryTriggerInteraction.Ignore);
+        foreach (var hit in hits)
+        {
+            float y = hit.point.y;
+            if (y <= aboveY + 0.3f && y > best) best = y;
+        }
+        return best < -0.5f ? 0f : best;
     }
 
     static bool Contains(Vector2[] poly, float x, float z)

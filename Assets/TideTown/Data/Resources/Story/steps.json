@@ -74,6 +74,44 @@
       "id": "S4_read",
       "goal": "目标：再读一遍阿萤的信",
       "letter": "ying_dog",
+      "next": "L0_cross"
+    },
+    {
+      "id": "L0_cross",
+      "goal": "目标：踩木箱穿过淹掉的路，到船棚",
+      "letter": "",
+      "next": "L1_shed",
+      "at": "24",
+      "auto": true
+    },
+    {
+      "id": "L1_shed",
+      "goal": "目标：在船棚檐下拿油壶",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "L2_door",
+      "goal": "目标：走台阶上灯塔，在塔门按 E",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "L3_oil",
+      "goal": "目标：给灯头加油，读老陈的信",
+      "letter": "chen_lighthouse",
+      "next": "L4_light"
+    },
+    {
+      "id": "L4_light",
+      "goal": "目标：点亮灯塔",
+      "letter": "",
+      "next": ""
+    },
+    {
+      "id": "L5_reply",
+      "goal": "目标：第三站完成，山那边亮了",
+      "letter": "",
       "next": ""
     }
   ]

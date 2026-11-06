@@ -218,12 +218,32 @@ def main():
     for p in platforms:
         if p.get("walk"):
             walk_areas.append({"id": p["id"], "y": p["y"], "x": [round(q[0], 3) for q in p["xz"]], "z": [round(q[1], 3) for q in p["xz"]]})
+    # 可走路面按段拆成四边形，山路因此也能通过 Walkable 判定
+    for r in roads:
+        if not r.get("walk"):
+            continue
+        for i in range(len(r["xyz"]) - 1):
+            ax, ay, az = r["xyz"][i]
+            bx, by, bz = r["xyz"][i + 1]
+            dx, dz = bx - ax, bz - az
+            ln = math.hypot(dx, dz) or 1.0
+            # 可走区严格落在路面网格之内：两侧缩 2 cm，两端多 14 cm（路面网格多 15 cm），不留数值缝
+            half = r["width"] * 0.5 - 0.02
+            nx, nz = -dz / ln * half, dx / ln * half
+            ux, uz = dx / ln * 0.14, dz / ln * 0.14
+            ax, az, bx, bz = ax - ux, az - uz, bx + ux, bz + uz
+            walk_areas.append({
+                "id": r["id"] + "_" + str(i),
+                "y": (ay + by) * 0.5,
+                "x": [round(ax + nx, 3), round(bx + nx, 3), round(bx - nx, 3), round(ax - nx, 3)],
+                "z": [round(az + nz, 3), round(bz + nz, 3), round(bz - nz, 3), round(az - nz, 3)],
+            })
 
     out = {
         "points": pts,
         "coast": {"x": [round(q[0], 3) for q in land_xz[0]], "z": [round(q[1], 3) for q in land_xz[0]]},
         "tiers": [{"id": t["id"], "y": t["y"], "walk": t.get("walk", False),
-                   "x": [round(q[0], 3) for q in t["xz"]], "z": [round(q[1], 3) for q in t["xz"]]} for t in tiers],
+                   "x": [round(q[0], 3) for q in t["xz"]], "z": [round(q[1], 3) for q in t["xz"]]} for t in tiers + platforms],
         "roads": [{"id": r["id"], "kind": r["kind"], "width": r["width"], "walk": r.get("walk", False),
                    "x": [round(n[0], 3) for n in r["xyz"]], "y": [round(n[1], 3) for n in r["xyz"]],
                    "z": [round(n[2], 3) for n in r["xyz"]]} for r in roads],
@@ -265,7 +285,8 @@ def main():
     rgb = np.stack([vis * 255, vis * 255, vis * 255], -1).astype(np.uint8)
     rgb[~land] = (30, 70, 140)
     rgb[walk > 0, 0] = 255
-    Image.fromarray(rgb[::-1]).resize((nx * 3, nz * 3), Image.NEAREST).save(ROOT / "docs/reference/island_height_top.png")
+    img_h, img_w = rgb.shape[0], rgb.shape[1]
+    Image.fromarray(rgb[::-1]).resize((img_w * 3, img_h * 3), Image.NEAREST).save(ROOT / "docs/reference/island_height_top.png")
     print("ok")
 
 

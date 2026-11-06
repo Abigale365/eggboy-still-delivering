@@ -25,7 +25,16 @@ public static class IslandBuilder
     [Serializable] public class Cam { public string name; public float[] pos, euler; public float fov; public int width, height; }
     [Serializable] public class Layout { public Pt[] points; public Coast coast; public Area[] tiers; public Area[] walk; public RoadDef[] roads; public Bld[] buildings; public Cam[] cameras; }
 
+    [Serializable] public class Footprint { public string instance; public float x, z, w, d; }
+    [Serializable] class FootprintList { public List<Footprint> buildings; }
+    [Serializable] class RoutePoint { public string id; public bool stop; public float x, z; }
+    [Serializable] class RouteFile { public RoutePoint[] route; }
+
+    const string FootprintPath = "Assets/TideTown/Data/Resources/World/building_footprints.json";
+    const string RoutePath = "Assets/TideTown/Data/Resources/World/route.json";
+
     static Cam previewCam;
+    static readonly List<Footprint> footprints = new List<Footprint>();
 
     [MenuItem("潮汐镇/场景/生成主场景（WP-05）")]
     public static void BuildMain()
@@ -63,8 +72,11 @@ public static class IslandBuilder
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);
         BuildSea(generated.transform, sea);
 
+        footprints.Clear();
         if (layout.buildings != null)
             foreach (var b in layout.buildings) BuildBuilding(b, generated.transform, greybox);
+        // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
+        File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
         if (layout.points != null)
             foreach (var p in layout.points)
@@ -74,9 +86,14 @@ public static class IslandBuilder
                 marker.transform.position = new Vector3(p.x, p.y, p.z);
             }
 
+        BuildWorld(layout, generated.transform);
+
         ScatterRocksAndTrees(layout, generated.transform, rockMat, leaves, trunk);
         BuildCamera(layout, generated.transform);
         BuildLight(generated.transform);
+        var game = new GameObject("Game");
+        game.transform.SetParent(generated.transform, false);
+        game.AddComponent<PrototypeGame>();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, ScenePath);
@@ -127,6 +144,12 @@ public static class IslandBuilder
     static Mesh TopMesh(List<Vector2> poly, float y, string name)
     {
         var tris = Triangulate(poly);
+        // 三角化丢面积就是地上有洞，角色会掉下去。宁可生成失败，也不留静默的洞。
+        float triArea = 0f;
+        foreach (var t in tris) triArea += Mathf.Abs(Cross(poly[t.Item2] - poly[t.Item1], poly[t.Item3] - poly[t.Item1])) * 0.5f;
+        float polyArea = Mathf.Abs(SignedArea(poly));
+        if (Mathf.Abs(triArea - polyArea) > polyArea * 0.001f + 0.001f)
+            throw new Exception($"三角化丢面积：{name} 多边形 {polyArea:F2}，三角形合计 {triArea:F2}。检查多边形是否自交或有多余共线点。");
         var verts = new List<Vector3>();
         var idx = new List<int>();
         foreach (var v in poly) verts.Add(new Vector3(v.x, y, v.y));
@@ -251,9 +274,13 @@ public static class IslandBuilder
             if (d.sqrMagnitude < 1e-6f) continue;
             d.Normalize();
             var side = new Vector3(-d.z, 0f, d.x) * (r.width * 0.5f);
-            int o = verts.Count;
-            verts.Add(a - side); verts.Add(a + side); verts.Add(b + side); verts.Add(b - side);
-            idx.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3 });
+            // 坡面本身不动；两端各加 15 cm 盖片补住拐弯和接缝，盖片顺着相邻那段的坡度走，
+            // 这样盖片不会高出邻段形成台阶。算法和 route_check.py 一致。
+            var capA = a - d * 0.15f; capA.y = a.y - NeighbourSlope(r, i - 1) * 0.15f;
+            var capB = b + d * 0.15f; capB.y = b.y + NeighbourSlope(r, i + 1) * 0.15f;
+            AddRoadQuad(verts, idx, capA, a, side);
+            AddRoadQuad(verts, idx, a, b, side);
+            AddRoadQuad(verts, idx, b, capB, side);
         }
         var mesh = new Mesh { name = "road_" + r.id };
         mesh.SetVertices(verts);
@@ -261,6 +288,22 @@ public static class IslandBuilder
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    // 第 seg 段每水平走一米的高度变化；路的两头之外没有邻段，算平的
+    static float NeighbourSlope(RoadDef r, int seg)
+    {
+        if (seg < 0 || seg + 1 >= r.x.Length) return 0f;
+        float dx = r.x[seg + 1] - r.x[seg], dz = r.z[seg + 1] - r.z[seg];
+        float len = Mathf.Sqrt(dx * dx + dz * dz);
+        return len < 1e-3f ? 0f : (r.y[seg + 1] - r.y[seg]) / len;
+    }
+
+    static void AddRoadQuad(List<Vector3> verts, List<int> idx, Vector3 a, Vector3 b, Vector3 side)
+    {
+        int o = verts.Count;
+        verts.Add(a - side); verts.Add(a + side); verts.Add(b + side); verts.Add(b - side);
+        idx.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3 });
     }
 
     // ---------- 海面 ----------
@@ -326,6 +369,18 @@ public static class IslandBuilder
         go.transform.rotation = Quaternion.identity;
         go.layer = 7;
         go.GetComponent<Renderer>().sharedMaterial = mat;
+        // 灰盒视觉是整框（含屋檐）；碰撞只算墙体：宽 80%，前墙在图上的墙根线（foot）上，后墙和灰盒一样。
+        // 角色的站位放在 route.json，不靠缩碰撞让路。
+        const float WallWidth = 0.8f;
+        float zFront = b.z, zBack = center.z + d * 0.5f;
+        var bc = go.GetComponent<BoxCollider>();
+        if (bc != null)
+        {
+            bc.size = new Vector3(WallWidth, 1f, (zBack - zFront) / d);
+            bc.center = new Vector3(0f, 0f, ((zFront + zBack) * 0.5f - center.z) / d);
+        }
+        footprints.Add(new Footprint { instance = b.instance, x = Mathf.Round(center.x * 1000f) / 1000f, z = Mathf.Round((zFront + zBack) * 500f) / 1000f,
+                                       w = Mathf.Round(w * WallWidth * 1000f) / 1000f, d = Mathf.Round((zBack - zFront) * 1000f) / 1000f });
         if (go.GetComponent<TownObstacle>() == null) go.AddComponent<TownObstacle>();
         var info = go.AddComponent<TownAssetInfo>();
         info.assetId = b.instance;
@@ -433,6 +488,32 @@ public static class IslandBuilder
                 crown.GetComponent<Renderer>().sharedMaterial = leaves;
             }
         }
+    }
+
+    // ---------- 世界 ----------
+
+    static void BuildWorld(Layout layout, Transform parent)
+    {
+        var go = new GameObject("IslandWorld");
+        go.transform.SetParent(parent, false);
+        var world = go.AddComponent<IslandWorld>();
+        world.groundMask = LayerMask.GetMask("Ground");
+        world.walkPolys = new List<WalkPoly>();
+        if (layout.walk != null)
+            foreach (var a in layout.walk)
+            {
+                var poly = new List<Vector2>();
+                for (int i = 0; i < a.x.Length; i++) poly.Add(new Vector2(a.x[i], a.z[i]));
+                world.walkPolys.Add(new WalkPoly { id = a.id, y = a.y, points = poly.ToArray() });
+            }
+        // P_xx 是预览图标签，可能贴在建筑上；出生点用 route.json 的第一站（站位）
+        var route = JsonUtility.FromJson<RouteFile>(File.ReadAllText(RoutePath));
+        var spawnGO = new GameObject("SpawnPoint");
+        spawnGO.transform.SetParent(go.transform, false);
+        spawnGO.transform.position = new Vector3(route.route[0].x, 3f, route.route[0].z);
+        world.spawnMarker = spawnGO.transform;
+        var mailbox = GameObject.Find("P_03");
+        if (mailbox != null) world.mailboxMarker = mailbox.transform;
     }
 
     // ---------- 机位与灯光 ----------

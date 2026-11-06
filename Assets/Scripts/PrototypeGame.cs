@@ -42,7 +42,10 @@ public class PrototypeGame : MonoBehaviour
             if (cliArgs[i] == "-expr" && System.Enum.TryParse<ExprId>(cliArgs[i + 1], true, out var expr))
                 baseExpr = expr;
         var town = FindObjectOfType<TownWorld>();
-        world = town != null ? (IEggboyWorld)town : gameObject.AddComponent<EggboyWorld>();
+        var island = FindObjectOfType<IslandWorld>();
+        world = island != null ? (IEggboyWorld)island
+              : town != null ? (IEggboyWorld)town
+              : gameObject.AddComponent<EggboyWorld>();
         var prefab = Resources.Load<GameObject>("Models/eggboy");
         if (prefab == null) { Debug.LogError("找不到 Resources/Models/eggboy"); enabled = false; return; }
         var go = new GameObject("EGGBOY");
@@ -101,6 +104,7 @@ public class PrototypeGame : MonoBehaviour
             at.Begin(player);
         }
         if (System.Array.Exists(cliArgs, a => a == "-routeaudit")) gameObject.AddComponent<ExpandedRouteAudit>().Begin(player, this);
+        if (System.Array.Exists(cliArgs, a => a == "-routeaudit2")) gameObject.AddComponent<RouteAudit2>().Begin(player, this);
         // 全镇横穿：从山口快跑到东侧码头，验主街全程无阻挡
         if (System.Array.Exists(cliArgs, a => a == "-townrun"))
         {

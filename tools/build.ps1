@@ -1,37 +1,77 @@
-# WP-01 构建脚本：Windows + WebGL，只打包，不生成场景。
-# 用法：powershell -ExecutionPolicy Bypass -File tools\build.ps1 [-OnlyWindows]
+# Project build. Trusts nothing left over from an earlier run.
+#   tools\build.ps1 -OnlyWindows                 Windows player
+#   tools\build.ps1                              Windows + WebGL
+#   tools\build.ps1 -Method IslandBuilder.BuildMain   any -executeMethod, no player check
+# Exit 0 only if: Unity really ran and exited 0, a fresh log says success, no compile errors,
+# the player's game code was rewritten during this run, and scene files were not changed by a pure build.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [switch]$OnlyWindows
+    [switch]$OnlyWindows,
+    [string]$Method = '',
+    [int]$TimeoutSeconds = 1500
 )
+$ErrorActionPreference = 'Stop'
+$unity = 'C:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe'
+if (-not (Test-Path -LiteralPath $unity)) { throw "Unity not found: $unity" }
 
-$ErrorActionPreference = "Stop"
-$unity = "C:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe"
-$log = Join-Path $ProjectPath "Logs\build_main.log"
-$sceneMain = Join-Path $ProjectPath "Assets\TideTown\Scenes\TideTown_Main.unity"
-$sceneFallback = Join-Path $ProjectPath "Assets\TideTown\Scenes\TideTown_Expanded_Stage1.unity"
-$scene = if (Test-Path $sceneMain) { $sceneMain } else { $sceneFallback }
+. (Join-Path $PSScriptRoot 'project-lock.ps1')
+$lock = Enter-ProjectLock $ProjectPath
+try {
+    $isPlayerBuild = -not $Method
+    if ($isPlayerBuild) { $Method = if ($OnlyWindows) { 'TideBuild.Windows' } else { 'TideBuild.All' } }
+    # A new file per run: an old log can never be mistaken for this run's result.
+    $log = Join-Path $ProjectPath ("Logs\build_{0}_{1:yyyyMMdd_HHmmss}.log" -f ($Method -replace '[^A-Za-z0-9]', '_'), (Get-Date))
+    New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
 
-if (-not (Test-Path $unity)) { throw "Unity 不存在：$unity" }
-if (-not (Test-Path $scene)) { throw "场景不存在：$scene" }
+    function Get-SceneHashes {
+        Get-ChildItem -LiteralPath (Join-Path $ProjectPath 'Assets') -Recurse -Filter *.unity |
+            Where-Object { $_.FullName -notlike '*\Library\*' } |
+            ForEach-Object { '{0} {1}' -f (Get-FileHash -LiteralPath $_.FullName).Hash, $_.FullName } | Sort-Object
+    }
+    $before = Get-SceneHashes
+    $started = Get-Date
 
-$before = (Get-FileHash $scene -Algorithm SHA256).Hash
-Write-Host "SCENE $scene"
-Write-Host "HASH_BEFORE $before"
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $unity
+    $psi.Arguments = '-batchmode -nographics -quit -projectPath "{0}" -executeMethod {1} -logFile "{2}"' -f $ProjectPath, $Method, $log
+    $psi.UseShellExecute = $false
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
+        $proc.Kill()
+        throw "Unity did not finish in $TimeoutSeconds s and was stopped. Log: $log"
+    }
+    $code = $proc.ExitCode
+    Write-Host "UNITY_EXIT $code  seconds=$([int]((Get-Date) - $started).TotalSeconds)"
 
-$method = if ($OnlyWindows) { "TideBuild.Windows" } else { "TideBuild.All" }
-$args = @("-batchmode", "-nographics", "-quit", "-projectPath", $ProjectPath, "-executeMethod", $method, "-logFile", $log)
-$proc = Start-Process -FilePath $unity -ArgumentList $args -PassThru
-$proc.WaitForExit()
-Write-Host "UNITY_EXIT $($proc.ExitCode)"
+    if (-not (Test-Path -LiteralPath $log)) { throw "Unity wrote no log, so it did not really run (exit $code)." }
+    # Unity's helper processes can keep the log open for a moment after Unity exits.
+    $share = [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete
+    $stream = New-Object IO.FileStream($log, ([IO.FileMode]::Open), ([IO.FileAccess]::Read), $share)
+    $reader = New-Object IO.StreamReader($stream)
+    $text = $reader.ReadToEnd()
+    $reader.Dispose(); $stream.Dispose()
+    $compile = [regex]::Matches($text, '(?m)^.*error CS\d+.*$') | ForEach-Object { $_.Value } | Select-Object -Unique -First 10
+    if ($compile) { $compile | ForEach-Object { Write-Host $_ }; throw 'Compile errors.' }
+    if ($code -ne 0) { throw "Unity exit code $code. Log: $log" }
 
-$after = (Get-FileHash $scene -Algorithm SHA256).Hash
-Write-Host "HASH_AFTER $after"
-if ($before -ne $after) { Write-Error "场景文件被构建改动，违反 WP-01（只打包不生成场景）"; exit 2 }
-
-$text = Get-Content $log -Raw
-if ($text -match "error CS") { Write-Error "日志里有 error CS"; exit 3 }
-if ($text -notmatch "TIDEBUILD WINDOWS Succeeded") { Write-Error "Windows 构建未成功"; exit 4 }
-if (-not $OnlyWindows -and $text -notmatch "TIDEBUILD WEBGL Succeeded") { Write-Error "WebGL 构建未成功"; exit 5 }
-
-Write-Host "BUILD OK"
+    if ($isPlayerBuild) {
+        if ($text -notmatch 'TIDEBUILD WINDOWS Succeeded') { throw 'Log does not report a successful Windows build.' }
+        # TideTown.exe is only a launcher and Unity skips unchanged files, so compare what matters:
+        # the player's code and data must be at least as new as the sources they are built from.
+        $data = Join-Path $ProjectPath 'Build\Main\TideTown_Data'
+        $dll = Join-Path $data 'Managed\Assembly-CSharp.dll'
+        if (-not (Test-Path -LiteralPath $dll)) { throw 'Assembly-CSharp.dll is missing from the build.' }
+        $assets = Join-Path $ProjectPath 'Assets'
+        $code = Get-ChildItem -LiteralPath $assets -Recurse -Filter *.cs | Where-Object { $_.FullName -notlike '*\Editor\*' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $dllTime = (Get-Item -LiteralPath $dll).LastWriteTime
+        if ($dllTime -lt $code.LastWriteTime) { throw "Stale player code: dll $dllTime is older than $($code.Name) $($code.LastWriteTime)." }
+        $inputs = @(Get-ChildItem -LiteralPath $assets -Recurse -Include *.unity,*.json | Where-Object { $_.FullName -like '*\TideTown\Scenes\*' -or $_.FullName -like '*\Resources\World\*' }) | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        $built = Get-ChildItem -LiteralPath $data -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($built.LastWriteTime -lt $inputs.LastWriteTime) { throw "Stale player data: $($built.Name) $($built.LastWriteTime) is older than $($inputs.Name) $($inputs.LastWriteTime)." }
+        Write-Host "PLAYER_FRESH code=$dllTime data=$($built.LastWriteTime)"
+        if (-not $OnlyWindows -and $text -notmatch 'TIDEBUILD WEBGL Succeeded') { throw 'Log does not report a successful WebGL build.' }
+        if (Compare-Object $before (Get-SceneHashes)) { throw 'A scene file changed during a pure build.' }
+    }
+    Write-Host "BUILD_OK $Method"
+}
+finally { Exit-ProjectLock $lock }

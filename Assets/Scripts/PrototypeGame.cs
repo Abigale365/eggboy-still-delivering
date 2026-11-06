@@ -35,6 +35,7 @@ public class PrototypeGame : MonoBehaviour
     };
 
     bool frameworkMode;
+    public bool introHold; // WP-10 序章期间压住"站久了犯困"的自动表情
 
     void Start()
     {
@@ -208,8 +209,8 @@ public class PrototypeGame : MonoBehaviour
 
         player.Move(dt, fwd.x * f + right.x * s, fwd.z * f + right.z * s, run, jumpPressed);
 
-        // 站久了犯困，一动就醒
-        if (player.CurrentEmote == null)
+        // 站久了犯困，一动就醒；序章有自己的一套表情节奏
+        if (!introHold && player.CurrentEmote == null)
         {
             if (player.idle > 14f && player.pose.expr != ExprId.sleepy) SetExpression(ExprId.sleepy);
             else if (player.idle == 0f && player.pose.expr == ExprId.sleepy && baseExpr != ExprId.sleepy)
@@ -224,7 +225,8 @@ public class PrototypeGame : MonoBehaviour
         if (ui != null) ui.ShowLetter();
     }
 
-    void SetExpression(ExprId id)
+    // 序章和剧情都通过这里同步身体姿态与面屏，避免只改一边
+    public void SetExpression(ExprId id)
     {
         if (player != null && player.pose != null) player.pose.SetExpression(id);
         if (face != null) face.Set(id);

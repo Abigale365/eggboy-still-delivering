@@ -16,6 +16,15 @@ public sealed class GameBootstrap : MonoBehaviour
     public InteractionService service;
     public StoryDirector director;
     public WaterLevel water;
+    public IntroSequence intro;
+
+    // 这些模式测的是别的系统，或需要固定机位，开场镜头会添乱
+    static readonly string[] SkipIntroArgs =
+    {
+        "-noIntro", "-routeaudit", "-routeaudit2", "-wateraudit", "-scanaudit",
+        "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture",
+    };
+
 
     bool initialized;
 
@@ -79,9 +88,17 @@ public sealed class GameBootstrap : MonoBehaviour
             if (Features.scan) service.Register(scan);
         }
 
-        if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-storyaudit"))
+        // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过
+        var args = Environment.GetCommandLineArgs();
+        if (state.step == "P0_boot" && !Array.Exists(args, a => Array.IndexOf(SkipIntroArgs, a) >= 0))
+        {
+            intro = gameObject.AddComponent<IntroSequence>();
+            intro.Begin(this);
+        }
+
+        if (Array.Exists(args, a => a == "-storyaudit"))
             gameObject.AddComponent<StoryAudit>().Begin(this);
-        if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-wateraudit"))
+        if (Array.Exists(args, a => a == "-wateraudit"))
             gameObject.AddComponent<WaterAudit>().Begin(this);
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-scanaudit"))
             gameObject.AddComponent<ScanAudit>().Begin(this);

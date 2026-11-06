@@ -1,4 +1,4 @@
-// WP-07 自动剧情审计：走到邮筒、取信、读信、收信，写 story-audit.json。
+// WP-07 自动剧情审计，WP-10 起覆盖序章：开场镜头、面屏睁眼、30 秒内取信。
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,9 +18,37 @@ public class StoryAudit : MonoBehaviour
 
     IEnumerator Run()
     {
-        yield return new WaitForSeconds(1f);
+        yield return new WaitForSeconds(0.5f);
         Time.timeScale = 1f;
         var p = boot.player;
+        float bootAt = boot.intro != null ? boot.intro.StartTime : Time.realtimeSinceStartup;
+
+        string status = "passed";
+        bool introRan = boot.intro != null;
+        bool introDone = !introRan;
+        bool faceOk = true;
+        float introSeconds = 0f;
+        string exprStart = p.pose != null ? p.pose.expr.ToString() : "";
+        string exprEnd = exprStart;
+
+        // 开场：先等镜头飞下来，再开始走路
+        if (introRan)
+        {
+            yield return new WaitForSeconds(1.5f);
+            yield return Snap("story_boot.png");
+            while (!boot.intro.Done && Time.realtimeSinceStartup - bootAt < 12f) yield return null;
+            introDone = boot.intro.Done;
+            introSeconds = Time.realtimeSinceStartup - bootAt;
+            exprEnd = p.pose != null ? p.pose.expr.ToString() : "";
+            faceOk = exprStart == ExprId.sleepy.ToString() && exprEnd == ExprId.happy.ToString();
+            if (!introDone) { status = "intro_timeout"; error = "intro did not finish in 12 s"; }
+            else if (!faceOk) { status = "intro_face_wrong"; error = exprStart + " -> " + exprEnd; }
+            yield return Snap("story_wake.png");
+        }
+        else
+        {
+            yield return new WaitForSeconds(0.5f);
+        }
 
         // 只走 07 → 03 这一段，沿 route.json 的手写路径点
         var asset = Resources.Load<TextAsset>("World/route");
@@ -32,7 +60,6 @@ public class StoryAudit : MonoBehaviour
             if (w.stop && w.id == "03") break;
         }
 
-        string status = "passed";
         float started = Time.realtimeSinceStartup;
         foreach (var w in way)
         {
@@ -51,6 +78,7 @@ public class StoryAudit : MonoBehaviour
         }
 
         bool opened = false;
+        float pickupSeconds = 0f;
         if (status == "passed")
         {
             yield return new WaitForSeconds(0.4f);
@@ -61,6 +89,11 @@ public class StoryAudit : MonoBehaviour
                 if (!opened) { status = "letter_not_open"; error = "ui.LetterOpen false"; }
             }
         }
+
+        pickupSeconds = Time.realtimeSinceStartup - bootAt;
+        bool within30 = pickupSeconds <= 30f;
+        if (status == "passed") yield return Snap("story_pickup.png");
+        if (status == "passed" && !within30) { status = "pickup_too_slow"; error = pickupSeconds.ToString("F1") + " s"; }
 
         bool stepOk = false;
         bool lockedMove = false;
@@ -94,7 +127,16 @@ public class StoryAudit : MonoBehaviour
         var sb = new StringBuilder();
         sb.AppendLine("{");
         sb.AppendLine("  \"status\": \"" + status + "\",");
-        sb.AppendLine("  \"steps\": { \"P1_mailbox\": " + (stepOk ? "true" : "false") + " },");
+        sb.AppendLine("  \"steps\": { \"P0_boot\": " + (introDone ? "true" : "false")
+                  + ", \"P1_mailbox\": " + (stepOk ? "true" : "false") + " },");
+        sb.AppendLine("  \"intro\": { \"ran\": " + (introRan ? "true" : "false")
+                  + ", \"seconds\": " + introSeconds.ToString("F1")
+                  + ", \"start_expr\": \"" + exprStart + "\""
+                  + ", \"end_expr\": \"" + exprEnd + "\""
+                  + ", \"face_ok\": " + (faceOk ? "true" : "false")
+                  + ", \"shots\": [\"story_boot.png\", \"story_wake.png\"] },");
+        sb.AppendLine("  \"pickup_seconds\": " + pickupSeconds.ToString("F1") + ",");
+        sb.AppendLine("  \"pickup_within_30s\": " + (within30 ? "true" : "false") + ",");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         sb.AppendLine("  \"letter_open\": " + (opened ? "true" : "false") + ",");
         sb.AppendLine("  \"move_locked\": " + (lockedMove ? "true" : "false") + ",");
@@ -104,9 +146,19 @@ public class StoryAudit : MonoBehaviour
         sb.AppendLine("  \"errors\": \"" + error + "\"");
         sb.AppendLine("}");
         File.WriteAllText(Path.Combine(Application.dataPath, "..", "story-audit.json"), sb.ToString(), new UTF8Encoding(false));
-        Debug.Log("STORYAUDIT " + status + " letter=" + opened + " save=" + saveOk + " seconds=" + secs.ToString("F1"));
+        Debug.Log("STORYAUDIT " + status + " intro=" + introSeconds.ToString("F1") + " pickup=" + pickupSeconds.ToString("F1")
+            + " letter=" + opened + " save=" + saveOk + " seconds=" + secs.ToString("F1"));
         yield return new WaitForSecondsRealtime(0.5f);
         Application.Quit();
+    }
+
+    // 全屏截图带 HUD，给评审看目标、教学提示和信纸
+    IEnumerator Snap(string file)
+    {
+        string dir = Path.Combine(Application.dataPath, "..", "shots");
+        Directory.CreateDirectory(dir);
+        ScreenCapture.CaptureScreenshot(Path.Combine(dir, file), 1);
+        yield return new WaitForSecondsRealtime(0.6f);
     }
 
     void Update()

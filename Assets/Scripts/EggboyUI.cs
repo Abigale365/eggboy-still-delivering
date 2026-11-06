@@ -17,8 +17,8 @@ public class EggboyUI : MonoBehaviour
     IEggboyWorld world;
     Font font;
     Canvas canvas;
-    Text goalText, promptText, lookText;
-    GameObject promptPanel, letterOverlay;
+    Text goalText, promptText, lookText, tutorialText;
+    GameObject promptPanel, letterOverlay, tutorialPanel;
     readonly System.Collections.Generic.List<Image> faceBg = new System.Collections.Generic.List<Image>();
     readonly System.Collections.Generic.List<Text> faceLabel = new System.Collections.Generic.List<Text>();
     ExprId activeExpr = ExprId.happy;
@@ -68,6 +68,12 @@ public class EggboyUI : MonoBehaviour
         var goalPanel = Panel(root, 18, -78, 620, 38, new Color32(0xff, 0xf8, 0xec, 220));
         goalText = Label(goalPanel.transform, "", 16, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.MiddleLeft, 14, -5, 590, 28, false);
         SetGoal("目标：去山口的红色邮筒取信（往左走）");
+
+        // 序章教学提示：只在 P0_boot 显示
+        var tutPanel = Panel(root, 18, -120, 620, 30, new Color32(0x3b, 0x2a, 0x1a, 185));
+        tutorialText = Label(tutPanel.transform, "", 14, new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleLeft, 13, -3, 594, 24, false);
+        tutorialPanel = tutPanel.gameObject;
+        tutorialPanel.SetActive(false);
 
         // 渲染标签
         var look = Panel(root, -18, -14, 150, 32, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
@@ -184,6 +190,15 @@ public class EggboyUI : MonoBehaviour
     public void SetGoal(string text)
     {
         if (goalText != null) goalText.text = text;
+    }
+
+    // 序章教学一行；空串即隐藏
+    public void SetTutorial(string text)
+    {
+        if (tutorialPanel == null) return;
+        bool on = !string.IsNullOrEmpty(text);
+        if (on && tutorialText != null) tutorialText.text = text;
+        tutorialPanel.SetActive(on);
     }
 
     public string PromptText => promptText != null && promptPanel != null && promptPanel.activeSelf ? promptText.text : "";

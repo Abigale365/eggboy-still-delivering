@@ -57,6 +57,10 @@ public sealed class StoryDirector : MonoBehaviour
     {
         var st = Step(State.step);
         if (st != null && !string.IsNullOrEmpty(st.goal)) ui.SetGoal(st.goal);
+        // WP-10 教学提示：只在序章显示，取到信进入 P1 后收起
+        ui.SetTutorial(State.step == "P0_boot"
+            ? "按住 W 往左走 · 靠近发光的邮筒按 E"
+            : "");
     }
 
     public void TakeLetters()
@@ -65,6 +69,7 @@ public sealed class StoryDirector : MonoBehaviour
         State.flags.Add("letters_taken");
         State.step = "P1_mailbox";
         store.Save(State);
+        if (ui != null) ui.SetTutorial("");
         letterLock = gate.Acquire("letter");
         if (letterLock != null && player != null) player.locked = true;
         var id = Step(State.step)?.letter;

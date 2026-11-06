@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "steps": { "P0_boot": true, "P1_mailbox": true },
+  "intro": { "ran": true, "seconds": 4.7, "start_expr": "sleepy", "end_expr": "happy", "face_ok": true, "shots": ["story_boot.png", "story_wake.png"] },
+  "pickup_seconds": 6.7,
+  "pickup_within_30s": true,
+  "save_reload": true,
+  "letter_open": true,
+  "move_locked": true,
+  "no_repeat": true,
+  "seconds": 2.3,
+  "avg_fps": 276.6,
+  "errors": ""
+}

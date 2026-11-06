@@ -84,6 +84,7 @@ public static class IslandBuilder
         if (layout.buildings != null)
             foreach (var b in layout.buildings) BuildBuilding(b, generated.transform, greybox);
         BuildScanStation(layout, generated.transform, scanMat);
+        BuildMailbox(layout, generated.transform, Mat("MailboxRed", new Color32(0x9e, 0x2b, 0x25, 255)));
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
@@ -530,6 +531,50 @@ public static class IslandBuilder
         body.GetComponent<Renderer>().sharedMaterial = mat;
         go.AddComponent<ScanStation>();
         Debug.Log($"SCANSTATION x={x:F2} y={y:F2} z={z:F2}");
+    }
+
+    // WP-10：山口 P_03 放真的红色邮筒（素材缺失时用简单圆柱兜底），并挂一团暖光做教学提示。
+    static void BuildMailbox(Layout layout, Transform parent, Material fallback)
+    {
+        var pos = new Vector3(-25.7f, 3f, 1.1f);
+        if (layout.points != null)
+            foreach (var p in layout.points) if (p.id == "03") { pos = new Vector3(p.x, p.y, p.z); break; }
+
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArtRoot + "/Street/S1_山口邮筒_分享包版.prefab");
+        GameObject go;
+        if (prefab != null)
+        {
+            go = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            go.name = "S1_Mailbox";
+            go.transform.position = pos;
+            go.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+        }
+        else
+        {
+            go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = "S1_Mailbox_fallback";
+            UnityEngine.Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos + new Vector3(0, 0.7f, 0);
+            go.transform.localScale = new Vector3(0.62f, 0.7f, 0.62f);
+            go.GetComponent<Renderer>().sharedMaterial = fallback;
+        }
+        go.layer = 7;
+
+        // 等比缩到 1.6 米高（5.3 比例表 S1 的目标高度）
+        float h = 1.6f;
+        var rends = go.GetComponentsInChildren<Renderer>();
+        if (rends.Length > 0)
+        {
+            var b = rends[0].bounds;
+            foreach (var r in rends) b.Encapsulate(r.bounds);
+            if (b.size.y > 0.01f) h = b.size.y;
+        }
+        if (h > 0.01f) go.transform.localScale *= 1.6f / h;
+
+        var glow = go.AddComponent<MailboxGlow>();
+        glow.Height = 1.6f;
+        Debug.Log($"MAILBOX x={pos.x:F2} y={pos.y:F2} z={pos.z:F2} prefab={(prefab != null)} native_h={h:F2}");
     }
 
     // 工程书 WP-05 第 4 步：未减面时建筑先用灰盒。按预览图的建筑框反推世界尺寸与位置。

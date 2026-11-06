@@ -6,3 +6,6 @@ Build/
 UserSettings/
 *.csproj
 *.sln
+
+__pycache__/
+*.pyc

@@ -9,3 +9,6 @@ UserSettings/
 
 __pycache__/
 *.pyc
+
+# headless chrome temp profile (browser session data, not evidence)
+chrome-profile/

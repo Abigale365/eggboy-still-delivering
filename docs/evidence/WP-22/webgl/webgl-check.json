@@ -1,0 +1,480 @@
+{
+  "state": {
+    "loading": "EGGBOY 正在开机… 100%",
+    "display": "none",
+    "error": "",
+    "errorDisplay": "none"
+  },
+  "nativeFaceLog": [
+    "NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=22681 hull=36 x=-0.238..0.212 y=0.489..0.780\n"
+  ],
+  "errors": [],
+  "messages": [
+    {
+      "entry": {
+        "source": "network",
+        "level": "error",
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "timestamp": 1793987899450.462,
+        "url": "http://127.0.0.1:62721/favicon.ico",
+        "networkRequestId": "15232.6"
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987900853.92,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987901254.712,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987901653.925,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987902053.714,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987902454.105,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "log",
+      "args": [
+        {
+          "type": "string",
+          "value": "NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=22681 hull=36 x=-0.238..0.212 y=0.489..0.780\n"
+        }
+      ],
+      "executionContextId": 2,
+      "timestamp": 1793987902725.292,
+      "stackTrace": {
+        "callFrames": [
+          {
+            "functionName": "_JS_Log_Dump",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 39699
+          },
+          {
+            "functionName": "$func86692",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27294797
+          },
+          {
+            "functionName": "$func86695",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27295492
+          },
+          {
+            "functionName": "$func86706",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27299844
+          },
+          {
+            "functionName": "$func86705",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27299703
+          },
+          {
+            "functionName": "$func86703",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27297971
+          },
+          {
+            "functionName": "$func85218",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 26846904
+          },
+          {
+            "functionName": "$func44109",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 12001349
+          },
+          {
+            "functionName": "$func43312",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 11913343
+          },
+          {
+            "functionName": "$func44114",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 12001884
+          },
+          {
+            "functionName": "$func59410",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 15644322
+          },
+          {
+            "functionName": "$func59408",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 15637477
+          },
+          {
+            "functionName": "$func19350",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 5509400
+          },
+          {
+            "functionName": "$func65277",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 16454520
+          },
+          {
+            "functionName": "$func68573",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 16798318
+          },
+          {
+            "functionName": "$dynCall_iiii",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27480997
+          },
+          {
+            "functionName": "invoke_iiii",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 391017
+          },
+          {
+            "functionName": "$func68557",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 16794376
+          },
+          {
+            "functionName": "$func1018",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 813115
+          },
+          {
+            "functionName": "$func86481",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27260297
+          },
+          {
+            "functionName": "$func83525",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 26751212
+          },
+          {
+            "functionName": "$func69617",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 17243095
+          },
+          {
+            "functionName": "$func69631",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 17249012
+          },
+          {
+            "functionName": "$func79688",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 24564486
+          },
+          {
+            "functionName": "$func81038",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 25627914
+          },
+          {
+            "functionName": "$func80973",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 25593766
+          },
+          {
+            "functionName": "$func80973",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 25593881
+          },
+          {
+            "functionName": "$func86825",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27356448
+          },
+          {
+            "functionName": "$dynCall_v",
+            "scriptId": "6",
+            "url": "wasm://wasm/0792e48e",
+            "lineNumber": 0,
+            "columnNumber": 27481047
+          },
+          {
+            "functionName": "browserIterationFunc",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 210801
+          },
+          {
+            "functionName": "callUserCallback",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 164373
+          },
+          {
+            "functionName": "runIter",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 165613
+          },
+          {
+            "functionName": "Browser_mainLoop_runner",
+            "scriptId": "5",
+            "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+            "lineNumber": 9,
+            "columnNumber": 163909
+          }
+        ]
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987902985.345,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987903253.721,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987903851.637,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987904249.785,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    },
+    {
+      "entry": {
+        "source": "other",
+        "level": "warning",
+        "text": "The AudioContext was not allowed to start. It must be resumed (or created) after a user gesture on the page. https://developer.chrome.com/blog/autoplay/#web_audio",
+        "timestamp": 1793987904455.241,
+        "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+        "lineNumber": 9,
+        "stackTrace": {
+          "callFrames": [
+            {
+              "functionName": "tryToResumeAudioContext",
+              "scriptId": "5",
+              "url": "blob:http://127.0.0.1:62721/375075f6-2b6a-4b39-bd26-c138acdc1ff4",
+              "lineNumber": 9,
+              "columnNumber": 60005
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

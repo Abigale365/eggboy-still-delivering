@@ -28,7 +28,7 @@
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |
 | WP-22 | 全流程 QA | WP-15, WP-16 | done | A(agent) | 2026-11-07 02:30 | 自动部分全绿：story 22/22（total 96.5 s）、route 28/28（airFrames 0、maxGroundGap 0.039）、map 5 点对位 + 互斥 true；无头 Chrome WebGL 冒烟通过（加载完成、0 error、标题/地图/HUD 中文正常，证据 docs/evidence/WP-22/webgl）；known-issues.md 已建（11 条）；真人项已入 human-queue（通关计时、两人试玩、标题点击、真显卡浏览器、核显机）。未验证：真显卡 Chrome/Edge 全流程、10 分钟内存、真人试玩——见 human-queue |
 | WP-23 | 部署（M7） | WP-21，用户确定位置 | todo | A | | |
-| WP-24 | 报告 | WP-15 | todo | B | | |
+| WP-24 | 报告 | WP-15 | doing | B(agent) | 2026-11-07 02:45 | 底稿 2026-11-03_记忆邮局_项目成果报告_阶段版 未找到（已入 human-queue），按工程书 0.4 默认做法：以桌面《记忆邮局_项目方案_2026.11.02.md》(v4) 为第 3 章底稿从零起草；真实运行数据来自 progress.md + docs/evidence |
 | WP-25 | 视频和发布包（M8） | WP-22 | todo | B | | |
 | WP-X1 | 扫描小版本（可选） | 决策点 11/14，用户要做 | todo | A | | 没开工 |
 | WP-X2 | 打印一件实物（可选） | 打印机型号已知 | todo | A | | 没开工 |

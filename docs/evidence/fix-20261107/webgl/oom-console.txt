@@ -1,0 +1,8 @@
+﻿2026-11-07 20:2x 内置浏览器（真显卡）打开 Build/MainWebGL（data 529.7 MB，webGLMaximumMemorySize 2048）：
+[error] Could not allocate memory: System out of memory!
+Trying to allocate: 51166000B with 16 alignment. MemoryLabel: TempOverflow
+[ ALLOC_DEFAULT ] used: 78783183B
+[ ALLOC_GFX ] used: 2017912912B | peak: 2017912912B
+[error] Uncaught RuntimeError: null function
+    at JS_ScreenOrientation_eventHandler
+无头 Chrome（check-tidetown-webgl.cjs）同样报“加载失败：RuntimeError: null function”，截图 webgl.png。

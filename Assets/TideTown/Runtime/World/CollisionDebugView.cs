@@ -21,7 +21,9 @@ public sealed class CollisionDebugView : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.F3)) { Visible = !Visible; dirty = true; Debug.Log("COLLISIONDEBUG " + Visible); }
+        // 只有调试模式（-debugui、开发版、编辑器）才响应 F3，发布包里玩家按了没反应
+        if (Input.GetKeyDown(KeyCode.F3) && (Features.debugUi || Debug.isDebugBuild))
+        { Visible = !Visible; dirty = true; Debug.Log("COLLISIONDEBUG " + Visible); }
         if (!Visible || world == null) return;
         if (dirty) { Build(); dirty = false; }
         if (lineMesh != null && lineMat != null)

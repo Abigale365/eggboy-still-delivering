@@ -26,6 +26,7 @@ public class WaterAudit : MonoBehaviour
     readonly StringBuilder levels = new StringBuilder();
     string crateJson = "{}";
     string rescueJson = "{}";
+    string fallJson = "{}";
     string riseJson = "{}";
     string shaderJson = "{}";
     float startedAt;
@@ -59,6 +60,7 @@ public class WaterAudit : MonoBehaviour
         if (status == "running") yield return Rise();
         if (status == "running") yield return CrateCross();
         if (status == "running") yield return Rescue();
+        if (status == "running") yield return Fall();
 
         // 收尾：回到 L0
         water.SetInstant(WaterLevel.LevelYs[0]);
@@ -216,6 +218,110 @@ public class WaterAudit : MonoBehaviour
         if (!ok) Fail("rescue_failed", "掉水后没回到安全点：" + rescueJson);
     }
 
+    // ---------- 掉层救援（known-issues #14） ----------
+    // 1. 误报：所有可走区按 1 米网格站一遍，正常地面上一个都不能判成掉层
+    // 2. 真掉：在路线旁边找一处比路面低 0.6 米以上的地面，把角色放过去，2.5 秒内要被送回路面
+
+    [Serializable] class RoutePt { public string id; public bool stop; public float x, z; }
+    [Serializable] class RouteDoc { public RoutePt[] route; }
+
+    IEnumerator Fall()
+    {
+        water.SetInstant(WaterLevel.LevelYs[0]);
+        yield return null;
+        if (safe == null) { Fail("fall_failed", "场景里没有 SafePoints"); yield break; }
+
+        // 1. 误报
+        int tested = 0, falsePos = 0;
+        var fp = new StringBuilder();
+        foreach (var poly in world.walkPolys)
+        {
+            if (poly.points == null || poly.points.Length < 3) continue;
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (var v in poly.points) { x0 = Mathf.Min(x0, v.x); x1 = Mathf.Max(x1, v.x); z0 = Mathf.Min(z0, v.y); z1 = Mathf.Max(z1, v.y); }
+            for (float x = Mathf.Ceil(x0); x <= x1; x += 1f)
+            for (float z = Mathf.Ceil(z0); z <= z1; z += 1f)
+            {
+                if (!world.InWalkArea(x, z)) continue;
+                float g = world.GroundAt(x, z, poly.y + 0.5f);
+                if (g < 0.2f || g < water.Y - 0.05f) continue;
+                tested++;
+                if (safe.FellBelowRoute(new Vector3(x, g, z), out _))
+                {
+                    falsePos++;
+                    if (falsePos <= 12) fp.Append(fp.Length == 0 ? "" : ",").Append("[\"").Append(poly.id).Append("\",")
+                        .Append(x.ToString("F1")).Append(",").Append(g.ToString("F2")).Append(",").Append(z.ToString("F1")).Append("]");
+                }
+            }
+        }
+
+        // 2. 真掉：沿路线每 0.5 米，往两侧 0.8–2.4 米找低处
+        var asset = Resources.Load<TextAsset>("World/route");
+        var doc = asset != null ? JsonUtility.FromJson<RouteDoc>(asset.text) : null;
+        Vector3 spot = Vector3.zero, back = Vector3.zero;
+        bool found = false, foundWalkable = false;
+        if (doc != null && doc.route != null)
+        {
+            for (int i = 0; i + 1 < doc.route.Length && !foundWalkable; i++)
+            {
+                var a = new Vector2(doc.route[i].x, doc.route[i].z);
+                var b = new Vector2(doc.route[i + 1].x, doc.route[i + 1].z);
+                float len = (b - a).magnitude;
+                if (len < 0.1f) continue;
+                var dir = (b - a) / len;
+                var side = new Vector2(-dir.y, dir.x);
+                for (float t = 0f; t <= len && !foundWalkable; t += 0.5f)
+                {
+                    var c = a + dir * t;
+                    float roadY = world.GroundAt(c.x, c.y);
+                    foreach (float s in new[] { 0.8f, 1.2f, 1.6f, 2.0f, 2.4f, -0.8f, -1.2f, -1.6f, -2.0f, -2.4f })
+                    {
+                        var q = c + side * s;
+                        float g = world.GroundAt(q.x, q.y, roadY - 0.6f);
+                        if (g < 0.2f || g < water.Y - 0.05f || roadY - g < 0.6f || roadY - g > 2.2f) continue;
+                        var cand = new Vector3(q.x, g, q.y);
+                        if (!safe.FellBelowRoute(cand, out var bk)) continue;
+                        bool walk = world.Walkable(q.x, q.y);
+                        if (!found || (walk && !foundWalkable)) { spot = cand; back = bk; found = true; foundWalkable = walk; }
+                        if (walk) break;
+                    }
+                }
+            }
+        }
+
+        string rescued = "false", reasonStr = "", endStr = "null";
+        float secs = 0f;
+        bool ok = falsePos == 0 && found;
+        if (found)
+        {
+            int before = safe.RescueCount;
+            player.transform.position = spot + Vector3.up * 0.01f;
+            player.vel = Vector3.zero;
+            player.grounded = true;
+            float t0 = Time.realtimeSinceStartup;
+            while (Time.realtimeSinceStartup - t0 < 3.5f && safe.RescueCount == before)
+            {
+                player.Move(Mathf.Min(0.05f, Time.deltaTime), 0f, 0f, false, false);
+                yield return null;
+            }
+            secs = Time.realtimeSinceStartup - t0;
+            var end = player.transform.position;
+            bool r = safe.RescueCount > before && safe.LastReason == "fell";
+            bool onRoad = end.y > spot.y + 0.5f;
+            rescued = r ? "true" : "false";
+            reasonStr = safe.LastReason ?? "";
+            endStr = "[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") + "]";
+            ok = ok && r && onRoad;
+        }
+
+        fallJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"tested\":" + tested + ",\"falsePositives\":" + falsePos +
+                   ",\"falseSamples\":[" + fp + "],\"found\":" + (found ? "true" : "false") + ",\"spotWalkable\":" + (foundWalkable ? "true" : "false") +
+                   ",\"spot\":[" + spot.x.ToString("F2") + "," + spot.y.ToString("F2") + "," + spot.z.ToString("F2") + "]" +
+                   ",\"expectedBack\":[" + back.x.ToString("F2") + "," + back.y.ToString("F2") + "," + back.z.ToString("F2") + "]" +
+                   ",\"end\":" + endStr + ",\"rescued\":" + rescued + ",\"reason\":\"" + reasonStr + "\",\"seconds\":" + secs.ToString("F2") + "}";
+        if (!ok) Fail("fall_failed", "掉层救援不对：" + fallJson);
+    }
+
     // ---------- 着色器 ----------
 
     string ShaderCheck()
@@ -244,7 +350,7 @@ public class WaterAudit : MonoBehaviour
             "\",\"seconds\":" + seconds.ToString("F1") +
             ",\"shader\":" + shaderJson +
             ",\"levels\":[" + levels + "]" +
-            ",\"rise\":" + riseJson + ",\"crate\":" + crateJson + ",\"rescue\":" + rescueJson + "}";
+            ",\"rise\":" + riseJson + ",\"crate\":" + crateJson + ",\"rescue\":" + rescueJson + ",\"fall\":" + fallJson + "}";
         File.WriteAllText(Path.Combine(Application.dataPath, "..", "water-audit.json"), json, new UTF8Encoding(false));
         Debug.Log("WATERAUDIT " + status + " " + reason);
         Application.Quit(status == "passed" ? 0 : 1);

@@ -1,8 +1,9 @@
 // WP-07 预留开关：扫描默认关闭；调试界面默认关闭。WP-09：-scan 命令行可以临时打开扫描站。
+// -debugui 命令行打开调试界面（F3 碰撞线框等）；发布包里玩家碰不到。
 public static class Features
 {
     public static bool scan = HasArg("-scan");
-    public static bool debugUi = false;
+    public static bool debugUi = HasArg("-debugui");
 
     static bool HasArg(string key)
     {

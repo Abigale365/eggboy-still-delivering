@@ -439,6 +439,7 @@ public static partial class IslandBuilder
         var trees = new Mesh[5]; for (int i = 0; i < trees.Length; i++) trees[i] = TreeMesh(i);
         var bushes = new Mesh[4]; for (int i = 0; i < bushes.Length; i++) bushes[i] = BushMesh(i);
         Material[] leafMats = { leafA, leafB, leafC };
+        var leafPink = NatureMat("NatureLeafPink", "NatureLeafPink", NatureKind.Leaves, new Color32(0xec, 0xa6, 0xc4, 255), 89, 1.6f, 5f);   // 开花树
         Material[] flowerMats = { flowerW, flowerP, flowerY };
 
         var walks = new List<WalkArea>();
@@ -640,7 +641,8 @@ public static partial class IslandBuilder
                 if (crowded) continue;
                 placed.Add(p2);
                 float s = 0.85f + rnd.Next01() * 0.55f;
-                Place(treeRoot, "Tree", trees[nTree % trees.Length], new[] { leafMats[nTree % 3], trunk }, p, new Vector3(s, s * (0.9f + rnd.Next01() * 0.25f), s), rnd.Next01() * 360f);
+                var crown = (t.id == "main" && rnd.Next01() < 0.3f) ? leafPink : leafMats[nTree % 3];   // 主街草地上三成是粉色开花树
+                Place(treeRoot, "Tree", trees[nTree % trees.Length], new[] { crown, trunk }, p, new Vector3(s, s * (0.9f + rnd.Next01() * 0.25f), s), rnd.Next01() * 360f);
                 nTree++;
             }
         }

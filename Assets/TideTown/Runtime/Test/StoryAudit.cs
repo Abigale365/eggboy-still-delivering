@@ -781,6 +781,7 @@ public class StoryAudit : MonoBehaviour
     IEnumerator WalkTo(float x, float z, string label)
     {
         float t0 = Time.realtimeSinceStartup;
+        float best = float.MaxValue, bestAt = t0;
         while (true)
         {
             // 到点自动读信或进过场会锁人，停在半径外也算到达
@@ -789,6 +790,11 @@ public class StoryAudit : MonoBehaviour
             float dx = x - pos.x, dz = z - pos.z;
             float d = Mathf.Sqrt(dx * dx + dz * dz);
             if (d < 0.8f) yield break;
+            // 2026-11-08：大件道具（烤炉、秋千……）按模型外形挡人，走不到中心点。
+            // 已经在互动距离内（InteractionService.range 是 1.6 m，这里留余量用 1.55）、又 0.6 秒没再靠近，
+            // 就算到了——真人也是站在跟前按 E
+            if (d < best - 0.01f) { best = d; bestAt = Time.realtimeSinceStartup; }
+            else if (d < 1.55f && Time.realtimeSinceStartup - bestAt > 0.6f) yield break;
             if (Time.realtimeSinceStartup - t0 > 30f)
             {
                 var at = boot.player.transform.position;

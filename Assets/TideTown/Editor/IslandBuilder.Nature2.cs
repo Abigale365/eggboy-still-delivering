@@ -129,55 +129,70 @@ public static partial class IslandBuilder
         root.SetParent(parent, false);
         int fences = 0, lamps = 0;
 
-        // 1. 栅栏 + 路灯：只沿台地（不沿山路这类坡道）的外沿，外面落差 ≥ 1.5 m、又不通向别的可走区
+        // 1. 矮木栅栏 + 路灯（目标图：每条石板路两边都围着一圈矮木栅栏，隔一段一盏路灯）
+        //    沿每块平的可走区（石板路、小广场、学校草坪、灯塔台）的外沿；外面是别的可走区（路口）或贴着房子/摊位的地方留口子。
+        //    栅栏是程序拼的（立柱 + 两道横杆，0.75 m 高），一块可走区合成一个网格；不单独做碰撞——
+        //    栅栏正好立在可走区边线上，边线本来就挡人，看到的和撞到的一致。
+        var wood = FlatMat("FenceWood", new Color32(0x8a, 0x5e, 0x3a, 255), 0.08f);
+        var fenceRoot = new GameObject("Fences").transform; fenceRoot.SetParent(root, false);
+        float lampRun = 0f;
         for (int wi = 0; wi < walks.Count; wi++)
         {
             var w = walks[wi];
             string id = layout.walk[wi].id;
-            if (id.StartsWith("mountain") || id.StartsWith("to_") || id == "dock") continue;
+            if (!id.StartsWith("pad_") && id != "lighthouse") continue;    // 坡道、码头、船棚不围
+            var verts = new List<Vector3>(); var tris = new List<int>();
             var poly = w.poly;
             for (int i = 0; i < poly.Count; i++)
             {
                 var a = poly[i]; var b = poly[(i + 1) % poly.Count];
                 float len = (b - a).magnitude;
-                if (len < 2.2f) continue;
+                if (len < 0.05f) continue;
                 var dir = (b - a) / len; var outN = new Vector2(dir.y, -dir.x);
-                if (InPolyXZ(poly, (a + b) * 0.5f + outN * 0.2f)) outN = -outN;
-                int segs = Mathf.FloorToInt(len / 2.1f);
-                float pad = (len - segs * 2.1f) * 0.5f;
-                for (int s = 0; s < segs; s++)
+                if (InPolyXZ(poly, (a + b) * 0.5f + outN * 0.05f)) outN = -outN;
+                int posts = Mathf.Max(1, Mathf.RoundToInt(len / 1.25f));
+                Vector2? prev = null;
+                for (int s = 0; s <= posts; s++)
                 {
-                    var c = a + dir * (pad + 2.1f * (s + 0.5f));
-                    bool ok = true;
-                    foreach (float tt in new[] { -0.95f, 0f, 0.95f })
-                    {
-                        var q = c + dir * tt + outN * 0.8f;
-                        if (w.y - GroundBelow(q.x, q.y, w.y - 0.1f) < 1.5f) { ok = false; break; }       // 外面不是崖
+                    var c = Vector2.Lerp(a, b, s / (float)posts) - outN * 0.08f;
+                    // 留口子：外面 0.5 m 是别的可走区（路口），或者贴着建筑/摊位
+                    var probe = c + outN * 0.5f;
+                    bool gap = NearBuilding(new Vector3(c.x, w.y, c.y), 0.9f);
+                    if (!gap)
                         foreach (var o in walks)
-                            if (o != w && o.y > w.y - 2.5f && DistToPoly(o.poly, q) < 0.6f) { ok = false; break; }  // 通向别的路
-                        if (!ok) break;
-                    }
-                    if (!ok) continue;
-                    var pos = c - outN * 0.12f;
-                    var p3 = new Vector3(pos.x, w.y, pos.y);
-                    if (NearBuilding(p3, 0.8f)) continue;
-                    var holder = new GameObject("Fence");
-                    holder.transform.SetParent(root, false);
-                    holder.transform.position = new Vector3(pos.x, w.y + 0.01f, pos.y);
-                    float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
-                    MountSourceModel(holder.transform, "S7", Vector3.zero, 2.0f, false, yaw);
-                    fences++;
-                    if (fences % 4 == 2)
+                            if (o != w && Mathf.Abs(o.y - w.y) < 3f && DistToPoly(o.poly, probe) < 0.35f) { gap = true; break; }
+                    if (gap) { prev = null; continue; }
+                    AddFenceBox(verts, tris, new Vector3(c.x, w.y, c.y), new Vector3(0.11f, 0.75f, 0.11f), 0f);
+                    if (prev.HasValue)
                     {
-                        var lp = c + dir * 1.05f - outN * 0.15f;     // 落在两段栅栏的接缝上
-                        var lamp = new GameObject("Lamp");
-                        lamp.transform.SetParent(root, false);
-                        lamp.transform.position = new Vector3(lp.x, w.y + 0.01f, lp.y);
-                        MountSourceModel(lamp.transform, "S4", Vector3.zero, 2.6f, true, yaw);
-                        lamps++;
+                        var m = (prev.Value + c) * 0.5f; float l = (c - prev.Value).magnitude;
+                        float yaw = Mathf.Atan2(dir.x, dir.y) * Mathf.Rad2Deg;
+                        AddFenceBox(verts, tris, new Vector3(m.x, w.y + 0.34f, m.y), new Vector3(0.05f, 0.06f, l), yaw);
+                        AddFenceBox(verts, tris, new Vector3(m.x, w.y + 0.60f, m.y), new Vector3(0.05f, 0.06f, l), yaw);
+                        fences++;
+                        lampRun += l;
+                        if (lampRun > 9f && id.StartsWith("pad_stone"))
+                        {
+                            lampRun = 0f;
+                            var lamp = new GameObject("Lamp");
+                            lamp.transform.SetParent(root, false);
+                            lamp.transform.position = new Vector3(c.x, w.y + 0.01f, c.y);
+                            MountSourceModel(lamp.transform, "S4", Vector3.zero, 2.2f, true, yaw);
+                            lamps++;
+                        }
                     }
+                    prev = c;
                 }
             }
+            if (verts.Count == 0) continue;
+            var mesh = new Mesh { name = "Fence_" + id, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.SetVertices(verts); mesh.SetTriangles(tris, 0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            mesh = SaveMesh(mesh, NatureMeshRoot + "/Fence_" + id + ".asset");
+            var fgo = new GameObject("Fence_" + id);
+            fgo.transform.SetParent(fenceRoot, false);
+            fgo.AddComponent<MeshFilter>().sharedMesh = mesh;
+            fgo.AddComponent<MeshRenderer>().sharedMaterial = wood;
+            GameObjectUtility.SetStaticEditorFlags(fgo, StaticEditorFlags.BatchingStatic);
         }
 
         // 2. 小船：28 号沙滩，船头斜朝海
@@ -202,6 +217,32 @@ public static partial class IslandBuilder
                 streetscapeBlockers.Add(new Vector3(pt.x, pt.y, pt.z));
             }
         Debug.Log($"STREETSCAPE fences={fences} lamps={lamps} blockers={streetscapeBlockers.Count}");
+    }
+
+    // 一根立柱或一道横杆：底面中心 center（横杆是中心），尺寸 size（x 厚、y 高、z 长），绕 Y 转 yaw 度
+    static void AddFenceBox(List<Vector3> v, List<int> t, Vector3 center, Vector3 size, float yaw)
+    {
+        var rot = Quaternion.Euler(0f, yaw, 0f);
+        bool post = yaw == 0f && size.y > 0.5f;
+        var c = post ? center + Vector3.up * size.y * 0.5f : center;
+        var h = size * 0.5f;
+        Vector3 P(float x, float y, float z) => c + rot * new Vector3(x * h.x, y * h.y, z * h.z);
+        // 6 个面各 4 个顶点（平直法线），每个面从外面看是顺时针
+        var corners = new[]
+        {
+            new[] { P(-1,-1, 1), P( 1,-1, 1), P( 1, 1, 1), P(-1, 1, 1) },
+            new[] { P( 1,-1,-1), P(-1,-1,-1), P(-1, 1,-1), P( 1, 1,-1) },
+            new[] { P( 1,-1, 1), P( 1,-1,-1), P( 1, 1,-1), P( 1, 1, 1) },
+            new[] { P(-1,-1,-1), P(-1,-1, 1), P(-1, 1, 1), P(-1, 1,-1) },
+            new[] { P(-1, 1, 1), P( 1, 1, 1), P( 1, 1,-1), P(-1, 1,-1) },
+            new[] { P(-1,-1,-1), P( 1,-1,-1), P( 1,-1, 1), P(-1,-1, 1) },
+        };
+        foreach (var f in corners)
+        {
+            int o = v.Count;
+            v.AddRange(f);
+            t.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3 });
+        }
     }
 
     static void BuildFountainPlaceholder(Transform parent, Vector3 basePos)

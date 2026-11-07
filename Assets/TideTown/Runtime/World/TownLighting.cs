@@ -73,11 +73,25 @@ public sealed class TownLighting : MonoBehaviour
     void LateUpdate()
     {
         RefreshAmbient(false);
+        if (!heroDone) ExcludeHeroFromReflections();
         if (probeDirtyAt >= 0f && Time.unscaledTime >= probeDirtyAt)
         {
             probeDirtyAt = -1f;
             if (probe != null) probe.RenderProbe();
         }
+    }
+
+    // 2026-11-08：EGGBOY 不吃小镇反射探针。面屏是低面数的黑色亮面，反射环境后左上角露出一块块灰色棱角，
+    // 左眼旁还映出路灯的亮斑（用户截图）。关掉后面屏回到纯黑底，只显示表情；外壳本来就哑光，看不出差别。
+    // 不改 EGGBOY 的任何脚本和材质，只改它渲染器的反射探针用法。
+    bool heroDone;
+    void ExcludeHeroFromReflections()
+    {
+        var hero = GameObject.Find("EGGBOY");
+        if (hero == null) return;
+        foreach (var r in hero.GetComponentsInChildren<Renderer>(true))
+            r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        heroDone = true;
     }
 
     // 环境光颜色一变就重算球谐；变化较大时 1 秒后重渲一次反射（灯塔变暗、天亮）

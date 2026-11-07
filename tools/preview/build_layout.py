@@ -64,6 +64,63 @@ def raster(polys_xz, x0, z0, nx, nz):
     return np.asarray(im) > 0
 
 
+PAD_LIFT = 0.02   # 石板路/小广场比所在台地高 2 cm：GroundAt 取到它，视觉上是一道小路沿
+
+
+def build_pads_and_paths(zones, cam):
+    """2026-11-08 新布局：路是一条条石板路，中间是草地。
+    paths：中心线（像素）+ 宽度（米），在世界里按宽度外扩，同一高度的合并成一块；
+    pads：直接给多边形或椭圆（像素）。输出成可走的台地（zone=stone/grass），高出所在台地 2 cm。
+    合并后带洞的多边形（环路）沿洞的中心竖切成几块，网格和 Walkable 都不支持洞。"""
+    from shapely.geometry import LineString, Polygon, MultiPolygon
+    from shapely.ops import unary_union, split
+    groups = {}   # (y, zone) -> [geom]
+    for p in zones.get("paths", []):
+        y = p["y"]
+        pts = [cam.unproject(u, v, y) for u, v in p["nodes"]]
+        if p.get("closed"):
+            pts = pts + [pts[0]]
+        g = LineString(pts).buffer(p["width"] / 2, quad_segs=8)
+        groups.setdefault((y, p.get("zone", "stone")), []).append(g)
+    for p in zones.get("pads", []):
+        y = p["y"]
+        if "ellipse" in p:
+            cu, cv, ru, rv = p["ellipse"]
+            px = [(cu + ru * math.cos(a * math.pi / 16), cv + rv * math.sin(a * math.pi / 16)) for a in range(32)]
+        else:
+            px = p["poly"]
+        g = Polygon([cam.unproject(u, v, y) for u, v in px]).buffer(0)
+        groups.setdefault((y, p.get("zone", "stone")), []).append(g)
+
+    def no_holes(poly):
+        if len(poly.interiors) == 0:
+            return [poly]
+        hx = Polygon(poly.interiors[0]).centroid.x
+        miny, maxy = poly.bounds[1] - 1, poly.bounds[3] + 1
+        parts = split(poly, LineString([(hx, miny), (hx, maxy)]))
+        out = []
+        for q in parts.geoms:
+            out += no_holes(q)
+        return out
+
+    out = []
+    for (y, zone), geoms in sorted(groups.items()):
+        merged = unary_union(geoms)
+        polys = list(merged.geoms) if isinstance(merged, MultiPolygon) else [merged]
+        k = 0
+        for poly in polys:
+            for piece in no_holes(poly):
+                piece = piece.simplify(0.03)
+                if piece.area < 0.2:
+                    continue
+                ring = list(piece.exterior.coords)[:-1]
+                out.append({"id": f"pad_{zone}_{str(y).replace('.', '_')}_{k}", "y": round(y + PAD_LIFT, 3), "walk": True,
+                            "zone": zone, "xz": [(round(a, 3), round(b, 3)) for a, b in ring], "poly": []})
+                k += 1
+    print("pads:", len(out), "pieces from", sum(len(g) for g in groups.values()), "paths/pads")
+    return out
+
+
 def ribbon(nodes_xyz, width):
     """折线 → 每段一个四边形，带端点高度"""
     out = []
@@ -95,6 +152,7 @@ def main():
         zpath.write_text(txt, encoding="utf-8")
 
     tiers = [dict(t, xz=[cam.unproject(u, v, t["y"]) for u, v in t["poly"]]) for t in zones["tiers"]]
+    tiers += build_pads_and_paths(zones, cam)
     roads = []
     for r in zones["roads"]:
         nodes = [(lambda xz: (xz[0], y, xz[1]))(cam.unproject(u, v, y)) for u, v, y in r["nodes"]]

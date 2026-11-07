@@ -121,7 +121,8 @@ public static partial class IslandBuilder
         BuildSchoolProps(generated.transform);
         BuildLighthouseProps(generated.transform);
         BuildEndingProps(generated.transform);
-        BuildStreetProps(generated.transform, layout);
+        // 2026-11-08：旧的街具摆放（按旧路名和旧坐标）停用，栅栏和路灯改由 BuildStreetscape 沿新的石板路摆
+        // BuildStreetProps(generated.transform, layout);
         BuildDog(route, generated.transform);
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
@@ -931,6 +932,17 @@ public static partial class IslandBuilder
                 fp.d = Mathf.Round(cd * 1000f) / 1000f;
             }
             Debug.Log($"WALLBOX {b.instance} layout={w * WallWidth:F2}x{wallBack - wallFront:F2} visual={vb.size.x:F2}x{vb.size.z:F2} box={fp.w:F2}x{fp.d:F2}");
+        }
+        // 2026-11-08：碰撞改成按模型外形（IslandBuilder.Collision.cs）。灯塔例外：塔身碰撞带顶面，塔顶平台要靠它。
+        var visualGo = parent.Find(b.instance + "_visual");
+        if (b.instance != "B4_lighthouse" && visualGo != null
+            && AddModelCollision(visualGo.gameObject, b.y, parent, b.instance, true) > 0)
+        {
+            if (bc != null) UnityEngine.Object.DestroyImmediate(bc);
+            var obs = go.GetComponent<TownObstacle>();
+            if (obs != null) UnityEngine.Object.DestroyImmediate(obs);
+            Debug.Log($"GREYBOX {b.instance} w={w:F2} h={h:F2} d={d:F2} pos=({center.x:F2},{center.z:F2}) collision=model");
+            return;
         }
         footprints.Add(fp);
         Debug.Log($"GREYBOX {b.instance} w={w:F2} h={h:F2} d={d:F2} pos=({center.x:F2},{center.z:F2})");

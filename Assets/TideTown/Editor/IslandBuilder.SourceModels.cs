@@ -5,6 +5,11 @@ using UnityEngine;
 
 public static partial class IslandBuilder
 {
+    // 要挡人的模型：烤炉、滑梯、秋千、黑板、邮筒、路灯、路牌、长椅、栅栏段。
+    // 小件（火柴、球、拖鞋……）不挡；狗窝和课桌也不挡——课桌在邮局门口的步道上（结局用），狗窝在去学校后门的路上；
+    // 秋千只是个架子，红球就在秋千底下（剧情要走到跟前捡），腿又往外撇，也不挡
+    static readonly string[] CollisionModelIds = { "A1", "C5", "C7", "S1", "S4", "S5", "S6", "S7" };
+
     static string SourceModelPath(string id)
     {
         var paths = Directory.GetFiles("Assets/TideTown/SourceGLB", id + "_*.glb", SearchOption.AllDirectories);
@@ -49,6 +54,9 @@ public static partial class IslandBuilder
         model.transform.position += parent.TransformPoint(localBase) -
             new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
         Debug.Log($"GLB_SCENE {parent.name}: {path}");
+        // 2026-11-08：这些街道道具和大件剧情道具按模型外形挡人（IslandBuilder.Collision.cs）
+        if (Array.IndexOf(CollisionModelIds, id) >= 0)
+            AddModelCollision(model, parent.TransformPoint(localBase).y, parent, id, true);
         return model;
     }
 

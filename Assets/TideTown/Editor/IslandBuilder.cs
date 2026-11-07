@@ -63,7 +63,7 @@ public static partial class IslandBuilder
         if (manual == null) manual = new GameObject("Manual");
 
         var grass = Mat("IslandGrass", new Color32(0x86, 0x9d, 0x5b, 255));
-        var road = Mat("IslandRoad", new Color32(0xc7, 0xae, 0x87, 255));
+        var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
         var cliff = Mat("IslandCliff", new Color32(0x99, 0x89, 0x73, 255));
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
@@ -288,7 +288,8 @@ public static partial class IslandBuilder
         {
             mat,
             Mat("IslandRoadCurb", new Color32(0xa8, 0x97, 0x7c, 255)),
-            Mat("IslandRoadGravel", new Color32(0xb7, 0xa9, 0x8c, 255)),
+            // 碎石人行道用程序贴图：横向/纵向 UV 直接按米记，材质里按 tile 米缩放
+            RoadSurfaceMat("IslandRoadGravel", new Color32(0xae, 0xa2, 0x8c, 255), "RoadGravel", 31, 150, 1.6f, 9f),
             Mat("IslandCliff", new Color32(0x99, 0x89, 0x73, 255)),
         };
         var mesh = SaveMesh(RoadMesh(r), "Assets/TideTown/Art/Meshes/Main_road_" + r.id + ".asset");
@@ -300,10 +301,12 @@ public static partial class IslandBuilder
     static Mesh RoadMesh(RoadDef r)
     {
         var verts = new List<Vector3>();
+        var uv = new List<Vector2>();
         var idx = new List<int>();
         var curbIdx = new List<int>();
         var walkIdx = new List<int>();
         var skirtIdx = new List<int>();
+        float arc = 0f;   // 沿路累计米数，贴图 V 坐标用它，接缝处天然连续
         for (int i = 0; i + 1 < r.x.Length; i++)
         {
             var a = new Vector3(r.x[i], r.y[i] + 0.02f, r.z[i]);
@@ -317,19 +320,22 @@ public static partial class IslandBuilder
             // 两端各 15cm 盖片补住拐弯和接缝，坡度跟邻段一致；顶面高度永远用 route.json，不贴地形
             var capA = a - d * 0.15f; capA.y = a.y - NeighbourSlope(r, i - 1) * 0.15f;
             var capB = b + d * 0.15f; capB.y = b.y + NeighbourSlope(r, i + 1) * 0.15f;
-            AddRoadStrip(verts, idx, curbIdx, walkIdx, skirtIdx, capA, a, side, half);
+            AddRoadStrip(verts, uv, idx, curbIdx, walkIdx, skirtIdx, capA, a, side, half, arc - 0.15f, arc);
             // 每 2m 细分，只是让路缘/人行道/裙边在长段上也连续；顶面沿 route 线性，不重新采样地面
             int steps = Mathf.Max(1, Mathf.CeilToInt(len / 2f));
             for (int s = 0; s < steps; s++)
             {
                 var p0 = Vector3.Lerp(a, b, s / (float)steps);
                 var p1 = Vector3.Lerp(a, b, (s + 1) / (float)steps);
-                AddRoadStrip(verts, idx, curbIdx, walkIdx, skirtIdx, p0, p1, side, half);
+                AddRoadStrip(verts, uv, idx, curbIdx, walkIdx, skirtIdx, p0, p1, side, half,
+                    arc + len * s / steps, arc + len * (s + 1) / steps);
             }
-            AddRoadStrip(verts, idx, curbIdx, walkIdx, skirtIdx, b, capB, side, half);
+            AddRoadStrip(verts, uv, idx, curbIdx, walkIdx, skirtIdx, b, capB, side, half, arc + len, arc + len + 0.15f);
+            arc += len;
         }
         var mesh = new Mesh { name = "road_" + r.id, subMeshCount = 4 };
         mesh.SetVertices(verts);
+        mesh.SetUVs(0, uv);
         mesh.SetTriangles(idx, 0);
         mesh.SetTriangles(curbIdx, 1);
         mesh.SetTriangles(walkIdx, 2);
@@ -343,9 +349,11 @@ public static partial class IslandBuilder
     static Mesh RoadTopMesh(RoadDef r)
     {
         var verts = new List<Vector3>();
+        var uv = new List<Vector2>();
         var idx = new List<int>();
         var curbIdx = new List<int>();
         var walkIdx = new List<int>();
+        float arc = 0f;
         for (int i = 0; i + 1 < r.x.Length; i++)
         {
             var a = new Vector3(r.x[i], r.y[i] + 0.02f, r.z[i]);
@@ -358,15 +366,17 @@ public static partial class IslandBuilder
             float half = r.width * 0.5f;
             var capA = a - d * 0.15f; capA.y = a.y - NeighbourSlope(r, i - 1) * 0.15f;
             var capB = b + d * 0.15f; capB.y = b.y + NeighbourSlope(r, i + 1) * 0.15f;
-            AddWalkableRibbons(verts, idx, curbIdx, walkIdx, capA, a, side, half);
+            AddWalkableRibbons(verts, uv, idx, curbIdx, walkIdx, capA, a, side, half, arc - 0.15f, arc);
             int steps = Mathf.Max(1, Mathf.CeilToInt(len / 2f));
             for (int s = 0; s < steps; s++)
             {
                 var p0 = Vector3.Lerp(a, b, s / (float)steps);
                 var p1 = Vector3.Lerp(a, b, (s + 1) / (float)steps);
-                AddWalkableRibbons(verts, idx, curbIdx, walkIdx, p0, p1, side, half);
+                AddWalkableRibbons(verts, uv, idx, curbIdx, walkIdx, p0, p1, side, half,
+                    arc + len * s / steps, arc + len * (s + 1) / steps);
             }
-            AddWalkableRibbons(verts, idx, curbIdx, walkIdx, b, capB, side, half);
+            AddWalkableRibbons(verts, uv, idx, curbIdx, walkIdx, b, capB, side, half, arc + len, arc + len + 0.15f);
+            arc += len;
         }
         var mesh = new Mesh { name = "road_" + r.id + "_col", subMeshCount = 3 };
         mesh.SetVertices(verts);
@@ -388,38 +398,43 @@ public static partial class IslandBuilder
     }
 
     // 一条带：路面、左右路缘（抬高 8cm、外扩 18cm）、再外扩 75cm 的碎石人行道、向下 25cm 的裙边
-    static void AddRoadStrip(List<Vector3> verts, List<int> top, List<int> curb, List<int> walk, List<int> skirt,
-        Vector3 p0, Vector3 p1, Vector3 side, float half)
+    static void AddRoadStrip(List<Vector3> verts, List<Vector2> uv, List<int> top, List<int> curb, List<int> walk,
+        List<int> skirt, Vector3 p0, Vector3 p1, Vector3 side, float half, float v0, float v1)
     {
-        AddRibbon(verts, top, p0, p1, side, -half, half, 0f, 0f);
-        AddRibbon(verts, curb, p0, p1, side, -half - 0.18f, -half, 0.08f, 0f);
-        AddRibbon(verts, curb, p0, p1, side, half, half + 0.18f, 0f, 0.08f);
-        AddRibbon(verts, walk, p0, p1, side, -half - 0.93f, -half - 0.18f, 0.08f, 0.08f);
-        AddRibbon(verts, walk, p0, p1, side, half + 0.18f, half + 0.93f, 0.08f, 0.08f);
-        AddRibbon(verts, skirt, p0, p1, side, -half - 0.93f, -half - 0.93f, 0.08f, -0.25f);
-        AddRibbon(verts, skirt, p0, p1, side, half + 0.93f, half + 0.93f, 0.08f, -0.25f);
+        AddRibbon(verts, uv, top, p0, p1, side, -half, half, 0f, 0f, v0, v1);
+        AddRibbon(verts, uv, curb, p0, p1, side, -half - 0.18f, -half, 0.08f, 0f, v0, v1);
+        AddRibbon(verts, uv, curb, p0, p1, side, half, half + 0.18f, 0f, 0.08f, v0, v1);
+        AddRibbon(verts, uv, walk, p0, p1, side, -half - 0.93f, -half - 0.18f, 0.08f, 0.08f, v0, v1);
+        AddRibbon(verts, uv, walk, p0, p1, side, half + 0.18f, half + 0.93f, 0.08f, 0.08f, v0, v1);
+        AddRibbon(verts, uv, skirt, p0, p1, side, -half - 0.93f, -half - 0.93f, 0.08f, -0.25f, v0, v1);
+        AddRibbon(verts, uv, skirt, p0, p1, side, half + 0.93f, half + 0.93f, 0.08f, -0.25f, v0, v1);
     }
 
     // 碰撞用：路面 + 路缘坡 + 人行道，和视觉前三个子网格同一份顶点
-    static void AddWalkableRibbons(List<Vector3> verts, List<int> top, List<int> curb, List<int> walk,
-        Vector3 p0, Vector3 p1, Vector3 side, float half)
+    static void AddWalkableRibbons(List<Vector3> verts, List<Vector2> uv, List<int> top, List<int> curb, List<int> walk,
+        Vector3 p0, Vector3 p1, Vector3 side, float half, float v0, float v1)
     {
-        AddRibbon(verts, top, p0, p1, side, -half, half, 0f, 0f);
-        AddRibbon(verts, curb, p0, p1, side, -half - 0.18f, -half, 0.08f, 0f);
-        AddRibbon(verts, curb, p0, p1, side, half, half + 0.18f, 0f, 0.08f);
-        AddRibbon(verts, walk, p0, p1, side, -half - 0.93f, -half - 0.18f, 0.08f, 0.08f);
-        AddRibbon(verts, walk, p0, p1, side, half + 0.18f, half + 0.93f, 0.08f, 0.08f);
+        AddRibbon(verts, uv, top, p0, p1, side, -half, half, 0f, 0f, v0, v1);
+        AddRibbon(verts, uv, curb, p0, p1, side, -half - 0.18f, -half, 0.08f, 0f, v0, v1);
+        AddRibbon(verts, uv, curb, p0, p1, side, half, half + 0.18f, 0f, 0.08f, v0, v1);
+        AddRibbon(verts, uv, walk, p0, p1, side, -half - 0.93f, -half - 0.18f, 0.08f, 0.08f, v0, v1);
+        AddRibbon(verts, uv, walk, p0, p1, side, half + 0.18f, half + 0.93f, 0.08f, 0.08f, v0, v1);
     }
 
     // 在两条采样点之间铺一条带：side 方向的内/外偏移可以不同，高度也可不同（路缘/裙边就靠这个）
-    static void AddRibbon(List<Vector3> verts, List<int> idx, Vector3 p0, Vector3 p1, Vector3 side,
-        float offA, float offB, float yA, float yB)
+    // UV：U 直接是横向米数，V 沿路米数；材质把米缩放成贴图张数
+    static void AddRibbon(List<Vector3> verts, List<Vector2> uv, List<int> idx, Vector3 p0, Vector3 p1, Vector3 side,
+        float offA, float offB, float yA, float yB, float v0, float v1)
     {
         int o = verts.Count;
         verts.Add(p0 + side * offA + Vector3.up * yA);
         verts.Add(p0 + side * offB + Vector3.up * yB);
         verts.Add(p1 + side * offB + Vector3.up * yB);
         verts.Add(p1 + side * offA + Vector3.up * yA);
+        uv.Add(new Vector2(offA, v0));
+        uv.Add(new Vector2(offB, v0));
+        uv.Add(new Vector2(offB, v1));
+        uv.Add(new Vector2(offA, v1));
         idx.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3 });
     }
 

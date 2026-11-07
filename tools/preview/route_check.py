@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "Assets/TideTown/Data/Resources/World"
 RADIUS = 0.42
-STEP = 0.14
+STEP = 0.22   # 和 EggboyPlayer.Step 一致（2026-11-07 opt-p0 改成 0.22）
 SAMPLE = 0.02
 GRID = 0.1
 ROAD_EXT = 0.15

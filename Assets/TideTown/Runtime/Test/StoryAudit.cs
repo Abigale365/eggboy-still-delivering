@@ -447,7 +447,9 @@ public class StoryAudit : MonoBehaviour
                 // 等淡入结束，否则信纸会被黑色过场盖住
                 while (boot.director.Climbing && Time.realtimeSinceStartup - t0 < 12f) yield return null;
                 yield return new WaitForSecondsRealtime(0.2f);
-                climbOk = boot.state.step == "L3_oil" && boot.player.transform.position.y > 16f;
+                // 2026-11-07：塔顶高度按 lighthouse.json 的 deck 算（旧地图写死 16，新塔顶 15.2）
+                float deckY = LighthouseData.Point(LighthouseData.Load().deck).y;
+                climbOk = boot.state.step == "L3_oil" && boot.player.transform.position.y > deckY - 0.5f;
                 if (!climbOk) { status = "climb_failed"; error = $"step={boot.state.step} y={boot.player.transform.position.y:F2}"; }
             }
         }

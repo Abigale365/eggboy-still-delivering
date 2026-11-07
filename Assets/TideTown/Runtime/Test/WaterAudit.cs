@@ -150,8 +150,24 @@ public class WaterAudit : MonoBehaviour
         yield return null;
         yield return null;
 
-        var start = new Vector3(14.2f, 0f, -6.55f);
+        // 2026-11-07：按场景里生成的浮箱算起点和方向，换地图不用改坐标
+        var crates = new List<FloatingCrate>(FindObjectsOfType<FloatingCrate>());
+        if (crates.Count < 2) { Fail("crate_failed", "场景里浮箱少于 2 个"); yield break; }
+        crates.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        var c0 = crates[0].transform.position; var c1 = crates[crates.Count - 1].transform.position;
+        var dir = new Vector3(c1.x - c0.x, 0f, c1.z - c0.z).normalized;
+        var start = c0 - dir * 1.4f;
         start.y = world.GroundAt(start.x, start.z) + 0.01f;
+
+        // 过了箱子以后沿路线走到船棚门口（route.json 里 LOW 之后、直到 24 的路径点）：新地图路在箱子后面拐弯
+        var targets = new List<Vector3> { c1 + dir * 0.3f };
+        var rdoc = JsonUtility.FromJson<RouteDoc>(Resources.Load<TextAsset>("World/route").text);
+        int li = Array.FindIndex(rdoc.route, r => r.stop && r.id == "LOW");
+        for (int i = li + 1; li >= 0 && i < rdoc.route.Length; i++)
+        {
+            targets.Add(new Vector3(rdoc.route[i].x, 0f, rdoc.route[i].z));
+            if (rdoc.route[i].stop) break;
+        }
         player.transform.position = start;
         player.vel = Vector3.zero;
         player.grounded = true;
@@ -161,27 +177,33 @@ public class WaterAudit : MonoBehaviour
         float t0 = Time.realtimeSinceStartup;
         int waterFrames = 0;
         int frames = 0;
+        int k = 0;
         float maxY = start.y;
-        while (Time.realtimeSinceStartup - t0 < 12f)
+        while (Time.realtimeSinceStartup - t0 < 20f && k < targets.Count)
         {
             var p = player.transform.position;
-            if (p.x >= 16.5f) break;
+            var to = new Vector3(targets[k].x - p.x, 0f, targets[k].z - p.z);
+            if (to.magnitude < 0.5f) { k++; continue; }
             if (p.y < water.Y - 0.05f) waterFrames++;
             maxY = Mathf.Max(maxY, p.y);
-            player.Move(Mathf.Min(0.05f, Time.deltaTime), 1f, 0f, false, false);
+            to.Normalize();
+            player.Move(Mathf.Min(0.05f, Time.deltaTime), to.x, to.z, false, false);
             frames++;
             yield return null;
         }
 
         var end = player.transform.position;
         float seconds = Time.realtimeSinceStartup - t0;
-        bool ok = end.x >= 16.5f && waterFrames == 0;
+        var dock = GameObject.Find("P_26");
+        var dockPos = dock != null ? dock.transform.position : Vector3.zero;
+        var midCrate = crates[crates.Count / 2].transform.position;
+        bool ok = k >= targets.Count && targets.Count > 1 && waterFrames == 0;
         crateJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"from\":[" + start.x.ToString("F2") + "," + start.y.ToString("F2") + "," + start.z.ToString("F2") +
                     "],\"to\":[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") +
                     "],\"seconds\":" + seconds.ToString("F2") + ",\"frames\":" + frames +
                     ",\"waterFrames\":" + waterFrames + ",\"maxY\":" + maxY.ToString("F2") +
-                    ",\"jumpUsed\":false,\"walkableOnCrates\":" + (world.Walkable(15.4f, -6.55f) ? "true" : "false") +
-                    ",\"walkableInWater\":" + (world.Walkable(18.0f, -8.0f) ? "true" : "false") + "}";
+                    ",\"jumpUsed\":false,\"walkableOnCrates\":" + (world.Walkable(midCrate.x, midCrate.z) ? "true" : "false") +
+                    ",\"walkableInWater\":" + (world.Walkable(dockPos.x, dockPos.z) ? "true" : "false") + "}";
         if (!ok)
         {
             Fail("crate_failed", "木箱区没走过去：" + crateJson);
@@ -197,8 +219,11 @@ public class WaterAudit : MonoBehaviour
         if (safe == null) { Fail("rescue_failed", "场景里没有 SafePoints"); yield break; }
 
         int before = safe.RescueCount;
-        // 码头 18,-8 在 L2 被淹（地面 0.9，水位 1.15）
-        var from = new Vector3(18.0f, world.GroundAt(18.0f, -8.0f), -8.0f);
+        // 码头（P_26）在 L2 被淹（地面 0.9，水位 1.15）
+        var dockGo = GameObject.Find("P_26");
+        if (dockGo == null) { Fail("rescue_failed", "场景里没有 P_26 码头点"); yield break; }
+        var dp = dockGo.transform.position;
+        var from = new Vector3(dp.x, world.GroundAt(dp.x, dp.z), dp.z);
         player.transform.position = from;
         player.vel = Vector3.zero;
         player.grounded = true;

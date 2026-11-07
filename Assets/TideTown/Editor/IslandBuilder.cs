@@ -34,6 +34,19 @@ public static partial class IslandBuilder
     const string RoutePath = "Assets/TideTown/Data/Resources/World/route.json";
 
     static Cam previewCam;
+    static Layout currentLayout;   // 2026-11-07：浮箱、爪印等按布局里的点和路算位置，换地图不用手改坐标
+
+    static Vector2 LayoutPoint(string id)
+    {
+        foreach (var p in currentLayout.points) if (p.id == id) return new Vector2(p.x, p.z);
+        throw new Exception("world_layout.json 没有点 " + id);
+    }
+
+    static Vector2 RoadNode(string roadId, int i)
+    {
+        foreach (var r in currentLayout.roads) if (r.id == roadId) return new Vector2(r.x[i], r.z[i]);
+        throw new Exception("world_layout.json 没有路 " + roadId);
+    }
     static readonly List<Footprint> footprints = new List<Footprint>();
     // WP-14：灯塔灰盒的实际尺寸，塔门和塔顶平台要贴着它搭
     static Vector3 lighthouseCenter;
@@ -48,6 +61,7 @@ public static partial class IslandBuilder
         var route = JsonUtility.FromJson<RouteFile>(File.ReadAllText(RoutePath));
         if (route == null || route.route == null) throw new Exception("route.json 读取失败");
         previewCam = null;
+        currentLayout = layout;
         if (layout.cameras != null)
             foreach (var c in layout.cameras) if (c.name == "preview") { previewCam = c; break; }
 
@@ -627,18 +641,48 @@ public static partial class IslandBuilder
 
     static void BuildCrates(Transform parent, Material mat)
     {
-        // 低洼段（工程书 5.3：22 和船棚之间约 3 米）。木箱铺在 L2 会淹掉的那段路上，
-        // 两头压在干路面，箱顶 = 水位 + 0.18，L2 时 1.33，两边都只差一步以内。
-        float[] xs = { 14.9f, 15.45f, 16.0f };
-        const float z = -6.55f;
+        // 低洼段：去船棚的下坡路（to_shed）在 LOW 附近落到 1.0 m，L2（1.15）会淹。
+        // 2026-11-07 新地图：沿路面折线采样，凡是 L2 会淹（路面 < 1.12）的那一段，每 0.55 m 放一只箱子，
+        // 两头各多盖 0.2 m。路在箱子后面拐弯也能盖全（第一版按直线排，拐弯处漏了 0.6 m 被淹）。
+        RoadDef shedRoad = null;
+        foreach (var r in currentLayout.roads) if (r.id == "to_shed") shedRoad = r;
+        if (shedRoad == null) throw new Exception("没有 to_shed 路，浮箱没地方放");
+        var arcPts = new List<Vector3>();   // x, 路面高, z
+        for (int i = 0; i + 1 < shedRoad.x.Length; i++)
+        {
+            var a = new Vector3(shedRoad.x[i], shedRoad.y[i], shedRoad.z[i]);
+            var b = new Vector3(shedRoad.x[i + 1], shedRoad.y[i + 1], shedRoad.z[i + 1]);
+            float len = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+            int n = Mathf.Max(1, Mathf.CeilToInt(len / 0.05f));
+            for (int k = 0; k < n; k++) arcPts.Add(Vector3.Lerp(a, b, k / (float)n));
+        }
+        arcPts.Add(new Vector3(shedRoad.x[shedRoad.x.Length - 1], shedRoad.y[shedRoad.y.Length - 1], shedRoad.z[shedRoad.z.Length - 1]));
+        var arcLen = new List<float> { 0f };
+        for (int i = 1; i < arcPts.Count; i++)
+            arcLen.Add(arcLen[i - 1] + new Vector2(arcPts[i].x - arcPts[i - 1].x, arcPts[i].z - arcPts[i - 1].z).magnitude);
+        float s0 = -1f, s1 = -1f;
+        for (int i = 0; i < arcPts.Count; i++)
+            if (arcPts[i].y < 1.12f) { if (s0 < 0f) s0 = arcLen[i]; s1 = arcLen[i]; }
+        if (s0 < 0f) throw new Exception("to_shed 路上没有会被 L2 淹的低洼段");
+        Vector3 AtArc(float s)
+        {
+            for (int i = 1; i < arcPts.Count; i++)
+                if (arcLen[i] >= s) return Vector3.Lerp(arcPts[i - 1], arcPts[i], (s - arcLen[i - 1]) / Mathf.Max(1e-5f, arcLen[i] - arcLen[i - 1]));
+            return arcPts[arcPts.Count - 1];
+        }
+        float from = s0 - 0.2f, span = (s1 + 0.2f) - from;
+        int count = Mathf.Max(2, Mathf.CeilToInt(span / 0.55f) + 1);
+        float[] xs = new float[count], zs = new float[count];
+        for (int i = 0; i < count; i++) { var q = AtArc(from + span * i / (count - 1)); xs[i] = q.x; zs[i] = q.z; }
+        Debug.Log($"CRATES flooded {s0:F2}..{s1:F2} m along to_shed, count={count}");
         var size = new Vector3(0.6f, 0.55f, 0.6f);
         var root = new GameObject("Crates").transform;
         root.SetParent(parent, false);
         float bed = float.MaxValue;
-        foreach (var x in xs)
+        for (int i = 0; i < xs.Length; i++)
         {
-            float g = GroundY(x, z);
-            if (g <= 0.2f) throw new Exception($"浮箱没落到地面：{x:F2},{z:F2}");
+            float g = GroundY(xs[i], zs[i]);
+            if (g <= 0.2f) throw new Exception($"浮箱没落到地面：{xs[i]:F2},{zs[i]:F2}");
             bed = Mathf.Min(bed, g);
         }
         for (int i = 0; i < xs.Length; i++)
@@ -646,7 +690,7 @@ public static partial class IslandBuilder
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "Crate_" + i;
             go.transform.SetParent(root, false);
-            go.transform.position = new Vector3(xs[i], bed + size.y * 0.5f, z);
+            go.transform.position = new Vector3(xs[i], bed + size.y * 0.5f, zs[i]);
             go.transform.localScale = size;
             go.layer = 6; // Ground：GroundAt 的射线要能打到箱顶
             go.GetComponent<Renderer>().sharedMaterial = mat;
@@ -687,8 +731,12 @@ public static partial class IslandBuilder
     static void BuildMailbox(Layout layout, Transform parent, Material fallback)
     {
         var pos = new Vector3(-25.7f, 3f, 1.1f);
+        // 2026-11-07：新地图里 03 是站位，邮筒自己有一个点 MAILBOX（没有就退回 03）
         if (layout.points != null)
+        {
             foreach (var p in layout.points) if (p.id == "03") { pos = new Vector3(p.x, p.y, p.z); break; }
+            foreach (var p in layout.points) if (p.id == "MAILBOX") { pos = new Vector3(p.x, p.y, p.z); break; }
+        }
 
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ArtRoot + "/Street/S1_山口邮筒_分享包版.prefab");
         GameObject go;
@@ -956,10 +1004,11 @@ public static partial class IslandBuilder
             case "B3_school": return ArtRoot + "/Buildings/B3_小学校舍_精修版.prefab";
             case "B4_lighthouse": return ArtRoot + "/Buildings/B4_灯塔_分享包版.prefab";
             case "B5_boathouse": return ArtRoot + "/Buildings/B5_船棚_分享包版.prefab";
-            case "B6_house14":
-            case "B6_house16": return ArtRoot + "/Buildings/B6_瓦房_分享包版.prefab";
-            case "B7_house15": return ArtRoot + "/Buildings/B7_木板房_分享包版.prefab";
-            default: return null;
+            default:
+                // 2026-11-07 新地图：住宅和集市房子都是 B6/B7 反复用，按前缀取
+                if (instance.StartsWith("B6_")) return ArtRoot + "/Buildings/B6_瓦房_分享包版.prefab";
+                if (instance.StartsWith("B7_")) return ArtRoot + "/Buildings/B7_木板房_分享包版.prefab";
+                return null;
         }
     }
 
@@ -1093,7 +1142,8 @@ public static partial class IslandBuilder
         world.endingDesk = GameObject.Find("EndingDesk");
         world.woodModel = GameObject.Find("A2_GLB");
         world.oilModel = GameObject.Find("D1_GLB");
-        var mailbox = GameObject.Find("P_03");
+        var mailbox = GameObject.Find("P_MAILBOX");
+        if (mailbox == null) mailbox = GameObject.Find("P_03");
         if (mailbox != null) world.mailboxMarker = mailbox.transform;
     }
 

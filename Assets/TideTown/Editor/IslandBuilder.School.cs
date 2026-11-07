@@ -61,15 +61,15 @@ public static partial class IslandBuilder
 
         if (ballComp != null) ballComp.BowlPoint = bowlPos + Vector3.up * 0.11f;
 
-        // 爪印：学校后门 → 拖鞋 → 绕到操场
+        // 爪印：学校后门（20）→ 拖鞋 → 绕学校东侧 → 操场（21）。2026-11-07 按布局点算，换地图不用改坐标。
+        var p20 = LayoutPoint("20");
+        var p21 = LayoutPoint("21");
+        float midZ = (p20.y + p21.y) * 0.5f;
         var path = new[]
         {
-            new Vector2(13.50f, 3.94f), new Vector2(13.85f, 3.70f), new Vector2(14.20f, 3.42f),
-            new Vector2(14.55f, 3.18f), new Vector2(14.85f, 3.02f), new Vector2(15.05f, 2.70f),
-            new Vector2(15.15f, 2.10f), new Vector2(15.18f, 1.40f), new Vector2(15.15f, 0.70f),
-            new Vector2(15.05f, 0.00f), new Vector2(14.85f, -0.90f), new Vector2(14.55f, -1.80f),
-            new Vector2(14.15f, -2.70f), new Vector2(13.60f, -3.60f), new Vector2(12.90f, -4.30f),
-            new Vector2(12.00f, -4.80f), new Vector2(11.05f, -4.95f), new Vector2(10.30f, -4.90f),
+            p20 + new Vector2(0f, 0.5f), p20 + new Vector2(0.9f, 0.2f), p20 + new Vector2(1.4f, -0.8f),
+            new Vector2(p20.x + 1.45f, midZ), new Vector2(p20.x + 1.0f, p21.y + 1.6f),
+            new Vector2(p20.x - 0.2f, p21.y + 0.3f), p21 + new Vector2(1.0f, -0.3f), p21 + new Vector2(0.3f, -0.3f),
         };
         int paws = BuildPawPrints(parent, path, paw);
         Debug.Log($"SCHOOL items={list.items.Length} paws={paws}");

@@ -9,12 +9,6 @@ EditorBuildSettings:
     path: Assets/TideTown/Scenes/TideTown_Main.unity
     guid: 706f253477c10f546b1ae1909613e0c1
   - enabled: 1
-    path: Assets/TideTown/Scenes/TideTown_Expanded_Stage1.unity
-    guid: 022d7a9297862a74cb10e48d50e56904
-  - enabled: 1
     path: Assets/Scenes/Prototype.unity
     guid: 421d8e823326cc7499361d93510968c1
-  - enabled: 1
-    path: Assets/TideTown/Scenes/TideTown_Stage1.unity
-    guid: e51ecd8dddba31c4c8e57402baea549b
   m_configObjects: {}

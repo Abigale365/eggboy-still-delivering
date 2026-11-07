@@ -8,12 +8,11 @@ using UnityEngine;
 public static class TideBuild
 {
     const string MainScene = "Assets/TideTown/Scenes/TideTown_Main.unity";
-    const string FallbackScene = "Assets/TideTown/Scenes/TideTown_Expanded_Stage1.unity";
     const string WindowsOut = "Build/Main/TideTown.exe";
     const string WebGLOut = "Build/MainWebGL";
 
-    // WP-05 生成 TideTown_Main 后自动切换；在此之前用现有扩展场景。
-    static string Scene => File.Exists(MainScene) ? MainScene : FallbackScene;
+    // 2026-11-07 旧的扩展场景已删除，只打主场景
+    static string Scene => MainScene;
 
     public static void Windows() => Build(WindowsOut, BuildTarget.StandaloneWindows64, "WINDOWS");
 

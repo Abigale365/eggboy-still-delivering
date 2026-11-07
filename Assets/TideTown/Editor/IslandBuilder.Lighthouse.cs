@@ -52,6 +52,7 @@ public static partial class IslandBuilder
 
         var chamber = lighthouseLantern.bounds;
         var lampCenter = root.transform.InverseTransformPoint(chamber.center);
+        SyncLighthouseData(data, basePos, deckTop, chamber.center);
         MountSourceModel(root.transform, "B9", lampCenter - Vector3.up * 0.32f, 0.64f, true);
 
         // 光束：半透明锥体 + 聚光灯，绕 Y 轴扫海
@@ -114,11 +115,12 @@ public static partial class IslandBuilder
         replyRoot.transform.SetParent(parent, false);
         var reply = replyRoot.AddComponent<FlashlightReply>();
         var dots = new List<Renderer>();
+        // 2026-11-07 新地图：岛后面是住宅区，光点挪到岛北面远处的对岸（海面上方）
         for (int i = 0; i < 40; i++)
         {
-            float x = -34f + i * 1.02f;
-            float z = 23.5f + Mathf.Sin(i * 0.7f) * 1.6f;
-            float y = 10.9f + Mathf.Sin(i * 1.3f) * 0.8f + (i % 3) * 0.35f;
+            float x = -45f + i * 1.6f;
+            float z = 72f + Mathf.Sin(i * 0.7f) * 3f;
+            float y = 7.5f + Mathf.Sin(i * 1.3f) * 1.0f + (i % 3) * 0.45f;
             var d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             UnityEngine.Object.DestroyImmediate(d.GetComponent<Collider>());
             d.name = "reply_" + i;
@@ -133,6 +135,31 @@ public static partial class IslandBuilder
         root.AddComponent<SkyDimmer>();
 
         Debug.Log($"LIGHTHOUSE base=({basePos.x:F2},{basePos.y:F2},{basePos.z:F2}) top={basePos.y + lighthouseSize.y:F2} deck={basePos.y + deckTop:F2} dots={dots.Count}");
+    }
+
+    // 2026-11-07：塔门、塔顶落点、灯头和塔顶三件回忆都按刚生成的塔重算并写回 lighthouse.json，
+    // 换地图后不会再和塔对不上。相对位置沿用旧版（灯头在塔中心，落点偏 0.6 m，三件回忆在 ±1 m）。
+    // 船棚油壶（oil）不在塔上，不动。
+    static void SyncLighthouseData(LighthouseList data, Vector3 basePos, float deckTop, Vector3 lampWorld)
+    {
+        float deckY = basePos.y + deckTop;
+        float cx = basePos.x, cz = basePos.z;
+        data.door = new LighthousePoint { x = cx - 0.08f, y = basePos.y, z = cz - lighthouseSize.z * 0.5f - 0.35f };
+        data.deck = new LighthousePoint { x = cx + 0.6f, y = deckY, z = cz + 0.6f };
+        data.lamp = new LighthousePoint { x = lampWorld.x, y = deckY + 0.37f, z = lampWorld.z };
+        foreach (var it in data.items)
+        {
+            switch (it.id)
+            {
+                case "log": it.x = cx; it.y = deckY + 0.04f; it.z = cz + 1.0f; break;
+                case "hat": it.x = cx + 1.0f; it.y = deckY + 0.04f; it.z = cz; break;
+                case "scope": it.x = cx - 1.0f; it.y = deckY + 0.04f; it.z = cz; break;
+            }
+        }
+        const string path = "Assets/TideTown/Data/Resources/Story/lighthouse.json";
+        File.WriteAllText(path, JsonUtility.ToJson(data, true), new System.Text.UTF8Encoding(false));
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        Debug.Log($"LIGHTHOUSE_DATA door=({data.door.x:F2},{data.door.y:F2},{data.door.z:F2}) deck=({data.deck.x:F2},{data.deck.y:F2},{data.deck.z:F2})");
     }
 
     static GameObject Cone(Transform parent, Material mat, float length, float radius, int segments)

@@ -360,6 +360,19 @@ public static partial class IslandBuilder
         return inside;
     }
 
+    // 到多边形边线的距离（里外都算，不像 DistToPoly 在里面返回 0）
+    static float DistToEdge(List<Vector2> poly, Vector2 p)
+    {
+        float best = float.MaxValue;
+        for (int i = 0, j = poly.Count - 1; i < poly.Count; j = i++)
+        {
+            var a = poly[j]; var ab = poly[i] - a;
+            float tt = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(1e-6f, ab.sqrMagnitude));
+            best = Mathf.Min(best, (a + ab * tt - p).magnitude);
+        }
+        return best;
+    }
+
     static float DistToPoly(List<Vector2> poly, Vector2 p)
     {
         if (InPolyXZ(poly, p)) return 0f;
@@ -425,6 +438,9 @@ public static partial class IslandBuilder
 
         var rockA = NatureMat("NatureRockA", "NatureRockA", NatureKind.Rock, new Color32(0xb8, 0x95, 0x80, 255), 61, 2.2f, 6f);
         var rockB = NatureMat("NatureRockB", "NatureRockB", NatureKind.Rock, new Color32(0xa3, 0x86, 0x74, 255), 67, 2.2f, 6f);
+        // 2026-11-08：目标图的礁石偏灰褐、比路面深；贴图有缓存，在材质上压暗
+        rockA.SetColor("_BaseColor", new Color(0.80f, 0.77f, 0.76f, 1f));
+        rockB.SetColor("_BaseColor", new Color(0.74f, 0.71f, 0.70f, 1f));
         var leafA = NatureMat("NatureLeafA", "NatureLeafA", NatureKind.Leaves, new Color32(0x6e, 0x8e, 0x3a, 255), 71, 1.6f, 5f);
         var leafB = NatureMat("NatureLeafB", "NatureLeafB", NatureKind.Leaves, new Color32(0x84, 0x9c, 0x3c, 255), 73, 1.6f, 5f);
         var leafC = NatureMat("NatureLeafC", "NatureLeafC", NatureKind.Leaves, new Color32(0x5a, 0x7c, 0x38, 255), 79, 1.6f, 5f);
@@ -566,6 +582,7 @@ public static partial class IslandBuilder
                 foreach (var pt in layout.points) if (pt.id == "28" || pt.id == "29") beach.Add(new Vector2(pt.x, pt.z));
             float cx0 = float.MaxValue, cx1 = float.MinValue, cz0 = float.MaxValue, cz1 = float.MinValue;
             foreach (var q in cpoly) { cx0 = Mathf.Min(cx0, q.x); cx1 = Mathf.Max(cx1, q.x); cz0 = Mathf.Min(cz0, q.y); cz1 = Mathf.Max(cz1, q.y); }
+            var coastTrees = new List<Vector2>();
             for (float x = cx0; x < cx1; x += 1.35f)       // 目标图的海岸是一片圆石加花草，几乎看不到沙子
             for (float z = cz0; z < cz1; z += 1.35f)
             {
@@ -582,12 +599,28 @@ public static partial class IslandBuilder
                 float roll = rnd.Next01();
                 if (onBeach && roll < 0.85f) continue;                  // 沙滩上只零星几块
                 // 目标图：崖顶是草和花丛，圆石只堆在靠海那一圈
-                bool inland = !onBeach && DistToPoly(cpoly, p2) > 3f;
+                bool inland = !onBeach && DistToEdge(cpoly, p2) > 3f;
                 if (inland && roll >= 0.5f) continue;                   // 留出草地，崖顶不放石头
                 if (!inland && !onBeach && roll >= 0.8f) continue;
                 float r = 0.55f + rnd.Next01() * 0.6f;
                 var c = new Vector3(p2.x, 0.15f + r * 0.1f, p2.y);
                 if (BlocksWalk(walks, c, r, -1f, 1.6f, 0.3f) || NearBuilding(c, r)) continue;
+                // 2026-11-08：北半边（离镜头远的那侧）的崖顶种树，目标图镇子背后是一片树林；前景海岸不种，免得挡镇子
+                if (inland && p2.y > (cz0 + cz1) * 0.5f && roll < 0.2f && !NearBuilding(c, 1.8f)
+                    && !BlocksWalk(walks, new Vector3(p2.x, 0.15f, p2.y), 0.9f, -0.5f, 3f, 0.3f))
+                {
+                    bool crowdedCoast = false;
+                    foreach (var q in coastTrees) if ((q - p2).sqrMagnitude < 2.2f * 2.2f) { crowdedCoast = true; break; }
+                    if (!crowdedCoast)
+                    {
+                        coastTrees.Add(p2);
+                        float ts = 0.9f + rnd.Next01() * 0.5f;
+                        Place(treeRoot, "CoastTree", trees[nTree % trees.Length], new[] { leafMats[nTree % 3], trunk },
+                              new Vector3(p2.x, 0.15f, p2.y), new Vector3(ts, ts * (0.9f + rnd.Next01() * 0.25f), ts), rnd.Next01() * 360f);
+                        nTree++;
+                        continue;
+                    }
+                }
                 if (!onBeach && (inland || roll < 0.25f))
                 {
                     float bs = 1.1f + rnd.Next01() * 0.8f;
@@ -609,7 +642,7 @@ public static partial class IslandBuilder
         {
             if (t.x == null || t.x.Length < 3) continue;
             if (t.zone == "sand") continue;                         // 沙滩不种树
-            bool homes = t.zone == "grass" && !t.walk;               // 住宅区：树少一些、离房子远一些，不能把房子盖住
+            bool homes = t.zone == "grass" && !t.walk && t.id != "hill_west";   // 住宅区：树少一些、离房子远一些；西山顶是树林，照常密种
             var poly = new List<Vector2>();
             float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
             for (int i = 0; i < t.x.Length; i++)

@@ -144,6 +144,12 @@ public class WaterAudit : MonoBehaviour
 
     // ---------- 木箱区 ----------
 
+    static int CrateIndex(string name)
+    {
+        int us = name.LastIndexOf('_');
+        return us >= 0 && int.TryParse(name.Substring(us + 1), out int n) ? n : 0;
+    }
+
     IEnumerator CrateCross()
     {
         water.SetInstant(WaterLevel.LevelYs[2]);
@@ -153,14 +159,21 @@ public class WaterAudit : MonoBehaviour
         // 2026-11-07：按场景里生成的浮箱算起点和方向，换地图不用改坐标
         var crates = new List<FloatingCrate>(FindObjectsOfType<FloatingCrate>());
         if (crates.Count < 2) { Fail("crate_failed", "场景里浮箱少于 2 个"); yield break; }
-        crates.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        // 按名字里的编号排（Crate_10 不能排在 Crate_2 前面）
+        crates.Sort((a, b) => CrateIndex(a.name).CompareTo(CrateIndex(b.name)));
         var c0 = crates[0].transform.position; var c1 = crates[crates.Count - 1].transform.position;
-        var dir = new Vector3(c1.x - c0.x, 0f, c1.z - c0.z).normalized;
-        var start = c0 - dir * 1.4f;
+        var firstDir = new Vector3(crates[1].transform.position.x - c0.x, 0f, crates[1].transform.position.z - c0.z).normalized;
+        var c1prev = crates[crates.Count - 2].transform.position;
+        var dir = new Vector3(c1.x - c1prev.x, 0f, c1.z - c1prev.z).normalized;
+        var start = c0 - firstDir * 1.4f;
         start.y = world.GroundAt(start.x, start.z) + 0.01f;
 
-        // 过了箱子以后沿路线走到船棚门口（route.json 里 LOW 之后、直到 24 的路径点）：新地图路在箱子后面拐弯
-        var targets = new List<Vector3> { c1 + dir * 0.3f };
+        // 2026-11-08：箱子沿弯路摆成一条弧，原来从起点直线瞄"最后一个箱子再往前 0.3 m"，会抄近道切到路沿外、
+        // 按帧时间不同时好时坏地卡在 (12.91,-13.57)。改成像玩家一样一个箱子一个箱子踩过去，
+        // 过了箱子以后沿路线走到船棚门口（route.json 里 LOW 之后、直到 24 的路径点）
+        var targets = new List<Vector3>();
+        for (int ci = 1; ci < crates.Count; ci++) targets.Add(crates[ci].transform.position);
+        targets.Add(c1 + dir * 0.3f);
         var rdoc = JsonUtility.FromJson<RouteDoc>(Resources.Load<TextAsset>("World/route").text);
         int li = Array.FindIndex(rdoc.route, r => r.stop && r.id == "LOW");
         for (int i = li + 1; li >= 0 && i < rdoc.route.Length; i++)
@@ -179,11 +192,17 @@ public class WaterAudit : MonoBehaviour
         int frames = 0;
         int k = 0;
         float maxY = start.y;
+        float best = float.MaxValue, bestAt = t0;
         while (Time.realtimeSinceStartup - t0 < 20f && k < targets.Count)
         {
             var p = player.transform.position;
             var to = new Vector3(targets[k].x - p.x, 0f, targets[k].z - p.z);
-            if (to.magnitude < 0.5f) { k++; continue; }
+            float dist = to.magnitude;
+            if (dist < 0.5f) { k++; best = float.MaxValue; bestAt = Time.realtimeSinceStartup; continue; }
+            // 2026-11-08："最后一个箱子再往前 0.3 m" 这个点跟着浮箱晃，偶尔落在路沿外面，人贴着路沿到不了 0.5 m 内，
+            // 测试就原地顶 20 秒失败（两次都停在 12.91,-13.57）。和剧情审计一样：1.2 m 内、0.6 秒没再靠近，就算到了
+            if (dist < best - 0.01f) { best = dist; bestAt = Time.realtimeSinceStartup; }
+            else if (dist < 1.2f && Time.realtimeSinceStartup - bestAt > 0.6f) { k++; best = float.MaxValue; bestAt = Time.realtimeSinceStartup; continue; }
             if (p.y < water.Y - 0.05f) waterFrames++;
             maxY = Mathf.Max(maxY, p.y);
             to.Normalize();
@@ -200,6 +219,8 @@ public class WaterAudit : MonoBehaviour
         bool ok = k >= targets.Count && targets.Count > 1 && waterFrames == 0;
         crateJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"from\":[" + start.x.ToString("F2") + "," + start.y.ToString("F2") + "," + start.z.ToString("F2") +
                     "],\"to\":[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") +
+                    "],\"k\":" + k + ",\"targets\":[" + string.Join(",", targets.ConvertAll(t => "[" + t.x.ToString("F2") + "," + t.z.ToString("F2") + "]")) +
+                    "],\"crates\":[" + string.Join(",", crates.ConvertAll(c => "[" + c.transform.position.x.ToString("F2") + "," + c.transform.position.y.ToString("F2") + "," + c.transform.position.z.ToString("F2") + "]")) +
                     "],\"seconds\":" + seconds.ToString("F2") + ",\"frames\":" + frames +
                     ",\"waterFrames\":" + waterFrames + ",\"maxY\":" + maxY.ToString("F2") +
                     ",\"jumpUsed\":false,\"walkableOnCrates\":" + (world.Walkable(midCrate.x, midCrate.z) ? "true" : "false") +

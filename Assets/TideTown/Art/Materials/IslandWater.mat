@@ -25,10 +25,15 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Alpha: 0.86
+    - _Alpha: 0.8
+    - _DepthRange: 4
+    - _FoamDepth: 0.9
     - _FoamWidth: 1.4
     - _ShoreRange: 8
+    - _SpecStrength: 0.35
+    - _VertWave: 0.06
     - _WaveSpeed: 1
+    - _WaveStrength: 0.6
     m_Colors:
     - _DeepColor: {r: 0.1, g: 0.33, b: 0.47, a: 1}
     - _FoamColor: {r: 0.94, g: 0.98, b: 0.96, a: 1}

@@ -525,8 +525,13 @@ public static partial class IslandBuilder
         m.SetColor("_FoamColor", new Color(0.94f, 0.98f, 0.96f, 1f));
         m.SetFloat("_ShoreRange", 8f);
         m.SetFloat("_FoamWidth", 1.4f);
-        m.SetFloat("_Alpha", 0.86f);
+        m.SetFloat("_DepthRange", 4f);
+        m.SetFloat("_FoamDepth", 0.9f);
+        m.SetFloat("_Alpha", 0.8f);
         m.SetFloat("_WaveSpeed", 1f);
+        m.SetFloat("_WaveStrength", 0.6f);
+        m.SetFloat("_SpecStrength", 0.35f);
+        m.SetFloat("_VertWave", 0.06f);
         EditorUtility.SetDirty(m);
         return m;
     }

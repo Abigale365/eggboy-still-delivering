@@ -26,7 +26,7 @@
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |
 | WP-20 | 声音 | WP-11 | todo | B | | |
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |
-| WP-22 | 全流程 QA | WP-15, WP-16 | doing | A(agent) | 2026-11-07 | 当前原贴图版 Windows 自动复验通过，story 22/22、route 28/28、map 5 点、water 五档及回退。标题、暂停和音量零位已修。待 Chrome/Edge 全流程、关页续玩、10 分钟内存和两名新玩家试玩。见 docs/evidence/WP-22/glb-recheck-20261107、known-issues.md 和 human-queue.md。 |
+| WP-22 | 全流程 QA | WP-15, WP-16 | doing | A(agent) | 2026-11-07 | 当前原贴图版 Windows 自动复验通过，story 22/22、route 28/28、map 5 点、water 五档及回退。Chrome 和 Edge 在 RTX 5070 Ti 上通过加载、开始、暂停、音量零位、地图和短距离移动检查。待浏览器全流程、关页续玩、10 分钟内存和两名新玩家试玩。见 docs/evidence/WP-22/glb-recheck-20261107、known-issues.md 和 human-queue.md。 |
 | WP-23 | 部署（M7） | WP-21，用户确定位置 | todo | A | | |
 | WP-24 | 报告 | WP-15 | doing | B(agent) | 2026-11-07 03:00 | 草稿 v1 完成：docs/report/WP-24-成果报告草稿.md（真实数据替换 + 三层对齐：叙事层已完成/生态层实体层规划中 + 8 组资产迭代对比 + 工具说明表 + 数字来源索引）；底稿缺失已入 human-queue。待做：图片嵌入排版成 PDF/PPT、两位队员读过 |
 | WP-25 | 视频和发布包（M8） | WP-22 | todo | B | | |

@@ -54,7 +54,9 @@
 | 指标 | 实测 | 说明 |
 |---|---:|---|
 | Windows 构建报告总大小 | 1,946,904,335 B（约 1.95 GB） | `TIDEBUILD WINDOWS Succeeded errors=0` |
+| WebGL 构建报告总大小 | 492,658,175 B（约 493 MB） | `TIDEBUILD WEBGL Succeeded errors=0` |
+| WebGL 数据文件 | 484,256,450 B（约 484 MB） | 主线原贴图直接进入场景，超过工程书 120 MB 预算 |
 | Windows 自动剧情 | 22/22，109.6 s | 自动流程计时，见 `docs/evidence/WP-22/glb-recheck-20261107/story-audit.json` |
 | Windows 路线 | 28/28，腾空帧 0，最大地面间隙 0.039 m | 同目录 `route-audit.json` |
 
-本轮保留优化版 GLB 内嵌贴图。网页包体以本版 WebGL 实测为准。RTX 5070 Ti 完整路线实玩帧率、核显机帧率和浏览器长测均待验。
+本轮保留优化版 GLB 内嵌贴图。Chrome 和 Edge 在 RTX 5070 Ti 上均通过启动与基础交互，证据见同目录的 WebGL 截图和日志。RTX 5070 Ti 完整路线实玩帧率、核显机帧率和浏览器长测均待验。

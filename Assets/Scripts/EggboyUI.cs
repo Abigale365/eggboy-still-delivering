@@ -167,7 +167,7 @@ public class EggboyUI : MonoBehaviour
         // 底部按键提示
         var keys = Panel(root, 0, 40, 1180, 50, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
         SetRect(keys.rectTransform, 0.5f, 0f, 0.5f, 0f, 0, 40, 1180, 50);
-        Label(keys.transform, "WASD 移动    Shift 跑    空格 跳    E 互动    M 地图    Esc 暂停\n按住鼠标右键转视角 · 滚轮缩放", 14,
+        Label(keys.transform, "WASD 移动    Shift 跑    空格 跳    E 互动    M 地图    Esc 暂停\n移动鼠标转视角 · Esc 释放鼠标 · 滚轮缩放", 14,
             new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleCenter, 0, 0, 1150, 46, false);
 
         // 互动提示

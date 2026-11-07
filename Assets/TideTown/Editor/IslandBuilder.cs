@@ -20,7 +20,7 @@ public static partial class IslandBuilder
     [Serializable] public class Pt { public string id; public float x, y, z; public bool main; }
     [Serializable] public class Area { public string id; public float y; public bool walk; public float[] x, z; }
     [Serializable] public class RoadDef { public string id, kind; public float width; public bool walk; public float[] x, y, z; }
-    [Serializable] public class Bld { public string name, instance, asset; public float x, y, z, width, height; public bool mirror; public float[] box, foot; }
+    [Serializable] public class Bld { public string name, instance, asset; public float x, y, z, width, height; public bool mirror; public float yaw; public float[] box, foot; }
     [Serializable] public class Coast { public float[] x, z; }
     [Serializable] public class Cam { public string name; public float[] pos, euler; public float fov; public int width, height; }
     [Serializable] public class Layout { public Pt[] points; public Coast coast; public Area[] tiers; public Area[] walk; public RoadDef[] roads; public Bld[] buildings; public Cam[] cameras; }
@@ -281,13 +281,57 @@ public static partial class IslandBuilder
         go.transform.SetParent(parent, false);
         go.layer = 6;
         var mf = go.AddComponent<MeshFilter>();
-        go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        var mr = go.AddComponent<MeshRenderer>();
+        // 三种材质：路面 / 路缘石 / 裙边。视觉有层次，不再是一条纯色平带
+        mr.sharedMaterials = new[] { mat, Mat("IslandRoadCurb", new Color32(0xa8, 0x97, 0x7c, 255)), Mat("IslandCliff", new Color32(0x99, 0x89, 0x73, 255)) };
         var mesh = SaveMesh(RoadMesh(r), "Assets/TideTown/Art/Meshes/Main_road_" + r.id + ".asset");
         mf.sharedMesh = mesh;
-        go.AddComponent<MeshCollider>().sharedMesh = mesh;
+        // 碰撞只用路面顶面：路缘石和裙边只做视觉，不能改变 GroundY / 安全点判定
+        go.AddComponent<MeshCollider>().sharedMesh = SaveMesh(RoadTopMesh(r), "Assets/TideTown/Art/Meshes/Main_road_" + r.id + "_col.asset");
     }
 
     static Mesh RoadMesh(RoadDef r)
+    {
+        var verts = new List<Vector3>();
+        var idx = new List<int>();
+        var curbIdx = new List<int>();
+        var skirtIdx = new List<int>();
+        for (int i = 0; i + 1 < r.x.Length; i++)
+        {
+            var a = new Vector3(r.x[i], r.y[i] + 0.02f, r.z[i]);
+            var b = new Vector3(r.x[i + 1], r.y[i + 1] + 0.02f, r.z[i + 1]);
+            var d = b - a; d.y = 0f;
+            if (d.sqrMagnitude < 1e-6f) continue;
+            float len = d.magnitude;
+            d.Normalize();
+            var side = new Vector3(-d.z, 0f, d.x);
+            float half = r.width * 0.5f;
+            // 两端各 15cm 盖片补住拐弯和接缝，坡度跟邻段一致；顶面高度永远用 route.json，不贴地形
+            var capA = a - d * 0.15f; capA.y = a.y - NeighbourSlope(r, i - 1) * 0.15f;
+            var capB = b + d * 0.15f; capB.y = b.y + NeighbourSlope(r, i + 1) * 0.15f;
+            AddRoadStrip(verts, idx, curbIdx, skirtIdx, capA, a, side, half);
+            // 每 2m 细分，只是让路缘/裙边在长段上也连续；顶面沿 route 线性，不重新采样地面
+            int steps = Mathf.Max(1, Mathf.CeilToInt(len / 2f));
+            for (int s = 0; s < steps; s++)
+            {
+                var p0 = Vector3.Lerp(a, b, s / (float)steps);
+                var p1 = Vector3.Lerp(a, b, (s + 1) / (float)steps);
+                AddRoadStrip(verts, idx, curbIdx, skirtIdx, p0, p1, side, half);
+            }
+            AddRoadStrip(verts, idx, curbIdx, skirtIdx, b, capB, side, half);
+        }
+        var mesh = new Mesh { name = "road_" + r.id, subMeshCount = 3 };
+        mesh.SetVertices(verts);
+        mesh.SetTriangles(idx, 0);
+        mesh.SetTriangles(curbIdx, 1);
+        mesh.SetTriangles(skirtIdx, 2);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // 碰撞专用：只含路面顶面，和视觉顶面完全同一份顶点（路缘/裙边只做视觉）
+    static Mesh RoadTopMesh(RoadDef r)
     {
         var verts = new List<Vector3>();
         var idx = new List<int>();
@@ -297,17 +341,23 @@ public static partial class IslandBuilder
             var b = new Vector3(r.x[i + 1], r.y[i + 1] + 0.02f, r.z[i + 1]);
             var d = b - a; d.y = 0f;
             if (d.sqrMagnitude < 1e-6f) continue;
+            float len = d.magnitude;
             d.Normalize();
-            var side = new Vector3(-d.z, 0f, d.x) * (r.width * 0.5f);
-            // 坡面本身不动；两端各加 15 cm 盖片补住拐弯和接缝，盖片顺着相邻那段的坡度走，
-            // 这样盖片不会高出邻段形成台阶。算法和 route_check.py 一致。
+            var side = new Vector3(-d.z, 0f, d.x);
+            float half = r.width * 0.5f;
             var capA = a - d * 0.15f; capA.y = a.y - NeighbourSlope(r, i - 1) * 0.15f;
             var capB = b + d * 0.15f; capB.y = b.y + NeighbourSlope(r, i + 1) * 0.15f;
-            AddRoadQuad(verts, idx, capA, a, side);
-            AddRoadQuad(verts, idx, a, b, side);
-            AddRoadQuad(verts, idx, b, capB, side);
+            AddRibbon(verts, idx, capA, a, side, -half, half, 0f, 0f);
+            int steps = Mathf.Max(1, Mathf.CeilToInt(len / 2f));
+            for (int s = 0; s < steps; s++)
+            {
+                var p0 = Vector3.Lerp(a, b, s / (float)steps);
+                var p1 = Vector3.Lerp(a, b, (s + 1) / (float)steps);
+                AddRibbon(verts, idx, p0, p1, side, -half, half, 0f, 0f);
+            }
+            AddRibbon(verts, idx, b, capB, side, -half, half, 0f, 0f);
         }
-        var mesh = new Mesh { name = "road_" + r.id };
+        var mesh = new Mesh { name = "road_" + r.id + "_col" };
         mesh.SetVertices(verts);
         mesh.SetTriangles(idx, 0);
         mesh.RecalculateNormals();
@@ -324,10 +374,26 @@ public static partial class IslandBuilder
         return len < 1e-3f ? 0f : (r.y[seg + 1] - r.y[seg]) / len;
     }
 
-    static void AddRoadQuad(List<Vector3> verts, List<int> idx, Vector3 a, Vector3 b, Vector3 side)
+    // 一条带上的三样东西：顶面、左右路缘（抬高 12cm、外扩 18cm）、向下 25cm 的裙边
+    static void AddRoadStrip(List<Vector3> verts, List<int> top, List<int> curb, List<int> skirt,
+        Vector3 p0, Vector3 p1, Vector3 side, float half)
+    {
+        AddRibbon(verts, top, p0, p1, side, -half, half, 0f, 0f);
+        AddRibbon(verts, curb, p0, p1, side, -half - 0.18f, -half, 0.12f, 0f);
+        AddRibbon(verts, curb, p0, p1, side, half, half + 0.18f, 0f, 0.12f);
+        AddRibbon(verts, skirt, p0, p1, side, -half - 0.18f, -half - 0.18f, 0.12f, -0.25f);
+        AddRibbon(verts, skirt, p0, p1, side, half + 0.18f, half + 0.18f, 0.12f, -0.25f);
+    }
+
+    // 在两条采样点之间铺一条带：side 方向的内/外偏移可以不同，高度也可不同（路缘/裙边就靠这个）
+    static void AddRibbon(List<Vector3> verts, List<int> idx, Vector3 p0, Vector3 p1, Vector3 side,
+        float offA, float offB, float yA, float yB)
     {
         int o = verts.Count;
-        verts.Add(a - side); verts.Add(a + side); verts.Add(b + side); verts.Add(b - side);
+        verts.Add(p0 + side * offA + Vector3.up * yA);
+        verts.Add(p0 + side * offB + Vector3.up * yB);
+        verts.Add(p1 + side * offB + Vector3.up * yB);
+        verts.Add(p1 + side * offA + Vector3.up * yA);
         idx.AddRange(new[] { o, o + 1, o + 2, o, o + 2, o + 3 });
     }
 
@@ -483,7 +549,12 @@ public static partial class IslandBuilder
         {
             if (!p.stop) continue;
             float y = GroundY(p.x, p.z);
-            if (y <= 0.2f) throw new Exception($"安全点没落到地面：{p.id} ({p.x:F2},{p.z:F2})");
+            if (y <= 0.2f)
+            {
+                Physics.Raycast(new Vector3(p.x, 200f, p.z), Vector3.down, out var dbg, 400f, LayerMask.GetMask("Ground"), QueryTriggerInteraction.Ignore);
+                Debug.LogError($"SAFE_DEBUG {p.id} y={y} hit={(dbg.collider != null ? dbg.collider.name : "none")} py={dbg.point.y}");
+                throw new Exception($"安全点没落到地面：{p.id} ({p.x:F2},{p.z:F2})");
+            }
             sp.points.Add(new Vector3(p.x, y, p.z));
         }
         Debug.Log("SAFEPOINTS n=" + sp.points.Count);
@@ -731,6 +802,7 @@ public static partial class IslandBuilder
         var visualRoot = new GameObject(b.instance + "_visual");
         visualRoot.transform.SetParent(parent, false);
         visualRoot.transform.position = center;
+        visualRoot.transform.rotation = Quaternion.Euler(0f, b.yaw, 0f);
         var visual = (GameObject)PrefabUtility.InstantiatePrefab(prefab, visualRoot.transform);
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localRotation = tower ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;

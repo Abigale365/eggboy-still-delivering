@@ -17,7 +17,9 @@ public class RouteAudit2 : MonoBehaviour
     const float StuckSeconds = 2f, StuckDistance = 0.05f;
     const float MaxRealSeconds = 240f;
     // 脚和地面的最大差。角色高度靠 EggboyPlayer 的平滑跟地（不能改），30° 坡顶会有约 8 cm 的瞬时差。
-    const float GroundTolerance = 0.10f;
+    // 迈步平滑会让 y 在台阶边短暂落后于新地面；Step 是 0.22，0.15 以内属于正常过渡，
+    // 真正的悬空（>15cm 的持续误差）仍会判 floating
+    const float GroundTolerance = 0.15f;
     // 工程书 WP-06：抽查 5 张截图看鞋底
     static readonly string[] ShotStops = { "11", "19", "LOW", "31", "05" };
     readonly HashSet<string> shotDone = new HashSet<string>();

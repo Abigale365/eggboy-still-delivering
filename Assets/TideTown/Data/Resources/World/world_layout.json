@@ -975,6 +975,7 @@
    "id": "main",
    "y": 3.0,
    "walk": true,
+   "zone": "stone",
    "x": [
     -35.203,
     -32.863,
@@ -1030,6 +1031,7 @@
    "id": "houses",
    "y": 5.5,
    "walk": false,
+   "zone": "grass",
    "x": [
     -28.55,
     -23.193,
@@ -1077,6 +1079,7 @@
    "id": "lighthouse",
    "y": 5.0,
    "walk": true,
+   "zone": "stone",
    "x": [
     28.612,
     31.609,
@@ -1102,6 +1105,7 @@
    "id": "shed",
    "y": 1.4,
    "walk": true,
+   "zone": "stone",
    "x": [
     14.661,
     15.424,
@@ -1127,6 +1131,7 @@
    "id": "beach",
    "y": 0.4,
    "walk": false,
+   "zone": "sand",
    "x": [
     -14.943,
     -7.683,
@@ -1152,6 +1157,7 @@
    "id": "hill_west",
    "y": 7.0,
    "walk": false,
+   "zone": "rock",
    "x": [
     -48.141,
     -38.372,
@@ -1179,6 +1185,7 @@
    "id": "landslide",
    "y": 7.5,
    "walk": false,
+   "zone": "rock",
    "x": [
     -34.205,
     -30.498,
@@ -1198,6 +1205,7 @@
    "id": "dock",
    "y": 0.9,
    "walk": true,
+   "zone": "stone",
    "x": [
     17.716,
     22.105,

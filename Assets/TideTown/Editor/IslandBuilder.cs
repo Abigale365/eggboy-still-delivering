@@ -18,7 +18,7 @@ public static partial class IslandBuilder
     const float Seabed = -2.0f;
 
     [Serializable] public class Pt { public string id; public float x, y, z; public bool main; }
-    [Serializable] public class Area { public string id; public float y; public bool walk; public float[] x, z; }
+    [Serializable] public class Area { public string id; public float y; public bool walk; public string zone; public float[] x, z; }
     [Serializable] public class RoadDef { public string id, kind; public float width; public bool walk; public float[] x, y, z; }
     [Serializable] public class Bld { public string name, instance, asset; public float x, y, z, width, height; public bool mirror; public float yaw; public float[] box, foot; }
     [Serializable] public class Coast { public float[] x, z; }
@@ -94,7 +94,14 @@ public static partial class IslandBuilder
 
         if (layout.coast != null)
             BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, sand, cliff);
-        for (int i = 0; i < layout.tiers.Length; i++) BuildTier(layout.tiers[i], generated.transform, grass, cliff);
+        // 2026-11-07 新地图：顶面材质按分区——街道和广场石板、住宅区草地、沙滩沙子、山体岩石
+        var cobble = CobbleMat();
+        for (int i = 0; i < layout.tiers.Length; i++)
+        {
+            var t = layout.tiers[i];
+            var top = t.zone == "stone" ? cobble : t.zone == "sand" ? sand : t.zone == "rock" ? cliff : grass;
+            BuildTier(t, generated.transform, top, cliff);
+        }
         if (layout.roads != null)
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);
 

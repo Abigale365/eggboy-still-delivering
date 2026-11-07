@@ -242,7 +242,7 @@ def main():
     out = {
         "points": pts,
         "coast": {"x": [round(q[0], 3) for q in land_xz[0]], "z": [round(q[1], 3) for q in land_xz[0]]},
-        "tiers": [{"id": t["id"], "y": t["y"], "walk": t.get("walk", False),
+        "tiers": [{"id": t["id"], "y": t["y"], "walk": t.get("walk", False), "zone": t.get("zone", "stone"),
                    "x": [round(q[0], 3) for q in t["xz"]], "z": [round(q[1], 3) for q in t["xz"]]} for t in tiers + platforms],
         "roads": [{"id": r["id"], "kind": r["kind"], "width": r["width"], "walk": r.get("walk", False),
                    "x": [round(n[0], 3) for n in r["xyz"]], "y": [round(n[1], 3) for n in r["xyz"]],

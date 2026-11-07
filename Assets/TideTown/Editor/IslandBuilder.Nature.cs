@@ -450,6 +450,9 @@ public static partial class IslandBuilder
                 walks.Add(new WalkArea { y = a.y, poly = poly });
             }
 
+        // 栅栏、路灯、小船、喷泉占位（IslandBuilder.Nature2.cs），先放，后面的花丛和礁石避开它们
+        BuildStreetscape(layout, parent, walks);
+
         var root = new GameObject("Nature").transform;
         root.SetParent(parent, false);
         var rockRoot = new GameObject("Boulders").transform; rockRoot.SetParent(root, false);
@@ -568,6 +571,9 @@ public static partial class IslandBuilder
                 bool onTier = false;
                 foreach (var tp in tierPolys) if (DistToPoly(tp, p2) < 0.4f) { onTier = true; break; }
                 if (onTier) continue;
+                bool nearBoat = false;
+                foreach (var bp in streetscapeBlockers) if ((new Vector2(bp.x, bp.z) - p2).magnitude < 2.8f) { nearBoat = true; break; }
+                if (nearBoat) continue;
                 bool onBeach = false;
                 foreach (var bc in beach) if ((bc - p2).magnitude < 5.5f) { onBeach = true; break; }
                 float roll = rnd.Next01();
@@ -595,6 +601,8 @@ public static partial class IslandBuilder
         foreach (var t in layout.tiers)
         {
             if (t.x == null || t.x.Length < 3) continue;
+            if (t.zone == "sand") continue;                         // 沙滩不种树
+            bool homes = t.zone == "grass" && !t.walk;               // 住宅区：树少一些、离房子远一些，不能把房子盖住
             var poly = new List<Vector2>();
             float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
             for (int i = 0; i < t.x.Length; i++)
@@ -621,10 +629,11 @@ public static partial class IslandBuilder
                 var p = new Vector3(p2.x, gy, p2.y);
                 // 树冠半径约 1.3 m：离路 1.2 m（树冠可以伸到路边，树干不能），离房子 1.5 m
                 if (BlocksWalk(walks, p, 0.9f, gy - 0.5f, gy + 2.5f, 0.3f)) continue;
-                if (NearBuilding(p, 1.5f)) continue;
+                if (NearBuilding(p, homes ? 2.6f : 1.5f)) continue;
+                if (homes && rnd.Next01() < 0.55f) continue;
                 bool shadowsHouse = false;
                 foreach (var f in footprints)
-                    if (Mathf.Abs(p.x - f.x) < f.w * 0.5f + 0.5f && p.z < f.z && p.z > f.z - f.d * 0.5f - 2.5f) { shadowsHouse = true; break; }
+                    if (Mathf.Abs(p.x - f.x) < f.w * 0.5f + 0.5f && p.z < f.z && p.z > f.z - f.d * 0.5f - (homes ? 4.5f : 2.5f)) { shadowsHouse = true; break; }
                 if (shadowsHouse) continue;
                 bool crowded = false;
                 foreach (var q in placed) if ((q - p2).sqrMagnitude < 1.8f * 1.8f) { crowded = true; break; }

@@ -25,8 +25,8 @@ public class EggboyUI : MonoBehaviour
     GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel, subtitlePanel;
     GameObject titlePanel, pausePanel, hud;
     public bool ToastVisible => toastPanel != null && toastPanel.activeInHierarchy;
-    Slider volumeBar1, volumeBar2;
-    Text volumeText1, volumeText2;
+    Slider volumeBar1, volumeBar2, sensBar;
+    Text volumeText1, volumeText2, sensText;
     System.Action onTitleStart;
     bool titleShowing;
     public bool Paused { get; private set; }
@@ -257,21 +257,24 @@ public class EggboyUI : MonoBehaviour
         titlePanel = AddMenuBackdrop(root, title);
         titlePanel.SetActive(false);
 
-        var pause = Panel(root, 0, 0, 520, 320, new Color32(0x1a, 0x14, 0x10, 242), true, true);
-        SetRect(pause.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 520, 320);
-        CenterLabel(pause.transform, "暂停", 28, new Color32(0xfb, 0xef, 0xd9, 255), 110, 40, true);
-        var resume = CenterPanel(pause.transform, 220, 46, 44, new Color32(0xff, 0x9a, 0x4d, 255));
+        var pause = Panel(root, 0, 0, 520, 380, new Color32(0x1a, 0x14, 0x10, 242), true, true);
+        SetRect(pause.rectTransform, 0.5f, 0.5f, 0.5f, 0.5f, 0, 0, 520, 380);
+        CenterLabel(pause.transform, "暂停", 28, new Color32(0xfb, 0xef, 0xd9, 255), 150, 40, true);
+        var resume = CenterPanel(pause.transform, 220, 46, 78, new Color32(0xff, 0x9a, 0x4d, 255));
         var resumeBtn = resume.gameObject.AddComponent<Button>();
         resumeBtn.targetGraphic = resume;
         resumeBtn.transition = Selectable.Transition.None;
         resumeBtn.onClick.AddListener(() => SetPaused(false));
         CenterLabel(resume.transform, "继续", 17, new Color32(0xff, 0xf8, 0xec, 255), 0, 36, true);
-        volumeText2 = CenterLabel(pause.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -34, 24, false);
-        volumeBar2 = BuildVolume(pause.transform, -66);
-        CenterLabel(pause.transform, "Esc 继续", 12, new Color32(0xa0, 0x8a, 0x6a, 255), -120, 20, false);
+        volumeText2 = CenterLabel(pause.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), 12, 24, false);
+        volumeBar2 = BuildVolume(pause.transform, -20);
+        sensText = CenterLabel(pause.transform, "视角灵敏度", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -72, 24, false);
+        sensBar = BuildSensitivity(pause.transform, -102);
+        CenterLabel(pause.transform, "Esc 继续", 12, new Color32(0xa0, 0x8a, 0x6a, 255), -160, 20, false);
         pausePanel = AddMenuBackdrop(root, pause);
         pausePanel.SetActive(false);
         ApplyVolume(volume);
+        ApplySensitivity(ChaseCamera.Sensitivity);
     }
 
     Text CenterLabel(Transform parent, string text, int size, Color32 color, float y, float h, bool bold)
@@ -329,6 +332,35 @@ public class EggboyUI : MonoBehaviour
         if (volumeText2 != null) volumeText2.text = label;
     }
 
+    // 视角灵敏度：0.4–2.0 倍，存 PlayerPrefs，和 ChaseCamera 的 MouseSens 相乘
+    Slider BuildSensitivity(Transform parent, float y)
+    {
+        var bar = CenterPanel(parent, 300, 14, y, new Color32(0x3b, 0x2a, 0x1a, 255));
+        var fill = CenterPanel(bar.transform, 0, 8, 0, new Color32(0xff, 0x9a, 0x4d, 255));
+        var handle = CenterPanel(bar.transform, 22, 22, 0, new Color32(0xff, 0xf8, 0xec, 255));
+        bar.raycastTarget = true;
+        fill.raycastTarget = false;
+        handle.rectTransform.sizeDelta = new Vector2(22f, 22f);
+        var slider = bar.gameObject.AddComponent<Slider>();
+        slider.fillRect = fill.rectTransform;
+        slider.handleRect = handle.rectTransform;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = 0.4f;
+        slider.maxValue = 2f;
+        slider.value = ChaseCamera.Sensitivity;
+        slider.onValueChanged.AddListener(ApplySensitivity);
+        return slider;
+    }
+
+    void ApplySensitivity(float v)
+    {
+        ChaseCamera.Sensitivity = v;
+        float s = ChaseCamera.Sensitivity;
+        if (sensBar != null && Mathf.Abs(sensBar.value - s) > 0.001f) sensBar.SetValueWithoutNotify(s);
+        if (sensText != null) sensText.text = "视角灵敏度 " + Mathf.RoundToInt(s * 100f) + "%";
+    }
+
     public void ShowTitle(System.Action onStart)
     {
         onTitleStart = onStart;
@@ -355,7 +387,11 @@ public class EggboyUI : MonoBehaviour
         Paused = on;
         hud.SetActive(!on);
         if (pausePanel != null) pausePanel.SetActive(on);
-        if (on) ApplyVolume(volume);
+        if (on)
+        {
+            ApplyVolume(volume);
+            ApplySensitivity(ChaseCamera.Sensitivity);
+        }
         Time.timeScale = on ? 0f : 1f;
         if (player != null) player.locked = on;
         if (on)

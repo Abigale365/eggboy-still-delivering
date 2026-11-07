@@ -8,6 +8,22 @@ public class ChaseCamera : MonoBehaviour
     const float DistMin = 2.2f, DistMax = 7.5f, DistDefault = 3.6f;
     const float Height = 0.95f, Shoulder = 0.35f;
     const float MouseSens = 0.04f; // Input.GetAxis 的鼠标值是"像素 × 0.05"，折算成和网页版一样的手感
+    static float sens = -1f;
+    // 视角灵敏度倍率，暂停菜单可调，存 PlayerPrefs；0.4–2.0，默认 1.0
+    public static float Sensitivity
+    {
+        get
+        {
+            if (sens < 0f) sens = Mathf.Clamp(PlayerPrefs.GetFloat("tidetown.sensitivity", 1f), 0.4f, 2f);
+            return sens;
+        }
+        set
+        {
+            sens = Mathf.Clamp(value, 0.4f, 2f);
+            PlayerPrefs.SetFloat("tidetown.sensitivity", sens);
+            PlayerPrefs.Save();
+        }
+    }
     const float RecenterDelay = 3.0f, RecenterRamp = 0.8f, RecenterSpeed = 1.6f, RecenterMaxAngle = 70f * Mathf.Deg2Rad;
     const float MinDist = 0.4f;
     static readonly float[,] Rays = { { 0f, 1f }, { 12f, 0.65f }, { -12f, 0.65f }, { 24f, 0.3f }, { -24f, 0.3f } }; // 偏转角度, 权重
@@ -48,8 +64,9 @@ public class ChaseCamera : MonoBehaviour
         {
             float mx = Input.GetAxisRaw("Mouse X"), my = Input.GetAxisRaw("Mouse Y");
             if (Mathf.Abs(mx) > 0f || Mathf.Abs(my) > 0f) idleMouse = 0f;
-            yawGoal += mx * MouseSens;
-            pitchGoal = Mathf.Clamp(pitchGoal - my * MouseSens, PitchMin, PitchMax);
+            float sens = MouseSens * Sensitivity;
+            yawGoal += mx * sens;
+            pitchGoal = Mathf.Clamp(pitchGoal - my * sens, PitchMin, PitchMax);
         }
         // 滚轮：按比例拉远拉近
         float wheel = Input.mouseScrollDelta.y;

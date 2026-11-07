@@ -4,7 +4,7 @@
 # Old result files are deleted first, so a result can only come from this run.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [ValidateSet('route','shot','water','scan','story','map')][string]$Mode = 'route',
+    [ValidateSet('route','shot','water','scan','story','map','collision')][string]$Mode = 'route',
     [string]$Shot = 'preview',
     [switch]$IdPass,
     [string]$OutDir = '',
@@ -44,6 +44,9 @@ try {
         $argv += ' -mapaudit'
         $files = @('map-audit.json', 'shots\map_03.png', 'shots\map_07.png', 'shots\map_11.png',
                    'shots\map_20.png', 'shots\map_31.png', 'shots\map_letter_blocked.png')
+    } elseif ($Mode -eq 'collision') {
+        $argv += ' -shot preview -collisiondebug'
+        $files = @('shots\preview.png')
     } else {
         $argv += " -shot $Shot"
         $files = @("shots\$Shot.png")

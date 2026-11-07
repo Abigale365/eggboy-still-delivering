@@ -186,6 +186,8 @@ public sealed class GameBootstrap : MonoBehaviour
         var map = gameObject.AddComponent<TownMap>();
         map.Init(player, ui, director, gate);
         gameObject.AddComponent<MenuController>().Init(ui, map, director);
+        // WP-22/P1：F3 显示碰撞盒线框
+        gameObject.AddComponent<CollisionDebugView>();
 
         // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过；WP-16 真实开局先给标题画面
         var args = Environment.GetCommandLineArgs();

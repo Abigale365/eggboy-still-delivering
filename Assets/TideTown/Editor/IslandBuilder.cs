@@ -789,18 +789,22 @@ public static partial class IslandBuilder
         go.transform.rotation = Quaternion.identity;
         go.layer = 7;
         go.GetComponent<Renderer>().sharedMaterial = mat;
-        // 灰盒视觉是整框（含屋檐）；碰撞只算墙体：宽 80%，前墙在图上的墙根线（foot）上，后墙和灰盒一样。
-        // 角色的站位放在 route.json，不靠缩碰撞让路。
         const float WallWidth = 0.8f;
-        float zFront = b.z, zBack = center.z + d * 0.5f;
+        float wallFront = b.z, wallBack = center.z + d * 0.5f;
         var bc = go.GetComponent<BoxCollider>();
         if (bc != null)
         {
-            bc.size = new Vector3(WallWidth, 1f, (zBack - zFront) / d);
-            bc.center = new Vector3(0f, 0f, ((zFront + zBack) * 0.5f - center.z) / d);
+            bc.size = new Vector3(WallWidth, 1f, (wallBack - wallFront) / d);
+            bc.center = new Vector3(0f, 0f, ((wallFront + wallBack) * 0.5f - center.z) / d);
         }
-        footprints.Add(new Footprint { instance = b.instance, x = Mathf.Round(center.x * 1000f) / 1000f, z = Mathf.Round((zFront + zBack) * 500f) / 1000f,
-                                       w = Mathf.Round(w * WallWidth * 1000f) / 1000f, d = Mathf.Round((zBack - zFront) * 1000f) / 1000f });
+        var fp = new Footprint
+        {
+            instance = b.instance,
+            x = Mathf.Round(center.x * 1000f) / 1000f,
+            z = Mathf.Round((wallFront + wallBack) * 500f) / 1000f,
+            w = Mathf.Round(w * WallWidth * 1000f) / 1000f,
+            d = Mathf.Round((wallBack - wallFront) * 1000f) / 1000f,
+        };
         if (b.instance != null && b.instance.Contains("lighthouse"))
         {
             lighthouseCenter = center;
@@ -816,19 +820,42 @@ public static partial class IslandBuilder
         info.category = "Buildings";
         info.sourceFile = "greybox";
         info.size = new Vector3(w, h, d);
-        AttachBuildingVisual(b, go, parent, center, w, h, d, info);
+        var vb = AttachBuildingVisual(b, go, parent, center, w, h, d, info);
+        // 碰撞跟真实外观走：只在模型比灰盒墙更小的地方收紧，绝不比原来的墙更挡路
+        if (vb.size.x > 0.05f && vb.size.z > 0.05f)
+        {
+            float lx0 = center.x - w * WallWidth * 0.5f, lx1 = center.x + w * WallWidth * 0.5f;
+            float lz0 = wallFront, lz1 = wallBack;
+            float x0 = Mathf.Max(lx0, vb.min.x + 0.05f), x1 = Mathf.Min(lx1, vb.max.x - 0.05f);
+            float z0 = Mathf.Max(lz0, vb.min.z + 0.05f), z1 = Mathf.Min(lz1, vb.max.z - 0.05f);
+            if (x1 - x0 > 0.2f && z1 - z0 > 0.2f)
+            {
+                float cw = x1 - x0, cd = z1 - z0;
+                if (bc != null)
+                {
+                    bc.size = new Vector3(cw / w, 1f, cd / d);
+                    bc.center = new Vector3(((x0 + x1) * 0.5f - center.x) / w, 0f, ((z0 + z1) * 0.5f - center.z) / d);
+                }
+                fp.x = Mathf.Round((x0 + x1) * 500f) / 1000f;
+                fp.z = Mathf.Round((z0 + z1) * 500f) / 1000f;
+                fp.w = Mathf.Round(cw * 1000f) / 1000f;
+                fp.d = Mathf.Round(cd * 1000f) / 1000f;
+            }
+            Debug.Log($"WALLBOX {b.instance} layout={w * WallWidth:F2}x{wallBack - wallFront:F2} visual={vb.size.x:F2}x{vb.size.z:F2} box={fp.w:F2}x{fp.d:F2}");
+        }
+        footprints.Add(fp);
         Debug.Log($"GREYBOX {b.instance} w={w:F2} h={h:F2} d={d:F2} pos=({center.x:F2},{center.z:F2})");
     }
 
     // 优化阶段4：保留灰盒碰撞和审计逻辑，真 prefab 只负责视觉。
     // LODGroup：近景真模型（不减面，原网格不动），远景复用灰盒当 LOD1，压住同屏面数。
-    static void AttachBuildingVisual(Bld b, GameObject go, Transform parent, Vector3 center, float w, float h, float d, TownAssetInfo info)
+    static Bounds AttachBuildingVisual(Bld b, GameObject go, Transform parent, Vector3 center, float w, float h, float d, TownAssetInfo info)
     {
         bool tower = b.instance == "B4_lighthouse";
         string id = b.instance.Split('_')[0];
         string prefabPath = id == "B6" || id == "B7" ? BuildingPrefabPath(b.instance) : SourceModelPath(id);
         var prefab = prefabPath != null ? AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) : null;
-        if (prefab == null) return;
+        if (prefab == null) return default;
 
         var visualRoot = new GameObject(b.instance + "_visual");
         visualRoot.transform.SetParent(parent, false);
@@ -851,10 +878,10 @@ public static partial class IslandBuilder
             if (invisible) { r.enabled = false; continue; }
             rends.Add(r);
         }
-        if (rends.Count == 0) { UnityEngine.Object.DestroyImmediate(visualRoot); return; }
+        if (rends.Count == 0) { UnityEngine.Object.DestroyImmediate(visualRoot); return default; }
         Bounds vb = rends[0].bounds;
         foreach (var r in rends) vb.Encapsulate(r.bounds);
-        if (vb.size.y <= 0.001f) { UnityEngine.Object.DestroyImmediate(visualRoot); return; }
+        if (vb.size.y <= 0.001f) { UnityEngine.Object.DestroyImmediate(visualRoot); return default; }
 
         float s = h / vb.size.y;
         if (vb.size.x * s > w * 1.15f) s = w * 1.15f / vb.size.x;
@@ -877,11 +904,13 @@ public static partial class IslandBuilder
         {
             float frontShift = Mathf.Max(0f, b.z - 0.10f - vb.min.z);
             visualRoot.transform.position += Vector3.forward * frontShift;
+            vb.center += Vector3.forward * frontShift;
         }
         // The GLB keeps the same silhouette when viewed from afar.
         go.GetComponent<Renderer>().enabled = false;
         info.sourceFile = prefabPath;
         Debug.Log($"GLB_SCENE {b.instance}: {prefabPath}");
+        return vb;
     }
 
     static string BuildingPrefabPath(string instance)

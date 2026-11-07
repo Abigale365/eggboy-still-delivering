@@ -1,0 +1,542 @@
+Mono path[0] = 'C:/Users/IKUN/Documents/ChatGPT/3d黑客松/outputs/tidetown-unity-rebuild-20261106/UnityProject/Build/Main/TideTown_Data/Managed'
+Mono config path = 'C:/Users/IKUN/Documents/ChatGPT/3d黑客松/outputs/tidetown-unity-rebuild-20261106/UnityProject/Build/Main/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[PhysX] Initialized MultithreadedTaskDispatcher with 32 workers.
+Initialize engine version: 2022.3.62f2c1 (92e6e6be66dc)
+[Subsystems] Discovering subsystems at path C:/Users/IKUN/Documents/ChatGPT/3d黑客松/outputs/tidetown-unity-rebuild-20261106/UnityProject/Build/Main/TideTown_Data/UnitySubsystems
+GfxDevice: creating device client; threaded=1; jobified=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce RTX 5070 Ti Laptop GPU (ID=0x2f18)
+    Vendor:   NVIDIA
+    VRAM:     11944 MB
+    Driver:   32.0.16.1088
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  0.189 seconds
+- Finished resetting the current domain, in  0.001 seconds
+<RI> Initializing input.
+<RI> Input initialized.
+<RI> Initialized touch support.
+[PhysX] Initialized MultithreadedTaskDispatcher with 32 workers.
+UnloadTime: 1.453700 ms
+URP 金属度/粗糙度贴图已接入：2048x2048
+角色图集已接入：2048x2048
+EGGBOY skin: shell 26344, leather 8729, visor 2743; gait True, antiClip True, bones 17
+NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=22681 hull=36 x=-0.238..0.212 y=0.489..0.780
+UI canvas 1280x720 screen 1280x720 scale 1
+BAKERYFIRE lit
+WATER set 0.00->0.45 in 4.0s
+WATER set 0.45->1.15 in 4.0s
+WATER_SAFE rescue water (12.70,-4.75) -> (10.01,-4.62)
+WATER set 1.15->1.60 in 4.0s
+WATER_SAFE rescue water (-19.44,9.27) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.50,9.24) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.47,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.47,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.47,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.45,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.48,9.26) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.45,9.30) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.47,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.47,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.53,9.21) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.28) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.48,9.27) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER_SAFE rescue water (-19.46,9.29) -> (-20.28,8.35)
+WATER set 1.60->3.05 in 4.0s
+STORYAUDIT passed intro=4.7 pickup=7.0 bakery=15.5 lit=True save=True
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+Memory Statistics:
+[ALLOC_TEMP_TLS] TLS Allocator
+  StackAllocators : 
+    [ALLOC_TEMP_MAIN]
+      Peak usage frame count: [2.0 KB-4.0 KB]: 148 frames, [8.0 KB-16.0 KB]: 3751 frames, [16.0 KB-32.0 KB]: 1292 frames, [32.0 KB-64.0 KB]: 6 frames, [64.0 KB-128.0 KB]: 14451 frames, [128.0 KB-256.0 KB]: 4 frames, [2.0 MB-4.0 MB]: 1 frames
+      Initial Block Size 4.0 MB
+      Current Block Size 4.0 MB
+      Peak Allocated Bytes 3.4 MB
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 18]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54.0 KB
+      Overflow Count 4
+    [ALLOC_TEMP_Loading.PreloadManager]
+      Initial Block Size 256.0 KB
+      Current Block Size 0.5 MB
+      Peak Allocated Bytes 438.2 KB
+      Overflow Count 13165
+    [ALLOC_TEMP_Background Job.Worker 8]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 10]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 16]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 49.3 KB
+      Overflow Count 18
+    [ALLOC_TEMP_Background Job.Worker 6]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 4]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 1201
+    [ALLOC_TEMP_Job.Worker 27]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.0 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 14]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54.0 KB
+      Overflow Count 109
+    [ALLOC_TEMP_Job.Worker 17]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 10
+    [ALLOC_TEMP_Job.Worker 3]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 12
+    [ALLOC_TEMP_Background Job.Worker 12]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_] x 19
+      Initial Block Size 64.0 KB
+      Current Block Size 92.0 KB
+      Peak Allocated Bytes 91.6 KB
+      Overflow Count 5
+    [ALLOC_TEMP_Background Job.Worker 1]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_AssetGarbageCollectorHelper] x 31
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 138 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 5]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 13]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 11]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 2]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 82.6 KB
+      Overflow Count 292
+    [ALLOC_TEMP_Background Job.Worker 3]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 0]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 20]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 11]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 55.1 KB
+      Overflow Count 1303
+    [ALLOC_TEMP_Background Job.Worker 4]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BatchDeleteObjects]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 30]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54.0 KB
+      Overflow Count 5
+    [ALLOC_TEMP_Job.Worker 6]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.3 KB
+      Overflow Count 989
+    [ALLOC_TEMP_Job.Worker 0]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 7
+    [ALLOC_TEMP_Background Job.Worker 9]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 21]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 51.7 KB
+      Overflow Count 3
+    [ALLOC_TEMP_Job.Worker 5]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 1099
+    [ALLOC_TEMP_Job.Worker 26]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 2
+    [ALLOC_TEMP_Job.Worker 25]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.1 KB
+      Overflow Count 2
+    [ALLOC_TEMP_Background Job.Worker 14]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 29]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 4
+    [ALLOC_TEMP_Job.Worker 13]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54.0 KB
+      Overflow Count 213
+    [ALLOC_TEMP_EnlightenWorker] x 32
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 15]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 2]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 7]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 22]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 51.6 KB
+      Overflow Count 3
+    [ALLOC_TEMP_UnityGfxDeviceWorker]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 29.9 KB
+      Overflow Count 3
+    [ALLOC_TEMP_Job.Worker 28]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.3 KB
+      Overflow Count 4
+    [ALLOC_TEMP_Job.Worker 9]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 54.0 KB
+      Overflow Count 1536
+    [ALLOC_TEMP_Job.Worker 8]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 921
+    [ALLOC_TEMP_Job.Worker 7]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 57.3 KB
+      Overflow Count 648
+    [ALLOC_TEMP_Job.Worker 23]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.5 KB
+      Overflow Count 4
+    [ALLOC_TEMP_Job.Worker 1]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 82.6 KB
+      Overflow Count 13
+    [ALLOC_TEMP_Job.Worker 10]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 53.8 KB
+      Overflow Count 1773
+    [ALLOC_TEMP_Job.Worker 15]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 65.6 KB
+      Overflow Count 29
+    [ALLOC_TEMP_Job.Worker 24]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 53.5 KB
+      Overflow Count 1
+    [ALLOC_TEMP_Job.Worker 19]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.8 KB
+      Overflow Count 3
+    [ALLOC_TEMP_Job.Worker 12]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 52.7 KB
+      Overflow Count 614
+    [ALLOC_TEMP_Loading.AsyncRead]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 447 B
+      Overflow Count 0
+[ALLOC_DEFAULT] Dual Thread Allocator
+  Peak main deferred allocation count 659
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 8 Subsections = 8192 buckets. Failed count: 956129
+        32B: 20 Subsections = 10240 buckets. Failed count: 802580
+        48B: 59 Subsections = 20138 buckets. Failed count: 86642
+        64B: 51 Subsections = 13056 buckets. Failed count: 16136
+        80B: 22 Subsections = 4505 buckets. Failed count: 4410
+        96B: 17 Subsections = 2901 buckets. Failed count: 0
+        112B: 36 Subsections = 5266 buckets. Failed count: 337
+        128B: 43 Subsections = 5504 buckets. Failed count: 1535
+    [ALLOC_DEFAULT_MAIN]
+      Peak usage frame count: [16.0 MB-32.0 MB]: 19652 frames, [32.0 MB-64.0 MB]: 1 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 2
+      Peak Allocated memory 33.5 MB
+      Peak Large allocation bytes 8.0 MB
+    [ALLOC_DEFAULT_THREAD]
+      Peak usage frame count: [16.0 MB-32.0 MB]: 19652 frames, [64.0 MB-128.0 MB]: 1 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 1
+      Peak Allocated memory 70.1 MB
+      Peak Large allocation bytes 64.8 MB
+[ALLOC_TEMP_JOB_1_FRAME]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_2_FRAMES]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_4_FRAMES (JobTemp)]
+  Initial Block Size 2.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_ASYNC (Background)]
+  Initial Block Size 1.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 1
+  Overflow Count (full) 0
+[ALLOC_GFX] Dual Thread Allocator
+  Peak main deferred allocation count 7
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 8 Subsections = 8192 buckets. Failed count: 956129
+        32B: 20 Subsections = 10240 buckets. Failed count: 802580
+        48B: 59 Subsections = 20138 buckets. Failed count: 86642
+        64B: 51 Subsections = 13056 buckets. Failed count: 16136
+        80B: 22 Subsections = 4505 buckets. Failed count: 4410
+        96B: 17 Subsections = 2901 buckets. Failed count: 0
+        112B: 36 Subsections = 5266 buckets. Failed count: 337
+        128B: 43 Subsections = 5504 buckets. Failed count: 1535
+    [ALLOC_GFX_MAIN]
+      Peak usage frame count: [16.0 MB-32.0 MB]: 19653 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 3
+      Peak Allocated memory 31.7 MB
+      Peak Large allocation bytes 0 B
+    [ALLOC_GFX_THREAD]
+      Peak usage frame count: [128.0 MB-256.0 MB]: 19653 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 7
+      Peak Allocated memory 164.6 MB
+      Peak Large allocation bytes 61.7 MB
+[ALLOC_CACHEOBJECTS] Dual Thread Allocator
+  Peak main deferred allocation count 4
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 8 Subsections = 8192 buckets. Failed count: 956129
+        32B: 20 Subsections = 10240 buckets. Failed count: 802580
+        48B: 59 Subsections = 20138 buckets. Failed count: 86642
+        64B: 51 Subsections = 13056 buckets. Failed count: 16136
+        80B: 22 Subsections = 4505 buckets. Failed count: 4410
+        96B: 17 Subsections = 2901 buckets. Failed count: 0
+        112B: 36 Subsections = 5266 buckets. Failed count: 337
+        128B: 43 Subsections = 5504 buckets. Failed count: 1535
+    [ALLOC_CACHEOBJECTS_MAIN]
+      Peak usage frame count: [32.0 MB-64.0 MB]: 19653 frames
+      Requested Block Size 4.0 MB
+      Peak Block count 5
+      Peak Allocated memory 32.9 MB
+      Peak Large allocation bytes 17.0 MB
+    [ALLOC_CACHEOBJECTS_THREAD]
+      Peak usage frame count: [64.0 MB-128.0 MB]: 19652 frames, [128.0 MB-256.0 MB]: 1 frames
+      Requested Block Size 4.0 MB
+      Peak Block count 12
+      Peak Allocated memory 132.5 MB
+      Peak Large allocation bytes 87.8 MB
+[ALLOC_TYPETREE] Dual Thread Allocator
+  Peak main deferred allocation count 0
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 8 Subsections = 8192 buckets. Failed count: 956129
+        32B: 20 Subsections = 10240 buckets. Failed count: 802580
+        48B: 59 Subsections = 20138 buckets. Failed count: 86642
+        64B: 51 Subsections = 13056 buckets. Failed count: 16136
+        80B: 22 Subsections = 4505 buckets. Failed count: 4410
+        96B: 17 Subsections = 2901 buckets. Failed count: 0
+        112B: 36 Subsections = 5266 buckets. Failed count: 337
+        128B: 43 Subsections = 5504 buckets. Failed count: 1535
+    [ALLOC_TYPETREE_MAIN]
+      Peak usage frame count: [4.0 KB-8.0 KB]: 1 frames, [8.0 KB-16.0 KB]: 19652 frames
+      Requested Block Size 2.0 MB
+      Peak Block count 1
+      Peak Allocated memory 14.5 KB
+      Peak Large allocation bytes 0 B
+    [ALLOC_TYPETREE_THREAD]
+      Peak usage frame count: [0-1.0 KB]: 19652 frames, [1.0 KB-2.0 KB]: 1 frames
+      Requested Block Size 2.0 MB
+      Peak Block count 1
+      Peak Allocated memory 1.0 KB
+      Peak Large allocation bytes 0 B

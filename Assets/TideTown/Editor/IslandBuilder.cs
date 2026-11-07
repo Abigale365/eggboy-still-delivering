@@ -62,9 +62,11 @@ public static partial class IslandBuilder
         var manual = GameObject.Find("Manual");
         if (manual == null) manual = new GameObject("Manual");
 
-        var grass = Mat("IslandGrass", new Color32(0x86, 0x9d, 0x5b, 255));
+        // 2026-11-07 草地、沙滩、崖壁换成程序贴图（IslandBuilder.Nature.cs），不再是纯色
+        var grass = NatureMat("IslandGrass", "NatureGrass", NatureKind.Grass, new Color32(0x8a, 0xa6, 0x4a, 255), 53, 6f, 2.5f);
+        var sand = NatureMat("IslandSand", "NatureSand", NatureKind.Sand, new Color32(0xe6, 0xcd, 0x9c, 255), 57, 3f, 3f);
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
-        var cliff = Mat("IslandCliff", new Color32(0x99, 0x89, 0x73, 255));
+        var cliff = NatureMat("IslandCliff", "NatureCliff", NatureKind.Rock, new Color32(0x96, 0x7c, 0x6a, 255), 59, 3f, 6f);
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
         var trunk = Mat("IslandTrunk", new Color32(0x6b, 0x4d, 0x31, 255));
@@ -77,7 +79,7 @@ public static partial class IslandBuilder
         var dogEye = Mat("DogEye", new Color32(0xe4, 0xd9, 0xc0, 255));
 
         if (layout.coast != null)
-            BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, grass, cliff);
+            BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, sand, cliff);
         for (int i = 0; i < layout.tiers.Length; i++) BuildTier(layout.tiers[i], generated.transform, grass, cliff);
         if (layout.roads != null)
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);
@@ -113,7 +115,8 @@ public static partial class IslandBuilder
 
         BuildWorld(layout, route, generated.transform);
 
-        ScatterRocksAndTrees(layout, generated.transform, rockMat, leaves, trunk);
+        // 2026-11-07 旧的圆球石头 + 棒棒糖树（ScatterRocksAndTrees）换成 BuildNature
+        BuildNature(layout, generated.transform);
         BuildCamera(layout, generated.transform);
         BuildLight(generated.transform);
         var game = new GameObject("Game");
@@ -177,13 +180,16 @@ public static partial class IslandBuilder
         if (Mathf.Abs(triArea - polyArea) > polyArea * 0.001f + 0.001f)
             throw new Exception($"三角化丢面积：{name} 多边形 {polyArea:F2}，三角形合计 {triArea:F2}。检查多边形是否自交或有多余共线点。");
         var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
         var idx = new List<int>();
-        foreach (var v in poly) verts.Add(new Vector3(v.x, y, v.y));
+        foreach (var v in poly) { verts.Add(new Vector3(v.x, y, v.y)); uvs.Add(new Vector2(v.x, v.y)); }   // UV 按米，贴图靠材质平铺
         foreach (var t in tris) idx.AddRange(new[] { t.Item1, t.Item3, t.Item2 });
         var mesh = new Mesh { name = name };
         mesh.SetVertices(verts);
+        mesh.SetUVs(0, uvs);
         mesh.SetTriangles(idx, 0);
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;
     }
@@ -191,7 +197,9 @@ public static partial class IslandBuilder
     static Mesh WallMesh(List<Vector2> poly, float top, float bottom, string name)
     {
         var verts = new List<Vector3>();
+        var uvs = new List<Vector2>();
         var idx = new List<int>();
+        float run = 0f;
         for (int i = 0; i < poly.Count; i++)
         {
             var a = poly[i];
@@ -200,13 +208,23 @@ public static partial class IslandBuilder
             var bt = new Vector3(b.x, top, b.y);
             var bb = new Vector3(b.x, bottom, b.y);
             var ab = new Vector3(a.x, bottom, a.y);
+            float len = (b - a).magnitude;
+            // UV：沿边走过的米数 × 高度，崖壁贴图不拉伸
+            for (int side = 0; side < 2; side++)
+            {
+                uvs.Add(new Vector2(run, top)); uvs.Add(new Vector2(run + len, top));
+                uvs.Add(new Vector2(run + len, bottom)); uvs.Add(new Vector2(run, bottom));
+            }
             AddQuad(verts, idx, at, bt, bb, ab, false);
             AddQuad(verts, idx, at, bt, bb, ab, true);
+            run += len;
         }
         var mesh = new Mesh { name = name };
         mesh.SetVertices(verts);
+        mesh.SetUVs(0, uvs);
         mesh.SetTriangles(idx, 0);
         mesh.RecalculateNormals();
+        mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;
     }
@@ -290,7 +308,8 @@ public static partial class IslandBuilder
             Mat("IslandRoadCurb", new Color32(0xa8, 0x97, 0x7c, 255)),
             // 碎石人行道用程序贴图：横向/纵向 UV 直接按米记，材质里按 tile 米缩放
             RoadSurfaceMat("IslandRoadGravel", new Color32(0xae, 0xa2, 0x8c, 255), "RoadGravel", 31, 150, 1.6f, 9f),
-            Mat("IslandCliff", new Color32(0x99, 0x89, 0x73, 255)),
+            // 路边裙边单独一个材质：IslandCliff 现在是带贴图的崖壁，Mat() 会把它的底色改回纯色
+            Mat("IslandRoadSkirt", new Color32(0x99, 0x89, 0x73, 255)),
         };
         var mesh = SaveMesh(RoadMesh(r), "Assets/TideTown/Art/Meshes/Main_road_" + r.id + ".asset");
         mf.sharedMesh = mesh;

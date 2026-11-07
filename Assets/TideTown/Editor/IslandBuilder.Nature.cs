@@ -479,7 +479,8 @@ public static partial class IslandBuilder
                 var outN = new Vector2(dir.y, -dir.x);
                 var mid = (a + b) * 0.5f;
                 if (InPolyXZ(poly, mid + outN * 0.3f)) outN = -outN;
-                int steps = Mathf.Max(1, Mathf.RoundToInt(len / 1.35f));
+                // 2026-11-08：原来 1.35 m 一堆、堆满整面崖，远看整岛都是石头；改稀一点，崖面留出来
+                int steps = Mathf.Max(1, Mathf.RoundToInt(len / 2.1f));
                 for (int s = 0; s < steps; s++)
                 {
                     var e = Vector2.Lerp(a, b, (s + 0.5f) / steps);
@@ -488,7 +489,7 @@ public static partial class IslandBuilder
                     if (drop < 0.45f) continue;                       // 台阶太矮，不堆石头
 
                     // 崖顶一圈花丛（预览图里每道崖边上都是开花的灌木）
-                    if (t.id != "coast" && rnd.Next01() < 0.5f)
+                    if (t.id != "coast" && rnd.Next01() < 0.75f)
                     {
                         var bp2 = e + outN * 0.25f;
                         float bs = 1.2f + rnd.Next01() * 0.9f;
@@ -502,8 +503,9 @@ public static partial class IslandBuilder
                     }
 
                     float yb = Mathf.Max(lower, -0.4f);
-                    // 从下往上一排排堆，最上面一排顶到台地边缘附近
-                    for (float yy = yb; yy < t.y + 0.1f;)
+                    // 从下往上一排排堆；台地只堆到下半截（上半截露崖面，崖顶是花丛），海岸底座照旧堆满
+                    float stackTop = t.id == "coast" ? t.y + 0.1f : yb + (t.y - yb) * 0.55f;
+                    for (float yy = yb; yy < stackTop;)
                     {
                         float size = 0.9f + rnd.Next01() * 1.1f;
                         float r = size * 0.5f;
@@ -564,8 +566,8 @@ public static partial class IslandBuilder
                 foreach (var pt in layout.points) if (pt.id == "28" || pt.id == "29") beach.Add(new Vector2(pt.x, pt.z));
             float cx0 = float.MaxValue, cx1 = float.MinValue, cz0 = float.MaxValue, cz1 = float.MinValue;
             foreach (var q in cpoly) { cx0 = Mathf.Min(cx0, q.x); cx1 = Mathf.Max(cx1, q.x); cz0 = Mathf.Min(cz0, q.y); cz1 = Mathf.Max(cz1, q.y); }
-            for (float x = cx0; x < cx1; x += 1.7f)
-            for (float z = cz0; z < cz1; z += 1.7f)
+            for (float x = cx0; x < cx1; x += 1.35f)       // 目标图的海岸是一片圆石加花草，几乎看不到沙子
+            for (float z = cz0; z < cz1; z += 1.35f)
             {
                 var p2 = new Vector2(x + (rnd.Next01() - 0.5f) * 1.2f, z + (rnd.Next01() - 0.5f) * 1.2f);
                 if (!InPolyXZ(cpoly, p2)) continue;
@@ -579,10 +581,14 @@ public static partial class IslandBuilder
                 foreach (var bc in beach) if ((bc - p2).magnitude < 5.5f) { onBeach = true; break; }
                 float roll = rnd.Next01();
                 if (onBeach && roll < 0.85f) continue;                  // 沙滩上只零星几块
+                // 目标图：崖顶是草和花丛，圆石只堆在靠海那一圈
+                bool inland = !onBeach && DistToPoly(cpoly, p2) > 3f;
+                if (inland && roll >= 0.5f) continue;                   // 留出草地，崖顶不放石头
+                if (!inland && !onBeach && roll >= 0.8f) continue;
                 float r = 0.55f + rnd.Next01() * 0.6f;
                 var c = new Vector3(p2.x, 0.15f + r * 0.1f, p2.y);
                 if (BlocksWalk(walks, c, r, -1f, 1.6f, 0.3f) || NearBuilding(c, r)) continue;
-                if (!onBeach && roll < 0.22f)
+                if (!onBeach && (inland || roll < 0.25f))
                 {
                     float bs = 1.1f + rnd.Next01() * 0.8f;
                     Place(bushRoot, "ShoreBush", bushes[nBush % bushes.Length], new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
@@ -645,6 +651,13 @@ public static partial class IslandBuilder
                 Place(treeRoot, "Tree", trees[nTree % trees.Length], new[] { crown, trunk }, p, new Vector3(s, s * (0.9f + rnd.Next01() * 0.25f), s), rnd.Next01() * 360f);
                 nTree++;
             }
+        }
+
+        // 3b. 住宅组团小广场中心的大树（目标图左组团中间那棵）
+        foreach (var sp in plazaTreeSpots)
+        {
+            Place(treeRoot, "PlazaTree", trees[nTree % trees.Length], new[] { leafB, trunk }, sp, new Vector3(1.35f, 1.4f, 1.35f), 30f);
+            nTree++;
         }
 
         // 4. 花丛：沿每块可走区的外沿，往外 0.55 m；落在同一层地面上、不在任何可走区里才种

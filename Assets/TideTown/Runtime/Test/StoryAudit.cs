@@ -205,6 +205,9 @@ public class StoryAudit : MonoBehaviour
         if (status == "passed")
         {
             yield return WalkRoute(route, i12 + 1, i13);
+            // 2026-11-08：13 号在大道上，直线走回烤炉会穿过大道西侧的集市摊（有碰撞）。
+            // 按路线自己的绕行点（摊子南边）原路退回，再进面包店院子——真人也这么绕
+            if (walkFail == "" && !boot.ui.LetterOpen) yield return WalkRouteBack(route, i13, i12 + 1);
             var stove = Find("stove");
             yield return WalkTo(stove.x, stove.z, "stove");
             if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
@@ -249,7 +252,8 @@ public class StoryAudit : MonoBehaviour
 
         if (status == "passed")
         {
-            yield return WalkRoute(route, i13 + 1, i20);
+            yield return WalkRoute(route, i12 + 1, i13 - 1);   // 从烤炉沿绕行点出院子（同上，避开集市摊）
+            if (walkFail == "") yield return WalkRoute(route, i13 + 1, i20);
             if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
 
             for (int i = 0; i < 120 && status == "passed"; i++)

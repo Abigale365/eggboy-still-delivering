@@ -79,6 +79,7 @@ public static partial class IslandBuilder
         // 2026-11-07 草地、沙滩、崖壁换成程序贴图（IslandBuilder.Nature.cs），不再是纯色
         var grass = NatureMat("IslandGrass", "NatureGrass", NatureKind.Grass, new Color32(0x8a, 0xa6, 0x4a, 255), 53, 6f, 2.5f);
         var sand = NatureMat("IslandSand", "NatureSand", NatureKind.Sand, new Color32(0xe6, 0xcd, 0x9c, 255), 57, 3f, 3f);
+        sand.SetColor("_BaseColor", new Color(0.9f, 0.8f, 0.66f, 1f));   // 2026-11-08：贴图有缓存，在材质上压暗；新灯光下原色发白
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
         var cliff = NatureMat("IslandCliff", "NatureCliff", NatureKind.Rock, new Color32(0x96, 0x7c, 0x6a, 255), 59, 3f, 6f);
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
@@ -93,7 +94,8 @@ public static partial class IslandBuilder
         var dogEye = Mat("DogEye", new Color32(0xe4, 0xd9, 0xc0, 255));
 
         if (layout.coast != null)
-            BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, sand, cliff);
+            // 2026-11-08：海岸那一圈顶面用草（目标图是绿崖顶 + 花丛，圆石只在靠海一圈；沙滩由 beach 台地单独铺沙）
+            BuildTier(new Area { id = "coast", y = 0.15f, walk = false, x = layout.coast.x, z = layout.coast.z }, generated.transform, grass, cliff);
         // 2026-11-07 新地图：顶面材质按分区——街道和广场石板、住宅区草地、沙滩沙子、山体岩石
         var cobble = CobbleMat();
         for (int i = 0; i < layout.tiers.Length; i++)
@@ -576,13 +578,14 @@ public static partial class IslandBuilder
         {
             m.shader = shader;
         }
-        m.SetColor("_ShallowColor", new Color(0.33f, 0.72f, 0.72f, 1f));
-        m.SetColor("_DeepColor", new Color(0.10f, 0.33f, 0.47f, 1f));
-        m.SetColor("_FoamColor", new Color(0.94f, 0.98f, 0.96f, 1f));
-        m.SetFloat("_ShoreRange", 8f);
-        m.SetFloat("_FoamWidth", 1.4f);
+        // 2026-11-08：按目标图调亮——深处饱和的蓝，近岸青绿，礁石边一圈白浪
+        m.SetColor("_ShallowColor", new Color(0.26f, 0.78f, 0.80f, 1f));
+        m.SetColor("_DeepColor", new Color(0.06f, 0.34f, 0.64f, 1f));
+        m.SetColor("_FoamColor", new Color(0.96f, 0.99f, 0.98f, 1f));
+        m.SetFloat("_ShoreRange", 9f);
+        m.SetFloat("_FoamWidth", 2.0f);
         m.SetFloat("_DepthRange", 4f);
-        m.SetFloat("_FoamDepth", 0.9f);
+        m.SetFloat("_FoamDepth", 1.2f);
         m.SetFloat("_Alpha", 0.8f);
         m.SetFloat("_WaveSpeed", 1f);
         m.SetFloat("_WaveStrength", 0.6f);

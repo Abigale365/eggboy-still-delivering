@@ -216,8 +216,168 @@ public static partial class IslandBuilder
                 BuildFountainPlaceholder(root, new Vector3(pt.x, GroundBelow(pt.x, pt.z, pt.y + 0.5f), pt.z));
                 streetscapeBlockers.Add(new Vector3(pt.x, pt.y, pt.z));
             }
+        // 4. 集市摊位占位（M1 模型到了再换）：中央大道两边各两个，面朝大道，摆在大道边线外侧，不占路
+        BuildMarketStalls(root);
+        // 5. 广场中心：大道上的星星罗盘、三个住宅组团小广场（左：一棵树，中：月亮雕塑，右：星星地砖）
+        BuildCenterpieces(root);
         Debug.Log($"STREETSCAPE fences={fences} lamps={lamps} blockers={streetscapeBlockers.Count}");
     }
+
+    // ---------- 集市摊位占位 ----------
+
+    static Material StripeMat(string name, Color32 a, Color32 b)
+    {
+        string texPath = TexRoot + "/" + name + ".png";
+        if (!System.IO.File.Exists(texPath))
+        {
+            var px = new Color32[64 * 8];
+            for (int y = 0; y < 8; y++) for (int x = 0; x < 64; x++) px[y * 64 + x] = (x / 8) % 2 == 0 ? a : b;
+            var t = new Texture2D(64, 8, TextureFormat.RGBA32, false); t.SetPixels32(px); t.Apply();
+            System.IO.File.WriteAllBytes(texPath, t.EncodeToPNG()); UnityEngine.Object.DestroyImmediate(t);
+            AssetDatabase.ImportAsset(texPath, ImportAssetOptions.ForceUpdate);
+            var imp = (TextureImporter)AssetImporter.GetAtPath(texPath);
+            imp.filterMode = FilterMode.Bilinear; imp.wrapMode = TextureWrapMode.Repeat; imp.SaveAndReimport();
+        }
+        var m = FlatMat(name, new Color32(255, 255, 255, 255), 0.15f);
+        m.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(texPath));
+        EditorUtility.SetDirty(m);
+        return m;
+    }
+
+    static void BuildMarketStalls(Transform parent)
+    {
+        var wood = FlatMat("StallWood", new Color32(0x9a, 0x68, 0x40, 255), 0.08f);
+        var red = StripeMat("StallStripeRed", new Color32(0xe0, 0x4a, 0x3c, 255), new Color32(0xfa, 0xf2, 0xe4, 255));
+        var blue = StripeMat("StallStripeBlue", new Color32(0x4a, 0x7c, 0xc8, 255), new Color32(0xfa, 0xf2, 0xe4, 255));
+        Material[] fruit = {
+            FlatMat("FruitOrange", new Color32(0xf0, 0x90, 0x2c, 255), 0.35f), FlatMat("FruitRed", new Color32(0xd8, 0x34, 0x2c, 255), 0.35f),
+            FlatMat("FruitYellow", new Color32(0xf2, 0xd0, 0x4a, 255), 0.35f), FlatMat("FruitGreen", new Color32(0x8c, 0xbe, 0x3c, 255), 0.35f) };
+        // 图上位置：大道西边线外 (790, 470/530)，东边线外 (946, 470/530)；朝向大道
+        // 2026-11-08：原 790/946 正好压在大道边线上，剧情审计卡在摊子东面；各往外挪 18 px（约 0.8 m）
+        var spots = new[] { (772f, 535f, 90f, red), (772f, 455f, 90f, blue), (964f, 535f, -90f, red), (964f, 455f, -90f, blue) };
+        var rnd = new Lcg(31);
+        int n = 0;
+        foreach (var (u, v, yaw, awning) in spots)
+        {
+            var c = Unproject(u, v, 3.0f);
+            float gy = GroundBelow(c.x, c.z, 3.5f);
+            var go = new GameObject("MarketStall_" + n++);
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(c.x, gy, c.z);
+            go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            void Box(string name, Vector3 pos, Vector3 scale, Material mat, PrimitiveType type = PrimitiveType.Cube)
+            {
+                var p = GameObject.CreatePrimitive(type);
+                p.name = name;
+                UnityEngine.Object.DestroyImmediate(p.GetComponent<Collider>());
+                p.transform.SetParent(go.transform, false);
+                p.transform.localPosition = pos; p.transform.localScale = scale;
+                p.GetComponent<Renderer>().sharedMaterial = mat;
+                GameObjectUtility.SetStaticEditorFlags(p, StaticEditorFlags.BatchingStatic);
+            }
+            // 局部坐标：+z 朝大道。摊台 2.2 × 1.1，台面 0.8 m；四根柱子 2.2 m；条纹遮阳棚往大道一侧斜下
+            Box("counter", new Vector3(0, 0.4f, 0), new Vector3(2.2f, 0.8f, 1.1f), wood);
+            foreach (var (x, z) in new[] { (-1.05f, -0.5f), (1.05f, -0.5f), (-1.05f, 0.5f), (1.05f, 0.5f) })
+                Box("post", new Vector3(x, 1.1f, z), new Vector3(0.08f, 2.2f, 0.08f), wood);
+            var aw = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            aw.name = "awning";
+            UnityEngine.Object.DestroyImmediate(aw.GetComponent<Collider>());
+            aw.transform.SetParent(go.transform, false);
+            aw.transform.localPosition = new Vector3(0, 2.15f, 0.25f);
+            aw.transform.localRotation = Quaternion.Euler(18f, 0f, 0f);
+            aw.transform.localScale = new Vector3(2.5f, 0.06f, 1.7f);
+            aw.GetComponent<Renderer>().sharedMaterial = awning;
+            for (int k = 0; k < 14; k++)
+            {
+                float fx = -0.9f + (k % 7) * 0.3f + (rnd.Next01() - 0.5f) * 0.08f, fz = (k < 7 ? -0.2f : 0.22f);
+                float r = 0.16f + rnd.Next01() * 0.06f;
+                Box("fruit", new Vector3(fx, 0.82f + r * 0.5f, fz), Vector3.one * r, fruit[k % fruit.Length], PrimitiveType.Sphere);
+            }
+            // 碰撞：摊台占的那一块（TownObstacle 长方形，按世界轴对齐）
+            var col = new GameObject("MarketStall_collision");
+            col.transform.SetParent(go.transform, false);
+            col.layer = 7;
+            var bc = col.AddComponent<BoxCollider>();
+            bool sideways = Mathf.Abs(Mathf.Abs(yaw) - 90f) < 1f;
+            col.transform.rotation = Quaternion.identity;
+            col.transform.position = new Vector3(c.x, gy + 0.6f, c.z);
+            bc.size = sideways ? new Vector3(1.2f, 1.2f, 2.3f) : new Vector3(2.3f, 1.2f, 1.2f);
+            col.AddComponent<TownObstacle>();
+            footprints.Add(new Footprint { instance = go.name, x = c.x, z = c.z, w = bc.size.x, d = bc.size.z });
+        }
+        Debug.Log("MARKET stalls=" + n);
+    }
+
+    // ---------- 广场中心装饰 ----------
+
+    // 五角星平面网格（贴地 2 cm），r 外半径
+    static Mesh StarMesh(float r)
+    {
+        var v = new List<Vector3> { Vector3.zero }; var t = new List<int>();
+        for (int i = 0; i < 10; i++)
+        {
+            float a = Mathf.PI / 2f + i * Mathf.PI / 5f;
+            float rr = i % 2 == 0 ? r : r * 0.42f;
+            v.Add(new Vector3(Mathf.Cos(a) * rr, 0f, Mathf.Sin(a) * rr));
+        }
+        for (int i = 0; i < 10; i++) { t.Add(0); t.Add(1 + (i + 1) % 10); t.Add(1 + i); }
+        var m = new Mesh { name = "Star_" + r };
+        m.SetVertices(v); m.SetTriangles(t, 0); m.RecalculateNormals(); m.RecalculateBounds();
+        return SaveMesh(m, NatureMeshRoot + "/Star_" + Mathf.RoundToInt(r * 100) + ".asset");
+    }
+
+    static void BuildCenterpieces(Transform parent)
+    {
+        var gold = FlatMat("FountainGold", new Color32(0xe8, 0xb4, 0x48, 255), 0.6f);
+        var ring = FlatMat("MosaicRing", new Color32(0xc9, 0xa4, 0x7c, 255), 0.2f);
+        var stone = FlatMat("FountainStone", new Color32(0xec, 0xdf, 0xc8, 255), 0.15f);
+        void Flat(string name, Mesh mesh, Vector3 pos, Material mat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.position = pos;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+        }
+        void Disc(string name, Vector3 pos, float r, Material mat)
+        {
+            var d = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            d.name = name; UnityEngine.Object.DestroyImmediate(d.GetComponent<Collider>());
+            d.transform.SetParent(parent, false);
+            d.transform.position = pos; d.transform.localScale = new Vector3(r * 2f, 0.01f, r * 2f);
+            d.GetComponent<Renderer>().sharedMaterial = mat;
+        }
+        // 大道上的星星罗盘（图上 868,465）
+        var a = Unproject(868, 465, 3.0f); float ay = GroundBelow(a.x, a.z, 3.5f);
+        Disc("Compass_ring", new Vector3(a.x, ay + 0.012f, a.z), 1.5f, ring);
+        Flat("Compass_star", StarMesh(1.25f), new Vector3(a.x, ay + 0.03f, a.z), gold);
+        // 右组团小广场：星星地砖
+        var r = Unproject(1222, 228, 5.5f); float ry = GroundBelow(r.x, r.z, 6f);
+        Disc("StarPlaza_ring", new Vector3(r.x, ry + 0.012f, r.z), 1.6f, ring);
+        Flat("StarPlaza_star", StarMesh(1.35f), new Vector3(r.x, ry + 0.03f, r.z), gold);
+        // 中组团小广场：月亮雕塑（石座 + 金色弯月，弯月用一大一小两个球相减的样子：金球 + 前面挡一个石色小球）
+        var m = Unproject(846, 178, 5.5f); float my = GroundBelow(m.x, m.z, 6f);
+        var stat = new GameObject("MoonStatue"); stat.transform.SetParent(parent, false); stat.transform.position = new Vector3(m.x, my, m.z);
+        void Part(PrimitiveType type, Vector3 lp, Vector3 s, Material mat)
+        {
+            var p = GameObject.CreatePrimitive(type); UnityEngine.Object.DestroyImmediate(p.GetComponent<Collider>());
+            p.transform.SetParent(stat.transform, false); p.transform.localPosition = lp; p.transform.localScale = s;
+            p.GetComponent<Renderer>().sharedMaterial = mat;
+        }
+        Part(PrimitiveType.Cylinder, new Vector3(0, 0.25f, 0), new Vector3(1.6f, 0.25f, 1.6f), stone);
+        Part(PrimitiveType.Cylinder, new Vector3(0, 0.75f, 0), new Vector3(0.35f, 0.3f, 0.35f), stone);
+        Part(PrimitiveType.Sphere, new Vector3(0, 1.45f, 0), new Vector3(0.9f, 0.9f, 0.18f), gold);
+        var colGo = new GameObject("MoonStatue_collision"); colGo.transform.SetParent(stat.transform, false);
+        colGo.transform.localPosition = new Vector3(0, 0.6f, 0); colGo.layer = 7;
+        colGo.AddComponent<BoxCollider>().size = new Vector3(1.5f, 1.2f, 1.5f); colGo.AddComponent<TownObstacle>();
+        footprints.Add(new Footprint { instance = "MoonStatue", x = m.x, z = m.z, w = 1.5f, d = 1.5f });
+        // 左组团小广场：中间一棵大树（Nature 里种）——记下位置给 BuildNature
+        plazaTreeSpots.Clear();
+        var l = Unproject(530, 228, 5.5f); plazaTreeSpots.Add(new Vector3(l.x, GroundBelow(l.x, l.z, 6f), l.z));
+        Debug.Log("CENTERPIECES compass+star+moon, plazaTree=" + plazaTreeSpots.Count);
+    }
+
+    static readonly List<Vector3> plazaTreeSpots = new List<Vector3>();
 
     // 一根立柱或一道横杆：底面中心 center（横杆是中心），尺寸 size（x 厚、y 高、z 长），绕 Y 转 yaw 度
     static void AddFenceBox(List<Vector3> v, List<int> t, Vector3 center, Vector3 size, float yaw)

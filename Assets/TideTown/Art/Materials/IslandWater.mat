@@ -27,15 +27,15 @@ Material:
     m_Floats:
     - _Alpha: 0.8
     - _DepthRange: 4
-    - _FoamDepth: 0.9
-    - _FoamWidth: 1.4
-    - _ShoreRange: 8
+    - _FoamDepth: 1.2
+    - _FoamWidth: 2
+    - _ShoreRange: 9
     - _SpecStrength: 0.35
     - _VertWave: 0.06
     - _WaveSpeed: 1
     - _WaveStrength: 0.6
     m_Colors:
-    - _DeepColor: {r: 0.1, g: 0.33, b: 0.47, a: 1}
-    - _FoamColor: {r: 0.94, g: 0.98, b: 0.96, a: 1}
-    - _ShallowColor: {r: 0.33, g: 0.72, b: 0.72, a: 1}
+    - _DeepColor: {r: 0.06, g: 0.34, b: 0.64, a: 1}
+    - _FoamColor: {r: 0.96, g: 0.99, b: 0.98, a: 1}
+    - _ShallowColor: {r: 0.26, g: 0.78, b: 0.8, a: 1}
   m_BuildTextureStacks: []

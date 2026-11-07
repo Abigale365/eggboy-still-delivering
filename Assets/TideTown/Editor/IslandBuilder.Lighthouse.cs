@@ -18,12 +18,6 @@ public static partial class IslandBuilder
         Vector3 basePos = new Vector3(lighthouseCenter.x, GroundY(lighthouseCenter.x, lighthouseCenter.z), lighthouseCenter.z);
         if (basePos.y <= 0.2f) throw new Exception($"灯塔没落到地面：{basePos.x:F2},{basePos.z:F2}");
 
-        var metal = Mat("LighthouseMetal", new Color32(0x3a, 0x3f, 0x44, 255));
-        var wood = Mat("LighthouseDeck", new Color32(0x8a, 0x62, 0x3e, 255));
-        var glass = Mat("LighthouseGlass", new Color32(0xb9, 0xcb, 0xd2, 255));
-        var cream = Mat("LighthouseCream", new Color32(0xe8, 0xd6, 0xb4, 255));
-        var dark = Mat("LighthouseDark", new Color32(0x2e, 0x2e, 0x30, 255));
-        var lampMat = EmissiveMat("LighthouseLamp", new Color32(0xff, 0xd9, 0x9a, 255));
         var dotMat = EmissiveMat("LighthouseReplyDot", new Color32(0xff, 0xe1, 0x9c, 255));
         var beamMat = BeamMat();
 
@@ -31,15 +25,11 @@ public static partial class IslandBuilder
         root.transform.SetParent(parent, false);
         root.transform.position = basePos;
 
-        // 塔门和塔基台阶：门朝 30 号点（-z 方向）
-        float front = -lighthouseSize.z * 0.5f;
-        Cube(root.transform, "door", new Vector3(0f, 0.68f, front - 0.03f), new Vector3(0.6f, 1.35f, 0.06f), metal);
-        Cube(root.transform, "doorstep", new Vector3(0f, 0.06f, front - 0.22f), new Vector3(0.95f, 0.12f, 0.4f), wood);
-        Cube(root.transform, "window", new Vector3(0f, 4.3f, front - 0.02f), new Vector3(0.3f, 0.42f, 0.05f), glass);
+        if (lighthouseLantern == null)
+            throw new InvalidOperationException("B4 GLB is missing its Lantern chamber node.");
 
         // 塔顶平台：圆盘视觉 + 一块 Ground 碰撞；顶面 11.98（世界 16.98）
         float deckTop = lighthouseSize.y + 0.16f;
-        Cyl(root.transform, "deck", new Vector3(0f, deckTop - 0.08f, 0f), new Vector3(3.4f, 0.08f, 3.4f), wood);
         var floor = new GameObject("deck_floor");
         floor.transform.SetParent(root.transform, false);
         floor.transform.localPosition = new Vector3(0f, deckTop - 0.08f, 0f);
@@ -47,16 +37,7 @@ public static partial class IslandBuilder
         var floorBox = floor.AddComponent<BoxCollider>();
         floorBox.size = new Vector3(3.2f, 0.16f, 3.2f);
 
-        // 栏杆：视觉一圈，碰撞用四块方形挡边（EggboyCollider 只认 AABB）
-        for (int i = 0; i < 8; i++)
-        {
-            float a = i * Mathf.PI * 0.25f;
-            Cyl(root.transform, "railpost", new Vector3(Mathf.Sin(a) * 1.62f, deckTop + 0.22f, Mathf.Cos(a) * 1.62f),
-                new Vector3(0.05f, 0.22f, 0.05f), dark);
-            var rail = Cube(root.transform, "rail", new Vector3(Mathf.Sin(a) * 1.62f, deckTop + 0.42f, Mathf.Cos(a) * 1.62f),
-                new Vector3(0.95f, 0.05f, 0.07f), wood);
-            rail.transform.localRotation = Quaternion.Euler(0f, a * Mathf.Rad2Deg, 0f);
-        }
+        // The original GLB provides the gallery and rails; these boxes are gameplay barriers.
         foreach (var side in new[] { new Vector3(0, 0, 1), new Vector3(0, 0, -1), new Vector3(1, 0, 0), new Vector3(-1, 0, 0) })
         {
             var go = new GameObject("rail_block");
@@ -69,29 +50,14 @@ public static partial class IslandBuilder
             raised.minY = basePos.y + deckTop - 0.25f;
         }
 
-        // 灯室、帽盖、灯芯
-        float lampBottom = deckTop + 0.12f;
-        Cyl(root.transform, "lamp_glass", new Vector3(0f, lampBottom + 0.35f, 0f), new Vector3(1.32f, 0.375f, 1.32f), glass);
-        for (int i = 0; i < 4; i++)
-        {
-            float a = i * Mathf.PI * 0.5f;
-            Cube(root.transform, "mullion", new Vector3(Mathf.Sin(a) * 0.6f, lampBottom + 0.35f, Mathf.Cos(a) * 0.6f),
-                new Vector3(0.06f, 0.75f, 0.06f), dark);
-        }
-        Cyl(root.transform, "lamp_cap", new Vector3(0f, lampBottom + 0.76f, 0f), new Vector3(1.7f, 0.06f, 1.7f), metal);
-        Cyl(root.transform, "finial", new Vector3(0f, lampBottom + 0.88f, 0f), new Vector3(0.12f, 0.08f, 0.12f), metal);
-        var lampOrb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        UnityEngine.Object.DestroyImmediate(lampOrb.GetComponent<Collider>());
-        lampOrb.name = "lamp_orb";
-        lampOrb.transform.SetParent(root.transform, false);
-        lampOrb.transform.localPosition = new Vector3(0f, lampBottom + 0.35f, 0f);
-        lampOrb.transform.localScale = Vector3.one * 0.34f;
-        lampOrb.GetComponent<Renderer>().sharedMaterial = lampMat;
+        var chamber = lighthouseLantern.bounds;
+        var lampCenter = root.transform.InverseTransformPoint(chamber.center);
+        MountSourceModel(root.transform, "B9", lampCenter - Vector3.up * 0.32f, 0.64f, true);
 
         // 光束：半透明锥体 + 聚光灯，绕 Y 轴扫海
         var beaconGo = new GameObject("Beacon");
         beaconGo.transform.SetParent(root.transform, false);
-        beaconGo.transform.localPosition = new Vector3(0f, lampBottom + 0.35f, 0f);
+        beaconGo.transform.localPosition = lampCenter;
         var pivot = new GameObject("BeaconPivot");
         pivot.transform.SetParent(beaconGo.transform, false);
         var cone = Cone(pivot.transform, beamMat, 16f, 1.6f, 24);
@@ -108,7 +74,7 @@ public static partial class IslandBuilder
         spot.shadows = LightShadows.None;
         var glowGo = new GameObject("LampGlow");
         glowGo.transform.SetParent(root.transform, false);
-        glowGo.transform.localPosition = new Vector3(0f, lampBottom + 0.35f, 0f);
+        glowGo.transform.localPosition = lampCenter;
         var glow = glowGo.AddComponent<Light>();
         glow.type = LightType.Point;
         glow.range = 11f;
@@ -129,20 +95,16 @@ public static partial class IslandBuilder
             switch (it.id)
             {
                 case "oil":
-                    Cyl(go.transform, "can", new Vector3(0f, 0.18f, 0f), new Vector3(0.22f, 0.18f, 0.22f), metal);
-                    Cube(go.transform, "handle", new Vector3(0f, 0.34f, 0f), new Vector3(0.04f, 0.1f, 0.16f), metal);
+                    MountSourceModel(go.transform, "D1", Vector3.zero, 0.38f, true);
                     break;
                 case "log":
-                    Cube(go.transform, "book", new Vector3(0f, 0.025f, 0f), new Vector3(0.26f, 0.05f, 0.19f), cream);
+                    MountSourceModel(go.transform, "D2", Vector3.zero, 0.28f, false);
                     break;
                 case "hat":
-                    Cyl(go.transform, "brim", new Vector3(0f, 0.01f, 0f), new Vector3(0.3f, 0.01f, 0.3f), cream);
-                    Cyl(go.transform, "crown", new Vector3(0f, 0.07f, 0f), new Vector3(0.16f, 0.06f, 0.16f), cream);
+                    MountSourceModel(go.transform, "D5", Vector3.zero, 0.30f, false);
                     break;
                 case "scope":
-                    var body = Cyl(go.transform, "scope", new Vector3(0f, 0.32f, 0f), new Vector3(0.09f, 0.3f, 0.09f), metal);
-                    body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                    Cyl(go.transform, "stand", new Vector3(0f, 0.14f, 0f), new Vector3(0.04f, 0.14f, 0.04f), dark);
+                    MountSourceModel(go.transform, "D3", Vector3.zero, 0.52f, true);
                     break;
             }
         }

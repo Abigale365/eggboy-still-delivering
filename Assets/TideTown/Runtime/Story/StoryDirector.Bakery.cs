@@ -25,7 +25,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         store.Save(State);
         if (player != null) player.PlayEmote("give");
         ui.SetCarried(CarryLabel());
-        ShowWood(true);
+        ShowCarriedModel("wood");
         AdvanceTo("B3_load");
     }
 
@@ -37,7 +37,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         store.Save(State);
         if (player != null) player.PlayEmote("give");
         ui.SetCarried("");
-        ShowWood(false);
+        ShowCarriedModel(null);
         AdvanceTo("B4_light");
     }
 
@@ -48,37 +48,36 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (!State.stamps.Contains("bakery")) State.stamps.Add("bakery");
         store.Save(State);
         if (fx != null) fx.Light();
-        if (water != null) water.SetLevel("L1", 2f);
+        if (water != null) water.SetLevel("L1", WaterLevel.StationRiseSeconds);
         if (player != null) player.PlayEmote("hop");
         ui.ShowToast("邮戳 1/3 · 面包店");
         AdvanceTo("S0_arrive");
     }
 
-    public bool ShowMemory(string id, string title, string text)
+    public bool ShowMemory(string id, string text, bool replay)
     {
         if (!ready || ui == null || gate == null || gate.Locked) return false;
-        if (!State.seenMemories.Contains(id)) { State.seenMemories.Add(id); store.Save(State); }
-        letterLock = gate.Acquire("memory");
-        if (letterLock == null) return false;
-        readingMemory = true;
-        if (player != null) player.locked = true;
-        ui.ShowMemory(title, text);
+        if (!State.seenMemories.Contains(id))
+        {
+            State.seenMemories.Add(id);
+            store.Save(State);
+        }
+        else if (!replay) return false;
+        ui.ShowToast(text, 3f);
         return true;
     }
 
-    void ShowWood(bool on)
+    void ShowCarriedModel(string item)
     {
-        if (on && woodVisual == null && player != null)
+        if (carriedVisual != null) Destroy(carriedVisual);
+        carriedVisual = null;
+        if (player == null || (item != "wood" && item != "oil")) return;
+        modelProvider.Load(item, model =>
         {
-            woodVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(woodVisual.GetComponent<Collider>());
-            woodVisual.name = "CarriedWood";
-            woodVisual.transform.SetParent(player.transform, false);
-            woodVisual.transform.localPosition = new Vector3(0f, 0.52f, -0.30f);
-            woodVisual.transform.localScale = new Vector3(0.5f, 0.2f, 0.28f);
-            woodVisual.GetComponent<Renderer>().material.color = new Color(0.55f, 0.36f, 0.2f);
-        }
-        if (!on && woodVisual != null) { Destroy(woodVisual); woodVisual = null; }
+            carriedVisual = Instantiate(model, player.transform, false);
+            var localOffset = model.transform.localPosition;
+            carriedVisual.transform.localPosition = localOffset + new Vector3(0.20f, 0.46f, 0.28f);
+        }, message => Debug.LogWarning(message));
     }
 
     // ---- WP-13 学校 ----

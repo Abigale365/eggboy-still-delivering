@@ -74,9 +74,13 @@ public class ChaseCamera : MonoBehaviour
 
         var back = new Vector3(-Mathf.Sin(yaw) * Mathf.Cos(pitch), Mathf.Sin(pitch), -Mathf.Cos(yaw) * Mathf.Cos(pitch));
         var pivot = target + Right * Shoulder;
+        if (Physics.CheckSphere(pivot, 0.12f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            pivot = target - Right * Shoulder;
 
         // 防穿墙：正后方一条射线，左右各偏 12°、24° 打"提前量"射线，偏得越多权重越低
         float wanted = dist;
+        if (Physics.SphereCast(pivot, 0.16f, back, out var wall, dist, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            wanted = Mathf.Max(MinDist, wall.distance - 0.12f);
         for (int i = 0; i < Rays.GetLength(0); i++)
         {
             var dir = Quaternion.AngleAxis(Rays[i, 0], Vector3.up) * back;
@@ -87,7 +91,7 @@ public class ChaseCamera : MonoBehaviour
         sinceBlocked = wanted < dist - 0.01f ? 0f : sinceBlocked + dt;
         float rate = wanted < wallDist ? 14f : sinceBlocked < 0.8f ? 3f : 7f;
         float step = Mathf.Clamp((wanted - wallDist) * Damp(rate, dt), -8f * dt, 8f * dt);
-        wallDist = Mathf.Min(wallDist + step, dist);
+        wallDist = Mathf.Min(wallDist + step, wanted);
 
         // 贴着墙时镜头一边靠近一边升高
         float lift = Mathf.Max(0f, 1.3f - wallDist) * 0.6f;

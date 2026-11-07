@@ -11,6 +11,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (!ready || State.step != "L1_shed" || State.flags.Contains("oil_taken")) return;
         State.flags.Add("oil_taken");
         State.carrying = "oil";
+        ShowCarriedModel("oil");
         store.Save(State);
         if (player != null) player.PlayEmote("give");
         ui.SetCarried(CarryLabel());
@@ -61,6 +62,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (!ready || State.step != "L3_oil" || State.flags.Contains("lamp_oiled")) return;
         State.flags.Add("lamp_oiled");
         State.carrying = "";
+        ShowCarriedModel(null);
         store.Save(State);
         ui.SetCarried("");
         if (game != null) game.SetExpression(ExprId.thinking);
@@ -103,7 +105,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         State.flags.Add("lighthouse_done");
         if (!State.stamps.Contains("lighthouse")) State.stamps.Add("lighthouse");
         store.Save(State);
-        if (water != null) water.SetLevel("L3", 2.5f);
+        if (water != null) water.SetLevel("L3", WaterLevel.StationRiseSeconds);
         if (game != null) game.SetExpression(ExprId.happy);
         AdvanceTo("L5_reply");
         ui.ShowToast("邮戳 3/3 · 灯塔");

@@ -67,7 +67,11 @@ public sealed partial class StoryDirector : MonoBehaviour
         var lines = SplitLines(letter.body);
         SchoolLinesTotal = lines.Length;
         letterLock = gate != null ? gate.Acquire("schoolread") : null;
-        if (letterLock != null && player != null) player.locked = true;
+        if (letterLock != null && player != null)
+        {
+            player.locked = true;
+            player.SetStoryCrouch(true);
+        }
 
         string shown = "";
         for (int i = 0; i < lines.Length; i++)
@@ -85,7 +89,11 @@ public sealed partial class StoryDirector : MonoBehaviour
         readingSchool = false;
         if (gate != null && letterLock != null) gate.Release(letterLock);
         letterLock = null;
-        if (player != null) player.locked = false;
+        if (player != null)
+        {
+            player.SetStoryCrouch(false);
+            player.locked = false;
+        }
         if (ui != null && ui.LetterOpen) ui.CloseLetter();
         FinishSchoolRead();
     }
@@ -97,7 +105,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (!State.stamps.Contains("school")) State.stamps.Add("school");
         State.carrying = "";
         store.Save(State);
-        if (water != null) water.SetLevel("L2", 2.5f);
+        if (water != null) water.SetLevel("L2", WaterLevel.StationRiseSeconds);
         if (dog != null) dog.Follow();
         if (game != null) game.SetExpression(ExprId.happy);
         else if (player != null) player.PlayEmote("hop");

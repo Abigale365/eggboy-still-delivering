@@ -14,7 +14,6 @@ public static partial class IslandBuilder
     static void BuildEndingProps(Transform parent)
     {
         var data = EndingData.Load();
-        var wood = Mat("EndingWood", new Color32(0x8a, 0x62, 0x3e, 255));
         var dark = Mat("EndingDark", new Color32(0x2e, 0x2e, 0x30, 255));
         var paper = Mat("EndingPaper", new Color32(0xf3, 0xe6, 0xc8, 255));
         var windowMat = EmissiveMat("CityWindow", new Color32(0xff, 0xd2, 0x8a, 255));
@@ -24,10 +23,7 @@ public static partial class IslandBuilder
         var desk = new GameObject("EndingDesk");
         desk.transform.SetParent(parent, false);
         desk.transform.position = deskPos;
-        Cube(desk.transform, "top", new Vector3(0f, 0.72f, 0f), new Vector3(0.7f, 0.06f, 0.45f), wood);
-        foreach (var x in new[] { -0.3f, 0.3f })
-            foreach (var z in new[] { -0.18f, 0.18f })
-                Cube(desk.transform, "leg", new Vector3(x, 0.35f, z), new Vector3(0.05f, 0.7f, 0.05f), dark);
+        MountSourceModel(desk.transform, "C8", Vector3.zero, 0.75f, true);
         Cube(desk.transform, "letter", new Vector3(0.08f, 0.755f, 0.02f), new Vector3(0.24f, 0.012f, 0.16f), paper);
         Cube(desk.transform, "seal", new Vector3(0.15f, 0.762f, 0.05f), new Vector3(0.05f, 0.014f, 0.04f), dark);
 

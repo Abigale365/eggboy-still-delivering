@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Text;
 using UnityEngine;
 
@@ -103,7 +104,7 @@ public class StoryAudit : MonoBehaviour
         pickupSeconds = Time.realtimeSinceStartup - bootAt;
         bool within30 = pickupSeconds <= 30f;
         if (status == "passed") yield return Snap("story_pickup.png");
-        if (status == "passed" && !within30) { status = "pickup_too_slow"; error = pickupSeconds.ToString("F1") + " s"; }
+        if (status == "passed" && !within30) { status = "pickup_too_slow"; error = pickupSeconds.ToString("F1", CultureInfo.InvariantCulture) + " s"; }
 
         bool stepOk = false;
         bool lockedMove = false;
@@ -158,14 +159,16 @@ public class StoryAudit : MonoBehaviour
             {
                 yield return WalkTo(basket.x, basket.z, "basket");
                 if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
-                else if (!boot.service.TryInteract("basket")) { status = "memory_failed"; error = "basket not in range"; }
                 else
                 {
-                    for (int i = 0; i < 30 && !boot.ui.LetterOpen; i++) yield return null;
-                    memoryOk = boot.state.seenMemories.Contains("basket") && boot.ui.LetterOpen;
-                    boot.ui.CloseLetter();
-                    yield return new WaitForSeconds(0.25f);
-                    if (!memoryOk) { status = "memory_failed"; error = "basket memory not opened"; }
+                    yield return null;
+                    float memoryDeadline = Time.realtimeSinceStartup + 3.5f;
+                    while (!boot.state.seenMemories.Contains("basket") && Time.realtimeSinceStartup < memoryDeadline)
+                        yield return null;
+                    bool nearby = boot.state.seenMemories.Contains("basket") && boot.ui.ToastVisible;
+                    bool replay = boot.service.TryInteract("basket") && boot.ui.ToastVisible;
+                    memoryOk = nearby && replay && !boot.ui.LetterOpen && !p.locked;
+                    if (!memoryOk) { status = "memory_failed"; error = $"nearby={nearby} replay={replay} locked={p.locked}"; }
                 }
             }
         }
@@ -215,7 +218,7 @@ public class StoryAudit : MonoBehaviour
                     stampOk = boot.state.stamps.Contains("bakery");
                     fx = FindObjectOfType<BakeryEffects>();
                     smokeOk = fx != null && fx.Lit && fx.HasSmoke;
-                    yield return new WaitForSeconds(2.6f);
+                    yield return new WaitForSeconds(4.1f);
                     waterOk = boot.water != null && Mathf.Abs(boot.water.Y - 0.45f) <= 0.06f;
                     yield return new WaitForSeconds(2.4f); // 让烟爬出烟囱，再拍远景
                 }
@@ -233,10 +236,12 @@ public class StoryAudit : MonoBehaviour
             error = $"lit={litOk} stamp={stampOk} water={waterOk} smoke={smokeOk}";
         }
 
+        float bakerySecs = Time.realtimeSinceStartup - bakeryAt;
+
         // WP-13：学校后门读信 → 拖鞋 → 操场红球 → 放回狗碗 → 逐行再读 → 小黑跟随
         float schoolAt = Time.realtimeSinceStartup;
         bool s0Auto = false, slipperOk = false, ballOk = false, bowlOk = false, schoolRead = false;
-        bool stamp2 = false, waterL2 = false, ballInBowl = false, dogPeek = false;
+        bool stamp2 = false, waterL2 = false, ballInBowl = false, dogPeek = false, crouched = false;
         int linesShown = 0, linesTotal = 0;
         string exprTrace = "";
 
@@ -335,16 +340,17 @@ public class StoryAudit : MonoBehaviour
                         dogPeek = dog != null && dog.Visible && !dog.Following;
                         // 逐行读信：等信纸打开、前两行出现后再拍
                         yield return new WaitForSecondsRealtime(2.8f);
+                        crouched = p.IsStoryCrouched;
                         if (status == "passed") yield return Snap("story_school_read.png");
                     }
                 }
             }
         }
 
-        if (status == "passed" && !(bowlOk && ballInBowl && dogPeek))
+        if (status == "passed" && !(bowlOk && ballInBowl && dogPeek && crouched))
         {
             status = "school_failed";
-            error = $"bowl={bowlOk} ball={ballInBowl} peek={dogPeek}";
+            error = $"bowl={bowlOk} ball={ballInBowl} peek={dogPeek} crouched={crouched}";
         }
 
         // S4：读完信、盖第二枚邮戳、水位 L2、小黑开始跟随
@@ -357,7 +363,7 @@ public class StoryAudit : MonoBehaviour
             linesShown = boot.director.SchoolLinesShown;
             linesTotal = boot.director.SchoolLinesTotal;
             exprTrace = boot.director.SchoolExprTrace;
-            yield return new WaitForSecondsRealtime(3.2f);
+            yield return new WaitForSecondsRealtime(4.1f);
             waterL2 = boot.water != null && Mathf.Abs(boot.water.Y - 1.15f) <= 0.06f;
             if (status == "passed" && !(schoolRead && stamp2 && waterL2)) { status = "s4_failed"; error = $"read={schoolRead} stamp={stamp2} water={waterL2}"; }
         }
@@ -475,7 +481,7 @@ public class StoryAudit : MonoBehaviour
                 beaconOk = beacon != null && beacon.On;
                 if (!(beamOk && dimOk && beaconOk)) { status = "light_failed"; error = $"beam={beamOk} dim={dimOk} beacon={beaconOk}"; }
                 else yield return SnapFrom("story_lighthouse_beam.png",
-                    new Vector3(10.0f, 13.5f, 12.0f), new Vector3(21.58f, 17.6f, 2.7f));
+                    new Vector3(4f, 14.5f, 10.0f), new Vector3(21.58f, 12f, 2.7f));
             }
         }
 
@@ -490,9 +496,9 @@ public class StoryAudit : MonoBehaviour
             if (!(replyOk && stamp3)) { status = "reply_failed"; error = $"step={boot.state.step} lit={replyCount} stamp={stamp3}"; }
             else
             {
-                yield return new WaitForSecondsRealtime(3.2f);
+                yield return new WaitForSecondsRealtime(4.1f);
                 waterL3 = boot.water != null && Mathf.Abs(boot.water.Y - 1.60f) <= 0.06f;
-                if (!waterL3) { status = "l3_failed"; error = "water=" + (boot.water != null ? boot.water.Y.ToString("F2") : "-"); }
+                if (!waterL3) { status = "l3_failed"; error = "water=" + (boot.water != null ? boot.water.Y.ToString("F2", CultureInfo.InvariantCulture) : "-"); }
                 else yield return SnapFrom("story_lighthouse_reply.png",
                     new Vector3(21.6f, 19.4f, 5.6f), new Vector3(-12f, 11.6f, 25f));
             }
@@ -557,7 +563,10 @@ public class StoryAudit : MonoBehaviour
 
         if (status == "passed")
         {
-            if (!boot.service.TryInteract("ending_desk")) { status = "e1_failed"; error = "desk not in range"; }
+            var desk = EndingData.Point(EndingData.Load().desk);
+            yield return WalkTo(desk.x, desk.z, "ending_desk");
+            if (walkFail != "" || !boot.service.TryInteract("ending_desk"))
+            { status = "e1_failed"; error = "desk not in range " + walkFail; }
             else
             {
                 for (int i = 0; i < 90 && !boot.ui.LetterOpen; i++) yield return null;
@@ -615,7 +624,6 @@ public class StoryAudit : MonoBehaviour
         // 结局会再写一次存档（水位 L4），别留给后面的路线审计
         new SaveStore().Clear();
 
-        float secs = Time.realtimeSinceStartup - bakeryAt;
         var sb = new StringBuilder();
         sb.AppendLine("{");
         sb.AppendLine("  \"status\": \"" + status + "\",");
@@ -642,14 +650,14 @@ public class StoryAudit : MonoBehaviour
                   + ", \"E2_climb\": " + (lookBack && waterL4 ? "true" : "false")
                   + ", \"E3_end\": " + (ended ? "true" : "false") + " },");
         sb.AppendLine("  \"intro\": { \"ran\": " + (introRan ? "true" : "false")
-                  + ", \"seconds\": " + introSeconds.ToString("F1")
+                  + ", \"seconds\": " + introSeconds.ToString("F1", CultureInfo.InvariantCulture)
                   + ", \"start_expr\": \"" + exprStart + "\""
                   + ", \"end_expr\": \"" + exprEnd + "\""
                   + ", \"face_ok\": " + (faceOk ? "true" : "false")
                   + ", \"shots\": [\"story_boot.png\", \"story_wake.png\"] },");
-        sb.AppendLine("  \"pickup_seconds\": " + pickupSeconds.ToString("F1") + ",");
+        sb.AppendLine("  \"pickup_seconds\": " + pickupSeconds.ToString("F1", CultureInfo.InvariantCulture) + ",");
         sb.AppendLine("  \"pickup_within_30s\": " + (within30 ? "true" : "false") + ",");
-        sb.AppendLine("  \"bakery\": { \"seconds\": " + secs.ToString("F1")
+        sb.AppendLine("  \"bakery\": { \"seconds\": " + bakerySecs.ToString("F1", CultureInfo.InvariantCulture)
                   + ", \"auto_letter\": " + (b0Auto ? "true" : "false")
                   + ", \"memory\": " + (memoryOk ? "true" : "false")
                   + ", \"matches\": " + (matchesOk ? "true" : "false")
@@ -664,7 +672,7 @@ public class StoryAudit : MonoBehaviour
                   + ", \"fire_visible\": " + (fireVisibleOven ? "true" : "false")
                   + ", \"smoke_visible\": " + (smokeVisibleOven ? "true" : "false")
                   + ", \"shots\": [\"story_bakery_letter.png\", \"story_oven.png\"] },");
-        sb.AppendLine("  \"school\": { \"seconds\": " + schoolSecs.ToString("F1")
+        sb.AppendLine("  \"school\": { \"seconds\": " + schoolSecs.ToString("F1", CultureInfo.InvariantCulture)
                   + ", \"auto_letter\": " + (s0Auto ? "true" : "false")
                   + ", \"slipper\": " + (slipperOk ? "true" : "false")
                   + ", \"ball\": " + (ballOk ? "true" : "false")
@@ -672,13 +680,15 @@ public class StoryAudit : MonoBehaviour
                   + ", \"ball_in_bowl\": " + (ballInBowl ? "true" : "false")
                   + ", \"peek\": " + (dogPeek ? "true" : "false")
                   + ", \"read\": " + (schoolRead ? "true" : "false")
+                  + ", \"crouched\": " + (crouched ? "true" : "false")
                   + ", \"line_by_line\": " + (linesShown == linesTotal && linesTotal > 0 ? "true" : "false")
-                  + ", \"lines_shown\": " + linesShown + "/" + linesTotal
+                  + ", \"lines_shown\": " + linesShown
+                  + ", \"lines_total\": " + linesTotal
                   + ", \"expr_trace\": \"" + exprTrace + "\""
                   + ", \"stamp\": " + (stamp2 ? "true" : "false")
                   + ", \"water_l2\": " + (waterL2 ? "true" : "false")
                   + ", \"shots\": [\"story_school_letter.png\", \"story_pawprints.png\", \"story_playground.png\", \"story_school_read.png\"] },");
-        sb.AppendLine("  \"lighthouse\": { \"seconds\": " + lightSecs.ToString("F1")
+        sb.AppendLine("  \"lighthouse\": { \"seconds\": " + lightSecs.ToString("F1", CultureInfo.InvariantCulture)
                   + ", \"crates\": " + (l0Auto ? "true" : "false")
                   + ", \"oil\": " + (oilOk ? "true" : "false")
                   + ", \"climb\": " + (climbOk ? "true" : "false")
@@ -691,7 +701,7 @@ public class StoryAudit : MonoBehaviour
                   + ", \"stamp\": " + (stamp3 ? "true" : "false")
                   + ", \"water_l3\": " + (waterL3 ? "true" : "false")
                   + ", \"shots\": [\"story_lighthouse_crates.png\", \"story_lighthouse_door.png\", \"story_lighthouse_letter.png\", \"story_lighthouse_beam.png\", \"story_lighthouse_reply.png\"] },");
-        sb.AppendLine("  \"ending\": { \"seconds\": " + endingSecs.ToString("F1")
+        sb.AppendLine("  \"ending\": { \"seconds\": " + endingSecs.ToString("F1", CultureInfo.InvariantCulture)
                   + ", \"descent\": " + (downOk ? "true" : "false")
                   + ", \"back_at_post\": " + (e0Ok ? "true" : "false")
                   + ", \"letter\": " + (e1Open ? "true" : "false")
@@ -702,31 +712,31 @@ public class StoryAudit : MonoBehaviour
                   + ", \"ended\": " + (ended ? "true" : "false")
                   + ", \"city\": " + (cityShown ? "true" : "false")
                   + ", \"subtitle\": \"" + subtitleText + "\""
-                  + ", \"dog_end\": " + dogFinal.ToString("F2")
+                  + ", \"dog_end\": " + dogFinal.ToString("F2", CultureInfo.InvariantCulture)
                   + ", \"shots\": [\"story_ending_desk.png\", \"story_ending_letter.png\", \"story_ending_lookback.png\", \"story_ending_city.png\"] },");
         sb.AppendLine("  \"save_reload\": " + (saveOk ? "true" : "false") + ",");
         var visual = dog != null ? dog.GetComponent<DogVisual>() : null;
         sb.AppendLine("  \"dog\": { \"followed\": " + (dogFollowed ? "true" : "false")
                   + ", \"visible\": " + (dogFollowed ? "true" : "false")
                   + ", \"left_at_tower\": " + (dog != null && !dog.Visible ? "true" : "false")
-                  + ", \"follow_max\": " + dogMaxCheck.ToString("F2")
-                  + ", \"follow_max_all\": " + dogMax.ToString("F2")
-                  + ", \"distance_end\": " + dogEnd.ToString("F2")
+                  + ", \"follow_max\": " + dogMaxCheck.ToString("F2", CultureInfo.InvariantCulture)
+                  + ", \"follow_max_all\": " + dogMax.ToString("F2", CultureInfo.InvariantCulture)
+                  + ", \"distance_end\": " + dogEnd.ToString("F2", CultureInfo.InvariantCulture)
                   + ", \"behind\": " + (dogBehind ? "true" : "false")
-                  + ", \"ground_error_min\": " + dogMinClear.ToString("F2")
-                  + ", \"wag_hz\": " + (dog != null ? dog.WagHz.ToString("F1") : "0")
+                  + ", \"ground_error_min\": " + dogMinClear.ToString("F2", CultureInfo.InvariantCulture)
+                  + ", \"wag_hz\": " + (dog != null ? dog.WagHz.ToString("F1", CultureInfo.InvariantCulture) : "0")
                   + ", \"visual\": \"" + (visual != null ? visual.GetType().Name : "none") + "\""
                   + ", \"shots\": [\"story_dog.png\"] },");
         sb.AppendLine("  \"letter_open\": " + (opened ? "true" : "false") + ",");
         sb.AppendLine("  \"move_locked\": " + (lockedMove ? "true" : "false") + ",");
         sb.AppendLine("  \"no_repeat\": " + (noRepeat ? "true" : "false") + ",");
-        sb.AppendLine("  \"avg_fps\": " + (frames > 0 ? (sumFps / frames).ToString("F1") : "0") + ",");
-        sb.AppendLine("  \"total_seconds\": " + (Time.realtimeSinceStartup - bootAt).ToString("F1") + ",");
-        sb.AppendLine("  \"errors\": \"" + error + "\"");
+        sb.AppendLine("  \"avg_fps\": " + (frames > 0 ? (sumFps / frames).ToString("F1", CultureInfo.InvariantCulture) : "0") + ",");
+        sb.AppendLine("  \"total_seconds\": " + (Time.realtimeSinceStartup - bootAt).ToString("F1", CultureInfo.InvariantCulture) + ",");
+        sb.AppendLine("  \"errors\": \"" + error.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"");
         sb.AppendLine("}");
         File.WriteAllText(Path.Combine(Application.dataPath, "..", "story-audit.json"), sb.ToString(), new UTF8Encoding(false));
-        Debug.Log("STORYAUDIT " + status + " intro=" + introSeconds.ToString("F1") + " pickup=" + pickupSeconds.ToString("F1")
-            + " bakery=" + secs.ToString("F1") + " lit=" + litOk + " save=" + saveOk);
+        Debug.Log("STORYAUDIT " + status + " intro=" + introSeconds.ToString("F1", CultureInfo.InvariantCulture) + " pickup=" + pickupSeconds.ToString("F1", CultureInfo.InvariantCulture)
+            + " bakery=" + bakerySecs.ToString("F1", CultureInfo.InvariantCulture) + " lit=" + litOk + " save=" + saveOk);
         yield return new WaitForSecondsRealtime(0.5f);
         Application.Quit();
     }

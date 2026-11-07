@@ -19,10 +19,6 @@ public static partial class IslandBuilder
         if (list == null || list.items == null) return;
 
         var wood = Mat("BakeryWood", new Color32(0x8a, 0x62, 0x3e, 255));
-        var stoveMat = Mat("BakeryStove", new Color32(0x4a, 0x44, 0x40, 255));
-        var metal = Mat("BakeryMetal", new Color32(0x2c, 0x2c, 0x2c, 255));
-        var cream = Mat("BakeryCream", new Color32(0xe8, 0xd6, 0xb4, 255));
-        var red = Mat("BakeryRed", new Color32(0x9e, 0x35, 0x2b, 255));
         var particle = ParticleMat();
 
         foreach (var it in list.items)
@@ -37,46 +33,34 @@ public static partial class IslandBuilder
                     for (int i = 0; i < 4; i++)
                         Cube(root.transform, "leg", new Vector3(i % 2 == 0 ? -0.47f : 0.47f, 0.36f, i < 2 ? -0.24f : 0.24f),
                             new Vector3(0.07f, 0.72f, 0.07f), wood);
-                    Cube(root.transform, "matchbox", new Vector3(0.2f, 0.79f, 0), new Vector3(0.14f, 0.05f, 0.10f), red);
+                    MountSourceModel(root.transform, "A3", new Vector3(0.2f, 0.77f, 0), 0.18f, false);
                     break;
                 case "wood":
-                    for (int i = 0; i < 4; i++)
-                    {
-                        var log = Cyl(root.transform, "log", new Vector3((i % 2) * 0.13f - 0.065f, 0.07f + (i / 2) * 0.12f, 0f),
-                            new Vector3(0.12f, 0.25f, 0.12f), wood);
-                        log.transform.localRotation = Quaternion.Euler(0, 0, 90);
-                    }
-                    Cyl(root.transform, "strap", new Vector3(0, 0.17f, 0), new Vector3(0.30f, 0.02f, 0.30f), metal);
+                    MountSourceModel(root.transform, "A2", Vector3.zero, 0.52f, false);
                     break;
                 case "stove":
-                    Cube(root.transform, "body", new Vector3(0, 1.0f, 0), new Vector3(1.2f, 2.0f, 0.9f), stoveMat);
-                    Cube(root.transform, "mouth", new Vector3(0, 0.72f, -0.46f), new Vector3(0.55f, 0.45f, 0.04f), metal);
-                    Cube(root.transform, "shelf", new Vector3(0, 1.6f, 0.5f), new Vector3(1.3f, 0.08f, 0.2f), metal);
-                    var pipe = Cyl(root.transform, "pipe", new Vector3(0.3f, 2.9f, 0), new Vector3(0.18f, 0.9f, 0.18f), metal);
-                    pipe.transform.localScale = new Vector3(0.18f, 0.9f, 0.18f);
+                    var oven = MountSourceModel(root.transform, "A1", Vector3.zero, 1.8f, true, 180f);
+                    var ovenBounds = ModelBounds(oven);
                     var fx = root.AddComponent<BakeryEffects>();
-                    fx.chimneyTopLocalY = 3.7f;
+                    // Measured at the top of the imported chimney mesh.
+                    fx.chimneyLocalPosition = new Vector3(-0.406f, 1.8f, 0.123f);
+                    fx.fireLocalPosition = new Vector3(0f, 0.57f, -ovenBounds.extents.z + 0.09f);
                     fx.ParticleMaterial = particle;
                     break;
                 case "bell":
-                    Cyl(root.transform, "bell", new Vector3(0, 1.42f, 0), new Vector3(0.14f, 0.05f, 0.14f), metal);
-                    Cube(root.transform, "plate", new Vector3(0, 1.42f, -0.03f), new Vector3(0.2f, 0.12f, 0.03f), cream);
+                    MountSourceModel(root.transform, "A5", new Vector3(0f, 1.22f, 0f), 0.26f, true);
                     break;
                 case "basket":
-                    Cyl(root.transform, "basket", new Vector3(0, 0.14f, 0), new Vector3(0.36f, 0.12f, 0.36f), wood);
-                    Cube(root.transform, "bread", new Vector3(0, 0.30f, 0), new Vector3(0.18f, 0.12f, 0.14f), cream);
+                    MountSourceModel(root.transform, "A4", Vector3.zero, 0.46f, false);
                     break;
                 case "scale":
-                    Cube(root.transform, "base", new Vector3(0, 0.05f, 0), new Vector3(0.34f, 0.1f, 0.3f), metal);
-                    Cyl(root.transform, "plate", new Vector3(0, 0.16f, 0), new Vector3(0.30f, 0.02f, 0.30f), cream);
-                    Cube(root.transform, "dial", new Vector3(0.1f, 0.26f, -0.08f), new Vector3(0.1f, 0.1f, 0.04f), cream);
+                    MountSourceModel(root.transform, "A6", Vector3.zero, 0.34f, true);
                     break;
                 case "recipe":
-                    Cube(root.transform, "book", new Vector3(0, 0.79f, 0), new Vector3(0.2f, 0.04f, 0.15f), cream);
+                    MountSourceModel(root.transform, "A7", new Vector3(-0.24f, 0.77f, 0f), 0.26f, false);
                     break;
                 case "flour":
-                    Cyl(root.transform, "sack", new Vector3(0, 0.3f, 0), new Vector3(0.5f, 0.3f, 0.4f), cream);
-                    Cube(root.transform, "knot", new Vector3(0, 0.62f, 0), new Vector3(0.12f, 0.08f, 0.12f), cream);
+                    MountSourceModel(root.transform, "A8", Vector3.zero, 0.58f, true);
                     break;
             }
 

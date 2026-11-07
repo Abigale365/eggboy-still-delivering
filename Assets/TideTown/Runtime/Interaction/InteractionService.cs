@@ -33,7 +33,8 @@ public sealed class InteractionService : MonoBehaviour
     void Update()
     {
         if (player == null || ui == null) return;
-        if (gate != null && gate.Locked) { ui.SetPrompt(""); return; }
+        if (ui.Paused || ui.TitleShowing || player.locked || (gate != null && gate.Locked))
+        { ui.SetPrompt(""); return; }
 
         var s = state();
         IInteractable best = null;
@@ -49,6 +50,7 @@ public sealed class InteractionService : MonoBehaviour
 
         ui.SetPrompt(best != null ? best.Prompt(s) : "");
         if (best != null && Input.GetKeyDown(KeyCode.E)) best.Interact(s, this);
+        else if (best is MemoryInteractable memory && !ui.ToastVisible) memory.ShowNearby();
     }
 
     public bool TryInteractNearest()

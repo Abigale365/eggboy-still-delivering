@@ -16,6 +16,9 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
     public LayerMask obstacleMask;
     public Transform mailboxMarker;
     public Transform spawnMarker;
+    public GameObject mailboxTrail;
+    public GameObject endingDesk;
+    public GameObject woodModel, oilModel;
     public float waterLevel;
 
     public List<WalkPoly> walkPolys = new List<WalkPoly>();

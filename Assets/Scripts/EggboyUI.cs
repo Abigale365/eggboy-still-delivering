@@ -23,7 +23,8 @@ public class EggboyUI : MonoBehaviour
     Canvas canvas;
     Text goalText, promptText, lookText, tutorialText, carryText, toastText, subtitleText;
     GameObject promptPanel, letterOverlay, tutorialPanel, carryPanel, toastPanel, subtitlePanel;
-    GameObject titlePanel, pausePanel;
+    GameObject titlePanel, pausePanel, hud;
+    public bool ToastVisible => toastPanel != null && toastPanel.activeInHierarchy;
     Slider volumeBar1, volumeBar2;
     Text volumeText1, volumeText2;
     System.Action onTitleStart;
@@ -73,6 +74,15 @@ public class EggboyUI : MonoBehaviour
         var root = cgo.GetComponent<RectTransform>();
         Debug.Log($"UI canvas {root.rect.width}x{root.rect.height} screen {Screen.width}x{Screen.height} scale {scaler.scaleFactor}");
 
+        var hudRoot = new GameObject("GameplayHUD", typeof(RectTransform)).GetComponent<RectTransform>();
+        hudRoot.SetParent(root, false);
+        hudRoot.anchorMin = Vector2.zero;
+        hudRoot.anchorMax = Vector2.one;
+        hudRoot.offsetMin = hudRoot.offsetMax = Vector2.zero;
+        hud = hudRoot.gameObject;
+        var canvasRoot = root;
+        root = hudRoot;
+
         // 标题
         Label(root, "EGGBOY · Still Delivering", 26, new Color32(0x3b, 0x2a, 0x1a, 255), TextAnchor.UpperLeft, 20, -14, 700, 34, true);
         Label(root, "潮汐镇 · 第一阶段漫游", 14, new Color32(0x3b, 0x2a, 0x1a, 200), TextAnchor.UpperLeft, 21, -48, 700, 24, false);
@@ -107,7 +117,9 @@ public class EggboyUI : MonoBehaviour
         var faceToggle = faceTitle.gameObject.AddComponent<Button>();
         faceToggle.targetGraphic = faceTitle;
         faceToggle.transition = Selectable.Transition.None;
-        bool facesOpen = true;
+        bool facesOpen = Features.debugUi;
+        faceTitle.gameObject.SetActive(Features.debugUi);
+        gridPanel.gameObject.SetActive(facesOpen);
         faceToggle.onClick.AddListener(() =>
         {
             facesOpen = !facesOpen;
@@ -155,7 +167,7 @@ public class EggboyUI : MonoBehaviour
         // 底部按键提示
         var keys = Panel(root, 0, 40, 1180, 50, new Color32(0x3b, 0x2a, 0x1a, 210), true, true);
         SetRect(keys.rectTransform, 0.5f, 0f, 0.5f, 0f, 0, 40, 1180, 50);
-        Label(keys.transform, "WASD 走    Shift 跑    空格 跳    E 互动    M 地图    1 挥手 2 点头 3 摇头 4 张望 5 难过\nZ/X 换表情 · 按住鼠标右键转视角 · 滚轮缩放 · F2 正面视角", 14,
+        Label(keys.transform, "WASD 移动    Shift 跑    空格 跳    E 互动    M 地图    Esc 暂停\n按住鼠标右键转视角 · 滚轮缩放", 14,
             new Color32(0xfb, 0xef, 0xd9, 255), TextAnchor.MiddleCenter, 0, 0, 1150, 46, false);
 
         // 互动提示
@@ -182,8 +194,8 @@ public class EggboyUI : MonoBehaviour
         subtitlePanel = sub.gameObject;
         subtitlePanel.SetActive(false);
 
-        BuildLetter(root);
-        BuildMenus(root);
+        BuildLetter(canvasRoot);
+        BuildMenus(canvasRoot);
     }
 
     void BuildLetter(RectTransform root)
@@ -242,7 +254,7 @@ public class EggboyUI : MonoBehaviour
         CenterLabel(start.transform, "按 Enter 开始", 18, new Color32(0xff, 0xf8, 0xec, 255), 0, 40, true);
         volumeText1 = CenterLabel(title.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -86, 24, false);
         volumeBar1 = BuildVolume(title.transform, -118);
-        titlePanel = title.gameObject;
+        titlePanel = AddMenuBackdrop(root, title);
         titlePanel.SetActive(false);
 
         var pause = Panel(root, 0, 0, 520, 320, new Color32(0x1a, 0x14, 0x10, 242), true, true);
@@ -257,7 +269,7 @@ public class EggboyUI : MonoBehaviour
         volumeText2 = CenterLabel(pause.transform, "音量", 14, new Color32(0xe8, 0xd6, 0xb4, 255), -34, 24, false);
         volumeBar2 = BuildVolume(pause.transform, -66);
         CenterLabel(pause.transform, "Esc 继续", 12, new Color32(0xa0, 0x8a, 0x6a, 255), -120, 20, false);
-        pausePanel = pause.gameObject;
+        pausePanel = AddMenuBackdrop(root, pause);
         pausePanel.SetActive(false);
         ApplyVolume(volume);
     }
@@ -276,11 +288,22 @@ public class EggboyUI : MonoBehaviour
         return img;
     }
 
+    GameObject AddMenuBackdrop(RectTransform canvasRoot, Image card)
+    {
+        var shade = Panel(canvasRoot, 0, 0, RefW, RefH, new Color32(10, 12, 16, 160), false, true);
+        SetRect(shade.rectTransform, 0f, 0f, 1f, 1f, 0, 0, 0, 0);
+        card.transform.SetParent(shade.transform, false);
+        return shade.gameObject;
+    }
+
     Slider BuildVolume(Transform parent, float y)
     {
         var bar = CenterPanel(parent, 300, 14, y, new Color32(0x3b, 0x2a, 0x1a, 255));
-        var fill = CenterPanel(bar.transform, 290, 8, 0, new Color32(0xff, 0x9a, 0x4d, 255));
+        var fill = CenterPanel(bar.transform, 0, 8, 0, new Color32(0xff, 0x9a, 0x4d, 255));
         var handle = CenterPanel(bar.transform, 22, 22, 0, new Color32(0xff, 0xf8, 0xec, 255));
+        bar.raycastTarget = true;
+        fill.raycastTarget = false;
+        handle.rectTransform.sizeDelta = new Vector2(22f, 22f);
         var slider = bar.gameObject.AddComponent<Slider>();
         slider.fillRect = fill.rectTransform;
         slider.handleRect = handle.rectTransform;
@@ -310,6 +333,7 @@ public class EggboyUI : MonoBehaviour
     {
         onTitleStart = onStart;
         titleShowing = true;
+        hud.SetActive(false);
         if (titlePanel != null) titlePanel.SetActive(true);
         ApplyVolume(volume);
     }
@@ -318,6 +342,7 @@ public class EggboyUI : MonoBehaviour
     {
         if (!titleShowing) return;
         titleShowing = false;
+        hud.SetActive(true);
         if (titlePanel != null) titlePanel.SetActive(false);
         var cb = onTitleStart;
         onTitleStart = null;
@@ -328,6 +353,7 @@ public class EggboyUI : MonoBehaviour
     {
         if (Paused == on) return;
         Paused = on;
+        hud.SetActive(!on);
         if (pausePanel != null) pausePanel.SetActive(on);
         if (on) ApplyVolume(volume);
         Time.timeScale = on ? 0f : 1f;
@@ -401,12 +427,12 @@ public class EggboyUI : MonoBehaviour
         subtitlePanel.SetActive(on);
     }
 
-    public void ShowToast(string text)
+    public void ShowToast(string text, float seconds = 4.5f)
     {
         if (toastPanel == null) return;
         if (toastText != null) toastText.text = text;
         toastPanel.SetActive(true);
-        toastUntil = Time.unscaledTime + 4.5f;
+        toastUntil = Time.unscaledTime + seconds;
     }
 
     public void ShowLetter()

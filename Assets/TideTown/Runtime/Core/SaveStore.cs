@@ -1,9 +1,28 @@
 // WP-07 存档：PlayerPrefs 存 JSON，Windows 和网页都能用。
+using System;
 using UnityEngine;
 
 public sealed class SaveStore
 {
-    const string Key = "tidetown.save.v1";
+    static readonly string Key = Array.Exists(Environment.GetCommandLineArgs(), IsAudit)
+        ? "tidetown.qa.save.v1" : "tidetown.save.v1";
+
+    static bool IsAudit(string arg)
+    {
+        switch (arg)
+        {
+            case "-storyaudit":
+            case "-routeaudit":
+            case "-routeaudit2":
+            case "-mapaudit":
+            case "-wateraudit":
+            case "-scanaudit":
+            case "-shot":
+                return true;
+            default:
+                return false;
+        }
+    }
 
     public GameState Load()
     {

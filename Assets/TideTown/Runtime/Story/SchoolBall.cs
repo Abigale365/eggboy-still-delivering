@@ -19,7 +19,7 @@ public sealed class SchoolBall : MonoBehaviour
     public void PlaceInBowl()
     {
         transform.SetParent(null, true);
-        transform.position = BowlPoint + Vector3.up * 0.22f;
+        transform.position = BowlPoint;
         transform.localRotation = Quaternion.identity;
         inBowl = true;
     }

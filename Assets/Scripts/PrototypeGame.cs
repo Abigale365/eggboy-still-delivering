@@ -62,7 +62,9 @@ public class PrototypeGame : MonoBehaviour
         go.transform.position = world.SpawnPos;
         if (System.Array.Exists(cliArgs, a => a == "-nearmail")) go.transform.position = world.MailboxPos;
         bool expandedTown = town != null && UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "TideTown_Expanded_Stage1";
-        player.yaw = expandedTown ? Mathf.PI / 2f : -Mathf.PI / 2f;
+        player.yaw = island != null && island.spawnMarker != null
+            ? island.spawnMarker.eulerAngles.y * Mathf.Deg2Rad
+            : (expandedTown ? Mathf.PI / 2f : -Mathf.PI / 2f);
         go.transform.rotation = Quaternion.Euler(0f, player.yaw * Mathf.Rad2Deg, 0f);
         face = new EggboyFace(player);
         SetExpression(baseExpr);

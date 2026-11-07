@@ -18,15 +18,15 @@
 | WP-11 | 面包店（M3） | WP-10 | done | A(agent) | 2026-11-06 21:25 | storyaudit passed：B0 到点自动读信、A4/A5/A6/A7/A8 回忆线索（抽测面包篮）、火柴→柴火→装炉→点火全链、邮戳 1/3、水位 L1、烟囱粒子和炉火可见；面包店 11.2 s，重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-11。占位灰盒待 WP-17，A1–A8 未减面（WP-03 blocked） |
 | WP-12 | 小黑入工程 | WP-06 | done | A(agent) | 2026-11-06 23:00 | 模型未导入，按用户决定先做灰盒占位并预留 `DogVisual` 接口（换模型只改 `BuildDog`）：跟随身后 1.2 m、贴地、走/小跑/摇尾；storyaudit passed，dog follow_max 2.94 m、收尾 1.26 m、ground_error 0、behind true；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-12，接口说明 docs/reserved-interfaces.md。未验证：WebGL 浏览器实跑画面、真实小黑 GLB |
 | WP-13 | 学校（M4） | WP-11, WP-12 | done | A(agent) | 2026-11-06 23:35 | storyaudit passed：B4→S0 自动读信、爪印一路到操场、拖鞋→红球→狗碗、S4 逐行 5/5 与面屏 sad→sad→curious→curious→happy、邮戳 2/3、水位 L2、重开恢复；小黑 S3 探头（滑梯旁）S4 接回身后；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-13。C1–C8 灰盒待 WP-17。未验证：WebGL 浏览器实跑画面、读信蹲下（当前无 crouch 接口） |
-| WP-14 | 灯塔（M5） | WP-13 | done | A(agent) | 2026-11-07 00:36 | storyaudit passed：L0 踩木箱到船棚、油壶、塔门淡出登塔、加油读老陈的信、点灯（天光约 20 s 转暗 + 光束扫海）、山那边 40 个手电、邮戳 3/3、水位 L3、重开恢复；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-14。顺带修两个底层问题：头顶平台会把 GroundAt 抬到 12 m 高、同文件多 MonoBehaviour 导致 level0 反序列化损坏。塔身/灯头仍灰盒待 WP-17；小黑上塔前留在塔下。未验证：WebGL 浏览器实跑画面、这段情绪高潮的录像 |
-| WP-15 | 结局（M6） | WP-14 | done | A(agent) | 2026-11-07 01:25 | storyaudit passed：22 步全过；塔顶下塔回邮局、天光转黎明、课桌老周的信（惊讶→笑）、上山到 06、回望镜头 + 水位 L4、新城 40 个光点与字幕“所有的信，都送到了。”；小黑一路跟到 1.26 m；save_reload；总时长 96.6 s（审计加速，非真人时长）；route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-15。停在最终画面，标题/暂停留 WP-16；新城灯光仍是光点占位。未验证：WebGL 浏览器实跑画面、真人从头通关一遍并记录卡点 |
+| WP-14 | 灯塔（M5） | WP-13 | doing | A(agent) | 2026-11-07 | Windows 自动复验 L0–L5 全过，40 处手电回应。B4/B9 使用原贴图 GLB，灯室、可走平台和光束位置已对齐。已录 31 s Windows 自动流程实机片段，含读信、点灯、扫海和手电回应。塔身比例待画面验收。见 docs/evidence/WP-22/glb-recheck-20261107/lighthouse-windows-audit.mp4。 |
+| WP-15 | 结局（M6） | WP-14 | doing | A(agent) | 2026-11-07 | Windows storyaudit 22/22，自动流程 109.6 s。课桌在黎明触发后出现，小黑跟到终点，字幕、水位 L4、存档恢复均通过。新城仍是光点占位，待真人从头通关并记录卡点。见 docs/evidence/WP-22/glb-recheck-20261107。 |
 | WP-16 | 界面收尾 | WP-11 | done | A(agent) | 2026-11-07 01:42 | mapaudit passed：5 个点（03/07/11/20/31）红点按预览相机投影对位、读信时地图打不开、地图开着来信会自动让位；地图改用 world_layout + preview.png，带目标与邮戳；标题画面、Esc 暂停、音量滑杆（PlayerPrefs 记忆）；中文字体统一 NotoSansSC，调试标签默认隐藏；storyaudit 22 步仍全过、route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-16。未验证：真人点击标题/暂停/拖音量、WebGL 浏览器实跑 |
 | WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | todo | B | | |
 | WP-18 | 环境素材 | WP-17，用户批准生成单 | todo | B | | |
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |
 | WP-20 | 声音 | WP-11 | todo | B | | |
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |
-| WP-22 | 全流程 QA | WP-15, WP-16 | done | A(agent) | 2026-11-07 02:30 | 自动部分全绿：story 22/22（total 96.5 s）、route 28/28（airFrames 0、maxGroundGap 0.039）、map 5 点对位 + 互斥 true；无头 Chrome WebGL 冒烟通过（加载完成、0 error、标题/地图/HUD 中文正常，证据 docs/evidence/WP-22/webgl）；known-issues.md 已建（11 条）；真人项已入 human-queue（通关计时、两人试玩、标题点击、真显卡浏览器、核显机）。未验证：真显卡 Chrome/Edge 全流程、10 分钟内存、真人试玩——见 human-queue |
+| WP-22 | 全流程 QA | WP-15, WP-16 | doing | A(agent) | 2026-11-07 | 当前原贴图版 Windows 自动复验通过，story 22/22、route 28/28、map 5 点、water 五档及回退。标题、暂停和音量零位已修。待 Chrome/Edge 全流程、关页续玩、10 分钟内存和两名新玩家试玩。见 docs/evidence/WP-22/glb-recheck-20261107、known-issues.md 和 human-queue.md。 |
 | WP-23 | 部署（M7） | WP-21，用户确定位置 | todo | A | | |
 | WP-24 | 报告 | WP-15 | doing | B(agent) | 2026-11-07 03:00 | 草稿 v1 完成：docs/report/WP-24-成果报告草稿.md（真实数据替换 + 三层对齐：叙事层已完成/生态层实体层规划中 + 8 组资产迭代对比 + 工具说明表 + 数字来源索引）；底稿缺失已入 human-queue。待做：图片嵌入排版成 PDF/PPT、两位队员读过 |
 | WP-25 | 视频和发布包（M8） | WP-22 | todo | B | | |

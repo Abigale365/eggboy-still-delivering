@@ -61,5 +61,7 @@ public sealed class MemoryInteractable : IInteractable
         (s.seenMemories.Contains(id) ? "E　再读" : "E　看看") + label;
     public bool CanInteract(GameState s) => true;
     public void Interact(GameState s, InteractionService svc) =>
-        director.ShowMemory(id, "回忆 · " + label, text);
+        director.ShowMemory(id, text, true);
+
+    public void ShowNearby() => director.ShowMemory(id, text, false);
 }

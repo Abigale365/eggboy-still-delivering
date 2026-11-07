@@ -5,6 +5,7 @@ using UnityEngine;
 
 public sealed class WaterLevel : MonoBehaviour
 {
+    public const float StationRiseSeconds = 4f;
     public static WaterLevel Main;
 
     public Transform sea;        // 海面平面，Y 跟着水位走

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 063a0f40457e4d73acafeb4cb231f5a3
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  script: {fileID: 11500000, guid: 715df9372183c47e389bb6e19fbc3b52, type: 3}
+  importSettings:
+    nodeNameMethod: 1
+    animationMethod: 1
+    generateMipMaps: 1
+  instantiationSettings:
+    mask: -1
+    skinUpdateWhenOffscreen: 1
+    sceneObjectCreation: 2

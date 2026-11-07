@@ -13,10 +13,6 @@ public static partial class IslandBuilder
 {
     static void BuildSchoolProps(Transform parent)
     {
-        var wood = Mat("SchoolWood", new Color32(0x8a, 0x62, 0x3e, 255));
-        var dark = Mat("SchoolDark", new Color32(0x3f, 0x44, 0x44, 255));
-        var cream = Mat("SchoolCream", new Color32(0xe8, 0xd6, 0xb4, 255));
-        var red = Mat("SchoolBallRed", new Color32(0xc2, 0x3a, 0x32, 255));
         var paw = Mat("SchoolPaw", new Color32(0x3a, 0x33, 0x2d, 255));
 
         var list = SchoolData.Load();
@@ -33,59 +29,37 @@ public static partial class IslandBuilder
             {
                 case "bowl":
                     bowlPos = root.transform.position;
-                    Cyl(root.transform, "bowl", new Vector3(0, 0.08f, 0), new Vector3(0.34f, 0.08f, 0.34f), cream);
-                    Cyl(root.transform, "inner", new Vector3(0, 0.14f, 0), new Vector3(0.25f, 0.02f, 0.25f), dark);
+                    MountSourceModel(root.transform, "C1", Vector3.zero, 0.38f, false);
                     break;
                 case "ball":
-                    var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                    UnityEngine.Object.DestroyImmediate(ball.GetComponent<Collider>());
-                    ball.name = "ball_mesh";
+                    var ball = new GameObject("ball_mesh");
                     ball.transform.SetParent(root.transform, false);
-                    ball.transform.localPosition = new Vector3(0, 0.07f, 0);
-                    ball.transform.localScale = Vector3.one * 0.14f;
-                    ball.GetComponent<Renderer>().sharedMaterial = red;
+                    ball.transform.localPosition = Vector3.up * 0.07f;
+                    MountSourceModel(ball.transform, "C2", Vector3.down * 0.07f, 0.14f, false);
                     ballComp = ball.AddComponent<SchoolBall>();
                     break;
                 case "slipper":
-                    root.transform.rotation = Quaternion.Euler(0f, 25f, 0f);
-                    Cube(root.transform, "sole", new Vector3(0, 0.03f, 0), new Vector3(0.30f, 0.05f, 0.12f), wood);
-                    Cube(root.transform, "strap", new Vector3(0, 0.065f, 0.02f), new Vector3(0.13f, 0.04f, 0.13f), cream);
+                    MountSourceModel(root.transform, "C3", Vector3.zero, 0.30f, false, 25f);
                     break;
                 case "doghouse":
-                    Cube(root.transform, "box", new Vector3(0, 0.31f, 0), new Vector3(0.75f, 0.62f, 0.6f), wood);
-                    Cube(root.transform, "door", new Vector3(0, 0.26f, 0.305f), new Vector3(0.34f, 0.40f, 0.03f), dark);
+                    MountSourceModel(root.transform, "C4", Vector3.zero, 0.62f, true, 180f);
                     break;
                 case "swing":
-                    foreach (var x in new[] { -0.6f, 0.6f })
-                        foreach (var z in new[] { -0.35f, 0.35f })
-                            Cyl(root.transform, "post", new Vector3(x, 0.9f, z), new Vector3(0.05f, 0.9f, 0.05f), dark);
-                    Cube(root.transform, "bar", new Vector3(0, 1.82f, 0), new Vector3(1.35f, 0.07f, 0.08f), dark);
-                    Cube(root.transform, "seat", new Vector3(0, 0.55f, 0), new Vector3(0.5f, 0.05f, 0.22f), wood);
-                    foreach (var x in new[] { -0.22f, 0.22f })
-                        Cyl(root.transform, "rope", new Vector3(x, 1.2f, 0), new Vector3(0.02f, 0.62f, 0.02f), cream);
+                    MountSourceModel(root.transform, "C6", Vector3.zero, 1.85f, true);
                     break;
                 case "slide":
-                    var ramp = Cube(root.transform, "ramp", new Vector3(0, 0.75f, 0.1f), new Vector3(0.7f, 0.08f, 1.5f), wood);
-                    ramp.transform.localRotation = Quaternion.Euler(-28f, 0f, 0f);
-                    foreach (var x in new[] { -0.34f, 0.34f })
-                        Cyl(root.transform, "post", new Vector3(x, 0.7f, -0.7f), new Vector3(0.05f, 0.7f, 0.05f), dark);
-                    Cube(root.transform, "platform", new Vector3(0, 1.36f, -0.7f), new Vector3(0.7f, 0.08f, 0.5f), wood);
+                    MountSourceModel(root.transform, "C5", Vector3.zero, 1.45f, true);
                     break;
                 case "blackboard":
-                    Cube(root.transform, "board", new Vector3(0, 1.0f, 0), new Vector3(1.2f, 0.8f, 0.06f), dark);
-                    foreach (var x in new[] { -0.5f, 0.5f })
-                        Cyl(root.transform, "leg", new Vector3(x, 0.45f, 0), new Vector3(0.04f, 0.45f, 0.04f), wood);
+                    MountSourceModel(root.transform, "C7", Vector3.zero, 1.4f, true, 180f);
                     break;
                 case "desk":
-                    Cube(root.transform, "top", new Vector3(0, 0.72f, 0), new Vector3(0.7f, 0.06f, 0.45f), wood);
-                    foreach (var x in new[] { -0.3f, 0.3f })
-                        foreach (var z in new[] { -0.18f, 0.18f })
-                            Cube(root.transform, "leg", new Vector3(x, 0.35f, z), new Vector3(0.05f, 0.7f, 0.05f), dark);
+                    MountSourceModel(root.transform, "C8", Vector3.zero, 0.75f, true);
                     break;
             }
         }
 
-        if (ballComp != null) ballComp.BowlPoint = bowlPos + Vector3.up * 0.02f;
+        if (ballComp != null) ballComp.BowlPoint = bowlPos + Vector3.up * 0.11f;
 
         // 爪印：学校后门 → 拖鞋 → 绕到操场
         var path = new[]

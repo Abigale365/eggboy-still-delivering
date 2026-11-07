@@ -3,7 +3,8 @@ using UnityEngine;
 
 public sealed class BakeryEffects : MonoBehaviour
 {
-    public float chimneyTopLocalY = 3.7f;
+    public Vector3 chimneyLocalPosition = new Vector3(0.22f, 3.7f, 0f);
+    public Vector3 fireLocalPosition = new Vector3(0f, 0.80f, -0.56f);
     // 由 IslandBuilder 指到烘焙好的粒子材质；运行时 Shader.Find 在打包后可能找不到
     public Material ParticleMaterial;
 
@@ -30,7 +31,7 @@ public sealed class BakeryEffects : MonoBehaviour
     {
         var go = new GameObject("OvenFire");
         go.transform.SetParent(transform, false);
-        go.transform.localPosition = new Vector3(0f, 0.80f, -0.56f);
+        go.transform.localPosition = fireLocalPosition;
         fire = go.AddComponent<ParticleSystem>();
         var main = fire.main;
         main.loop = true;
@@ -57,7 +58,7 @@ public sealed class BakeryEffects : MonoBehaviour
 
         var lightGo = new GameObject("OvenLight");
         lightGo.transform.SetParent(transform, false);
-        lightGo.transform.localPosition = new Vector3(0f, 1.0f, -0.35f);
+        lightGo.transform.localPosition = fireLocalPosition + Vector3.up * 0.18f;
         fireLight = lightGo.AddComponent<Light>();
         fireLight.type = LightType.Point;
         fireLight.color = new Color(1f, 0.62f, 0.28f);
@@ -73,7 +74,7 @@ public sealed class BakeryEffects : MonoBehaviour
     {
         var go = new GameObject("ChimneySmoke");
         go.transform.SetParent(transform, false);
-        go.transform.localPosition = new Vector3(0.22f, chimneyTopLocalY, 0f);
+        go.transform.localPosition = chimneyLocalPosition;
         smoke = go.AddComponent<ParticleSystem>();
         var main = smoke.main;
         main.loop = true;

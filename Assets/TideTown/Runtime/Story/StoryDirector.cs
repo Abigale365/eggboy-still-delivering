@@ -24,16 +24,17 @@ public sealed partial class StoryDirector : MonoBehaviour
     SchoolBall ball;
     object letterLock;
     bool ready;
-    bool readingMemory;
     bool readingSchool;
     string arrivedStep = "";
-    GameObject woodVisual;
+    GameObject carriedVisual;
+    readonly BuiltinModelProvider modelProvider = new BuiltinModelProvider();
 
     public int SchoolLinesShown { get; private set; }
     public int SchoolLinesTotal { get; private set; }
     public string SchoolExprTrace { get; private set; } = "";
 
     Dictionary<string, Vector3> routePoints;
+    IslandWorld island;
     LetterData[] letters = new LetterData[0];
     StoryStep[] steps = new StoryStep[0];
 
@@ -41,6 +42,7 @@ public sealed partial class StoryDirector : MonoBehaviour
     {
         player = p; ui = u; State = s; store = st; gate = g; water = w;
         game = FindObjectOfType<PrototypeGame>();
+        island = FindObjectOfType<IslandWorld>();
         dog = FindObjectOfType<DogFollower>();
         ball = FindObjectOfType<SchoolBall>();
         LoadData();
@@ -48,7 +50,12 @@ public sealed partial class StoryDirector : MonoBehaviour
         ApplyStepGoal();
         ui.OnLetterClosed += OnLetterClosed;
         ui.SetCarried(CarryLabel());
-        ShowWood(State.carrying == "wood");
+        if (island != null)
+        {
+            modelProvider.Register("wood", island.woodModel);
+            modelProvider.Register("oil", island.oilModel);
+        }
+        ShowCarriedModel(State.carrying);
     }
 
     void LoadData()
@@ -84,9 +91,14 @@ public sealed partial class StoryDirector : MonoBehaviour
             var st = Step(State.step);
             if (st != null && !string.IsNullOrEmpty(st.goal)) ui.SetGoal(st.goal);
         }
+        if (island != null)
+        {
+            if (island.mailboxTrail != null) island.mailboxTrail.SetActive(State.step == "P0_boot");
+            if (island.endingDesk != null) island.endingDesk.SetActive(State.flags.Contains("dawn_shown"));
+        }
         // WP-10 教学提示：只在序章显示，取到信进入 P1 后收起
         ui.SetTutorial(State.step == "P0_boot"
-            ? "按住 W 往左走 · 靠近发光的邮筒按 E"
+            ? "沿金色路标走到邮筒 · 靠近后按 E 取信"
             : "");
     }
 
@@ -105,6 +117,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (!ready || State.flags.Contains("letters_taken")) return;
         State.flags.Add("letters_taken");
         State.step = "P1_mailbox";
+        if (island != null && island.mailboxTrail != null) island.mailboxTrail.SetActive(false);
         store.Save(State);
         if (ui != null) ui.SetTutorial("");
         letterLock = gate.Acquire("letter");
@@ -203,7 +216,6 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (player != null) player.locked = false;
 
         if (readingSchool) { readingSchool = false; ApplyStepGoal(); return; }
-        if (readingMemory) { readingMemory = false; ApplyStepGoal(); return; }
         if (State.step == "E1_read" && game != null) game.SetExpression(ExprId.happy);
 
         var st = Step(State.step);

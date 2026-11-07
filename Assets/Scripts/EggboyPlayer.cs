@@ -53,6 +53,11 @@ public class EggboyPlayer : MonoBehaviour
     float accYJump;
     float debugT;
     Transform modelT;
+    bool storyCrouch;
+    float storyCrouchWeight;
+
+    public void SetStoryCrouch(bool crouch) => storyCrouch = crouch;
+    public bool IsStoryCrouched => storyCrouchWeight > 0.9f;
 
     // 模型挂在这个物体下面。朝向不对时改 modelYawDegrees
     public void Setup(GameObject model, IEggboyWorld w, float modelYawDegrees)
@@ -302,6 +307,17 @@ public class EggboyPlayer : MonoBehaviour
             speed = speed, accF = accF, accL = accL, accY = gait.accY + accYJump,
             emoting = emote != null, jump = gait.jw,
         });
+        storyCrouchWeight = Mathf.MoveTowards(storyCrouchWeight, storyCrouch ? 1f : 0f, dt * 5f);
+        if (storyCrouchWeight > 0f && Bones != null)
+        {
+            float bend = 0.35f * storyCrouchWeight;
+            Bones.Move("body", 0f, -0.055f * storyCrouchWeight, 0f);
+            Bones.Rotate("body", Vector3.right, 0.23f * storyCrouchWeight);
+            Bones.Rotate("legL", Vector3.right, -bend);
+            Bones.Rotate("legR", Vector3.right, -bend);
+            Bones.Rotate("footL", Vector3.right, bend);
+            Bones.Rotate("footR", Vector3.right, bend);
+        }
         if (antiClipOn && antiClip != null) antiClip.Solve(dt, 1f + 2f * gait.jw);
         if (debugPose && Time.time - debugT > 1f)
         {

@@ -19,7 +19,7 @@ $dir = Split-Path -Parent $exe
 $lock = Enter-ProjectLock $ProjectPath
 $proc = $null
 try {
-    $argv = '-screen-width 1280 -screen-height 720 -screen-fullscreen 0'
+    $argv = '-screen-width 1280 -screen-height 720 -screen-fullscreen 0 -resetsave'
     if ($Mode -eq 'route') {
         $argv += ' -routeaudit2'
         $files = @('route-audit.json')
@@ -30,7 +30,7 @@ try {
         $argv += ' -scanaudit'
         $files = @('scan-audit.json')
     } elseif ($Mode -eq 'story') {
-        $argv += ' -storyaudit -resetsave'
+        $argv += ' -storyaudit'
         $files = @('story-audit.json', 'shots\story_boot.png', 'shots\story_wake.png', 'shots\story_pickup.png',
                    'shots\story_dog.png', 'shots\story_bakery_letter.png', 'shots\story_oven.png',
                    'shots\story_school_letter.png', 'shots\story_pawprints.png',
@@ -41,7 +41,7 @@ try {
                    'shots\story_ending_desk.png', 'shots\story_ending_letter.png',
                    'shots\story_ending_lookback.png', 'shots\story_ending_city.png')
     } elseif ($Mode -eq 'map') {
-        $argv += ' -mapaudit -resetsave'
+        $argv += ' -mapaudit'
         $files = @('map-audit.json', 'shots\map_03.png', 'shots\map_07.png', 'shots\map_11.png',
                    'shots\map_20.png', 'shots\map_31.png', 'shots\map_letter_blocked.png')
     } else {
@@ -111,7 +111,10 @@ try {
     if ($Mode -eq 'story') {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'story-audit.json'))
         Write-Host $content
-        if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
+        $audit = $content | ConvertFrom-Json -ErrorAction Stop
+        $steps = @($audit.steps.PSObject.Properties)
+        $failed = @($steps | Where-Object { $_.Value -isnot [bool] -or -not $_.Value })
+        if ($audit.status -ne 'passed' -or $audit.errors -ne '' -or $steps.Count -ne 22 -or $failed.Count) { exit 2 }
     }
     if ($Mode -eq 'map') {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'map-audit.json'))

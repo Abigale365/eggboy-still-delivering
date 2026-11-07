@@ -38,6 +38,7 @@ public static partial class IslandBuilder
     // WP-14：灯塔灰盒的实际尺寸，塔门和塔顶平台要贴着它搭
     static Vector3 lighthouseCenter;
     static Vector3 lighthouseSize;
+    static Renderer lighthouseLantern;
 
     [MenuItem("潮汐镇/场景/生成主场景（WP-05）")]
     public static void BuildMain()
@@ -88,6 +89,7 @@ public static partial class IslandBuilder
         BuildCrates(generated.transform, crate);
 
         footprints.Clear();
+        lighthouseLantern = null;
         if (layout.buildings != null)
             foreach (var b in layout.buildings) BuildBuilding(b, generated.transform, greybox);
         BuildScanStation(layout, generated.transform, scanMat);
@@ -96,7 +98,7 @@ public static partial class IslandBuilder
         BuildSchoolProps(generated.transform);
         BuildLighthouseProps(generated.transform);
         BuildEndingProps(generated.transform);
-        BuildDog(route, generated.transform, dogFur, dogMuzzle, dogCollar, dogEye);
+        BuildDog(route, generated.transform);
         // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
         File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
@@ -720,7 +722,9 @@ public static partial class IslandBuilder
     // LODGroup：近景真模型（不减面，原网格不动），远景复用灰盒当 LOD1，压住同屏面数。
     static void AttachBuildingVisual(Bld b, GameObject go, Transform parent, Vector3 center, float w, float h, float d, TownAssetInfo info)
     {
-        string prefabPath = BuildingPrefabPath(b.instance);
+        bool tower = b.instance == "B4_lighthouse";
+        string id = b.instance.Split('_')[0];
+        string prefabPath = id == "B6" || id == "B7" ? BuildingPrefabPath(b.instance) : SourceModelPath(id);
         var prefab = prefabPath != null ? AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) : null;
         if (prefab == null) return;
 
@@ -729,7 +733,7 @@ public static partial class IslandBuilder
         visualRoot.transform.position = center;
         var visual = (GameObject)PrefabUtility.InstantiatePrefab(prefab, visualRoot.transform);
         visual.transform.localPosition = Vector3.zero;
-        visual.transform.localRotation = Quaternion.identity;
+        visual.transform.localRotation = tower ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
         if (b.mirror) visual.transform.localScale = new Vector3(-1f, 1f, 1f);
         // 碰撞只由灰盒负责；prefab 自带的碰撞体会挡住取信/路线审计
         foreach (var c in visual.GetComponentsInChildren<Collider>()) UnityEngine.Object.DestroyImmediate(c);
@@ -752,16 +756,29 @@ public static partial class IslandBuilder
         float s = h / vb.size.y;
         if (vb.size.x * s > w * 1.15f) s = w * 1.15f / vb.size.x;
         if (vb.size.z * s > d * 1.15f) s = d * 1.15f / vb.size.z;
-        visual.transform.localScale *= s;
+        if (tower)
+        {
+            var balcony = rends.Find(r => r.name == "Balcony slab");
+            float deck = balcony != null ? balcony.bounds.max.y - vb.min.y : vb.size.y;
+            float sy = (h + 0.16f) / Mathf.Max(0.01f, deck);
+            visual.transform.localScale = Vector3.Scale(visual.transform.localScale, new Vector3(s, sy, s));
+            lighthouseLantern = rends.Find(r => r.name == "Lantern chamber");
+        }
+        else visual.transform.localScale *= s;
 
         vb = rends[0].bounds;
         foreach (var r in rends) vb.Encapsulate(r.bounds);
         visualRoot.transform.position += new Vector3(center.x - vb.center.x, (center.y - h * 0.5f) - vb.min.y, center.z - vb.center.z);
 
-        var lod = go.AddComponent<LODGroup>();
-        lod.SetLODS(new[] { new LOD(0.04f, rends.ToArray()), new LOD(0.005f, new[] { go.GetComponent<Renderer>() }) });
-        lod.RecalculateBounds();
+        if (!tower)
+        {
+            float frontShift = Mathf.Max(0f, b.z - 0.10f - vb.min.z);
+            visualRoot.transform.position += Vector3.forward * frontShift;
+        }
+        // The GLB keeps the same silhouette when viewed from afar.
+        go.GetComponent<Renderer>().enabled = false;
         info.sourceFile = prefabPath;
+        Debug.Log($"GLB_SCENE {b.instance}: {prefabPath}");
     }
 
     static string BuildingPrefabPath(string instance)
@@ -899,7 +916,17 @@ public static partial class IslandBuilder
         var spawnGO = new GameObject("SpawnPoint");
         spawnGO.transform.SetParent(go.transform, false);
         spawnGO.transform.position = new Vector3(route.route[0].x, 3f, route.route[0].z);
+        if (route.route.Length > 1)
+        {
+            var next = route.route[1];
+            spawnGO.transform.rotation = Quaternion.LookRotation(new Vector3(
+                next.x - spawnGO.transform.position.x, 0f, next.z - spawnGO.transform.position.z));
+        }
         world.spawnMarker = spawnGO.transform;
+        world.mailboxTrail = BuildMailboxTrail(route, parent);
+        world.endingDesk = GameObject.Find("EndingDesk");
+        world.woodModel = GameObject.Find("A2_GLB");
+        world.oilModel = GameObject.Find("D1_GLB");
         var mailbox = GameObject.Find("P_03");
         if (mailbox != null) world.mailboxMarker = mailbox.transform;
     }

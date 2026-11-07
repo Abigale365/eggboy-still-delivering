@@ -12,7 +12,7 @@ public class EggboyPlayer : MonoBehaviour
     const float GUp = 14f, GDown = 21f, ApexSlow = 0.55f; // 竖直速度小于 0.7 m/s 时重力乘 ApexSlow
     const float CrouchStand = 0.13f, CrouchMove = 0.06f; // 起跳前下蹲多久
     const float LandStand = 0.32f, LandMove = 0.16f; // 落地缓冲多久
-    const float Step = 0.14f; // 不用跳就能迈上去的高度
+    const float Step = 0.22f; // 不用跳就能迈上去的高度（原 0.14 会被路缘/小台阶卡住）
     const float PlatR = 0.3f; // 撞台子侧面时身体的半径
     const float AirControl = 0.35f;
 

@@ -8,7 +8,7 @@ public class ChaseCamera : MonoBehaviour
     const float DistMin = 2.2f, DistMax = 7.5f, DistDefault = 3.6f;
     const float Height = 0.95f, Shoulder = 0.35f;
     const float MouseSens = 0.04f; // Input.GetAxis 的鼠标值是"像素 × 0.05"，折算成和网页版一样的手感
-    const float RecenterDelay = 1.2f, RecenterRamp = 0.8f, RecenterSpeed = 1.6f, RecenterMaxAngle = 70f * Mathf.Deg2Rad;
+    const float RecenterDelay = 3.0f, RecenterRamp = 0.8f, RecenterSpeed = 1.6f, RecenterMaxAngle = 70f * Mathf.Deg2Rad;
     const float MinDist = 0.4f;
     static readonly float[,] Rays = { { 0f, 1f }, { 12f, 0.65f }, { -12f, 0.65f }, { 24f, 0.3f }, { -24f, 0.3f } }; // 偏转角度, 权重
     static readonly float PitchMin = -12f * Mathf.Deg2Rad, PitchMax = 55f * Mathf.Deg2Rad;
@@ -37,12 +37,13 @@ public class ChaseCamera : MonoBehaviour
 
     public void Tick(float dt, Vector3 pos, float heading, bool moving, bool running)
     {
-        // 点 UI 时不要抢指针锁定，否则表情/信件按钮会在鼠标按下瞬间失去悬停
-        if (Input.GetMouseButtonDown(1) && Cursor.lockState != CursorLockMode.Locked
+        // 点一下画面（左键或右键）就锁定光标、可转视角；Esc 释放。原来必须按住右键才能转，玩家会以为鼠标坏了
+        bool anyClick = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1);
+        if (anyClick && Cursor.lockState != CursorLockMode.Locked
             && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
         { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
         if (Input.GetKeyDown(KeyCode.Escape)) { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; }
-        if (Input.GetMouseButtonUp(1)) { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; }
+        // 保留按住右键锁定的习惯，但松开右键不再强制解锁
         if (Cursor.lockState == CursorLockMode.Locked)
         {
             float mx = Input.GetAxisRaw("Mouse X"), my = Input.GetAxisRaw("Mouse Y");

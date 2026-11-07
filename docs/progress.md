@@ -21,8 +21,8 @@
 | WP-14 | 灯塔（M5） | WP-13 | doing | A(agent) | 2026-11-07 | Windows 自动复验 L0–L5 全过，40 处手电回应。B4/B9 使用原贴图 GLB，灯室、可走平台和光束位置已对齐。已录 31 s Windows 自动流程实机片段，含读信、点灯、扫海和手电回应。塔身比例待画面验收。见 docs/evidence/WP-22/glb-recheck-20261107/lighthouse-windows-audit.mp4。 |
 | WP-15 | 结局（M6） | WP-14 | doing | A(agent) | 2026-11-07 | Windows storyaudit 22/22，自动流程 109.6 s。课桌在黎明触发后出现，小黑跟到终点，字幕、水位 L4、存档恢复均通过。新城仍是光点占位，待真人从头通关并记录卡点。见 docs/evidence/WP-22/glb-recheck-20261107。 |
 | WP-16 | 界面收尾 | WP-11 | done | A(agent) | 2026-11-07 01:42 | mapaudit passed：5 个点（03/07/11/20/31）红点按预览相机投影对位、读信时地图打不开、地图开着来信会自动让位；地图改用 world_layout + preview.png，带目标与邮戳；标题画面、Esc 暂停、音量滑杆（PlayerPrefs 记忆）；中文字体统一 NotoSansSC，调试标签默认隐藏；storyaudit 22 步仍全过、route 28/28；Windows+WebGL 构建成功；证据 docs/evidence/WP-16。未验证：真人点击标题/暂停/拖音量、WebGL 浏览器实跑 |
-| WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | todo | B | | |
-| WP-18 | 环境素材 | WP-17，用户批准生成单 | todo | B | | |
+| WP-17 | 画面样板段 | WP-05, WP-03 前 10 件 | doing | A(agent) | 2026-11-07 22:10 | 用户要求“场景重构”，直接全镇做了第一版（没先做样板段）：灯光（TownLighting：环境光、反射探针、太阳软阴影、后期）+ SSAO；IslandBuilder.Nature 程序生成圆石崖壁、团簇树、崖边/路边花丛、海岸礁石，草地/沙滩/崖壁程序贴图。不改 Lux3D 模型，装饰无碰撞。story 22/22、route 28/28（救援 0）、water、map 通过；WebGL 加载到标题无报错。对比图 docs/evidence/lookdev-20261107/compare_scene.jpg。待：两位队员看图验收（决策点 11/11）、主街石板、海面颜色与浪花、栅栏、核显帧率（known-issues 25） |
+| WP-18 | 环境素材 | WP-17，用户批准生成单 | todo | B | | 11-07 先用程序化圆石/树/花丛代替（不花积分），Lux3D 生成单仍待用户批准 |
 | WP-19 | 全镇铺开 | WP-17，决策点 11/11 | todo | B | | |
 | WP-20 | 声音 | WP-11 | todo | B | | |
 | WP-21 | 性能和包体 | WP-15, WP-19 进行中 | todo | A | | |

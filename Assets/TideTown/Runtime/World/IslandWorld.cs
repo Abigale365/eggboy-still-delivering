@@ -58,11 +58,16 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
                 hw = s.x * 0.5f,
                 hd = s.z * 0.5f,
                 water = o.kind == TownObstacle.Kind.Water,
+                minY = o.minY,
             };
             if (o.kind == TownObstacle.Kind.WalkableTop)
                 ec.top = c.y + s.y * 0.5f;
             colliders.Add(ec);
         }
+        // 按模型外轮廓的小圆（TownObstacleSet）
+        foreach (var set in FindObjectsOfType<TownObstacleSet>())
+            for (int i = 0; i < set.x.Length; i++)
+                colliders.Add(new EggboyCollider { x = set.x[i], z = set.z[i], r = set.r[i], top = set.top[i] });
     }
 
     public bool Walkable(float x, float z)

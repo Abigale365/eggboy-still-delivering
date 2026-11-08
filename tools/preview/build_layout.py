@@ -132,6 +132,71 @@ def ribbon(nodes_xyz, width):
     return out
 
 
+def point_in(xz, x, z):
+    inside, j = False, len(xz) - 1
+    for i in range(len(xz)):
+        (xi, zi), (xj, zj) = xz[i], xz[j]
+        if (zi > z) != (zj > z) and x < (xj - xi) * (z - zi) / (zj - zi) + xi:
+            inside = not inside
+        j = i
+    return inside
+
+
+def notch_tiers(tiers, roads):
+    """2026-11-08 第四轮：坡道比台地矮的那几段，在台地上开豁口。
+    原来住宅台地（5.5 m）整块盖在三条上山坡道上面：坡道埋在山体里，坡道口横着一道 2.5 m 的崖壁，
+    角色等于从墙里钻进去、在草皮底下走上去。碰撞贴着模型走以后这道墙就把住宅区堵死了。
+    现在顺着坡道（路宽 + 0.3 m）把台地切开，两边是石墙，和目标图里上台阶两边砌墙一样。"""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    out = []
+    for t in tiers:
+        P = Polygon(t["xz"])
+        if not P.is_valid:
+            P = P.buffer(0)
+        cuts = []
+        for r in roads:
+            # 坡道低的那头往外多切 1.5 m：坡道起点常常已经在台地边线里面，只从起点切会在坡道口留一道矮墙
+            nodes = list(r["xyz"])
+            def ext(a, b, d=1.5):
+                L = math.hypot(a[0] - b[0], a[2] - b[2]) or 1.0
+                return (a[0] + (a[0] - b[0]) / L * d, a[1], a[2] + (a[2] - b[2]) / L * d)
+            if len(nodes) >= 2:
+                if nodes[0][1] < t["y"] - 0.25:
+                    nodes = [ext(nodes[0], nodes[1])] + nodes
+                if nodes[-1][1] < t["y"] - 0.25:
+                    nodes = nodes + [ext(nodes[-1], nodes[-2])]
+            # 可走的石板平台只切"坡道比平台低 0.18 m 以上"那一截：坡顶和平台接得上（剩下的台阶比一步 0.22 m 矮）；
+            # 不可走的台地整段切
+            thr = 0.18 if t.get("walk") else 0.25
+            lim = t["y"] - thr
+            for a_, b_ in zip(nodes, nodes[1:]):
+                if min(a_[1], b_[1]) >= lim:
+                    continue
+                if t.get("walk") and max(a_[1], b_[1]) > lim:
+                    s = (lim - a_[1]) / (b_[1] - a_[1])
+                    mid_ = (a_[0] + (b_[0] - a_[0]) * s, lim, a_[2] + (b_[2] - a_[2]) * s)
+                    a_, b_ = (a_, mid_) if a_[1] < lim else (mid_, b_)
+                for (p0, p1, quad) in ribbon([a_, b_], r["width"] + 0.3):
+                    q = Polygon(quad)
+                    if q.intersects(P) and q.intersection(P).area > 0.05:
+                        cuts.append(q)
+        if not cuts:
+            out.append(t)
+            continue
+        D = P.difference(unary_union(cuts).buffer(0.05, join_style=2))
+        parts = [D] if D.geom_type == "Polygon" else list(D.geoms)
+        parts = sorted([g for g in parts if g.area > 1.0], key=lambda g: -g.area)
+        for i, g in enumerate(parts):
+            g = g.simplify(0.02)
+            if len(g.interiors):
+                print(f"  警告：{t['id']} 开豁口后有内洞，忽略内洞")
+            xz = list(g.exterior.coords)[:-1]
+            out.append(dict(t, id=t["id"] if i == 0 else f"{t['id']}_{i + 1}", xz=[(x, z) for x, z in xz]))
+        print(f"豁口 {t['id']}: 切掉 {len(cuts)} 段坡道 → {len(parts)} 块，面积 {P.area:.1f} → {sum(g.area for g in parts):.1f}")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--extract-land", action="store_true")
@@ -157,6 +222,7 @@ def main():
     for r in zones["roads"]:
         nodes = [(lambda xz: (xz[0], y, xz[1]))(cam.unproject(u, v, y)) for u, v, y in r["nodes"]]
         roads.append(dict(r, xyz=nodes))
+    tiers = notch_tiers(tiers, roads)
     platforms = [dict(p, xz=[cam.unproject(u, v, p["y"]) for u, v in p["poly"]]) for p in zones.get("platforms", [])]
     land_xz = [[cam.unproject(u, v, SHORE_Y) for u, v in poly] for poly in zones["land"]]
 
@@ -289,7 +355,20 @@ def main():
             half = r["width"] * 0.5 - 0.02
             nx, nz = -dz / ln * half, dx / ln * half
             ux, uz = dx / ln * 0.14, dz / ln * 0.14
-            ax, az, bx, bz = ax - ux, az - uz, bx + ux, bz + uz
+            # 2026-11-08 第四轮：路的两头再多伸 0.4 m 搭到平台上（东坡道口和广场石板之间原来有几厘米的缝，角色卡在坡脚）
+            #   只在伸出去那头落在同高度的可走平台上时才伸，免得伸到岸线上留洞
+            def on_pad(px_, pz_, py_):
+                # 伸出去那条边的中点落在同高度的可走平台上；两个角下面是同高度的地（平台或台地），不能悬在岸线上
+                if not any(t2.get("walk") and abs(t2["y"] - py_) < 0.3 and point_in(t2["xz"], px_, pz_) for t2 in tiers):
+                    return False
+                for k in (1.0, -1.0):
+                    qx, qz = px_ + nx * k, pz_ + nz * k
+                    if not any(abs(t2["y"] - py_) < 0.3 and point_in(t2["xz"], qx, qz) for t2 in tiers):
+                        return False
+                return True
+            sx, sz = (dx / ln * 0.4, dz / ln * 0.4) if i == 0 and on_pad(ax - dx / ln * 0.4, az - dz / ln * 0.4, ay) else (ux, uz)
+            ex, ez = (dx / ln * 0.4, dz / ln * 0.4) if i == len(r["xyz"]) - 2 and on_pad(bx + dx / ln * 0.4, bz + dz / ln * 0.4, by) else (ux, uz)
+            ax, az, bx, bz = ax - sx, az - sz, bx + ex, bz + ez
             walk_areas.append({
                 "id": r["id"] + "_" + str(i),
                 "y": (ay + by) * 0.5,

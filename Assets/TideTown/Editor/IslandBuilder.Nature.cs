@@ -249,6 +249,55 @@ public static partial class IslandBuilder
         return SaveMesh(mesh, NatureMeshRoot + "/" + nm + ".asset");
     }
 
+    // 2026-11-08 第四轮：有棱角的岩块（目标图海边是层层叠叠的大块岩壁，不是圆鹅卵石）
+    //   球体 → 轻微噪声 → 7 刀随机平面切出平面 → 顶部压平 → 每个三角形单独顶点，法线是平的，面一块块分明
+    static Mesh CliffRockMesh(int variant, int subdiv)
+    {
+        var v = new List<Vector3>(); var t = new List<int>();
+        Icosphere(subdiv, v, t);
+        var rnd = new Lcg(1300 + variant * 7);
+        var off = new Vector3(variant * 2.3f, variant * 0.7f, variant * 4.1f);
+        float squash = 0.72f + (variant % 3) * 0.1f;
+        var cuts = new List<(Vector3 n, float d)>();
+        for (int c = 0; c < 7; c++)
+        {
+            float ang = rnd.Next01() * Mathf.PI * 2f, el = -0.25f + rnd.Next01() * 0.9f;
+            var n = new Vector3(Mathf.Cos(ang) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Sin(ang) * Mathf.Cos(el));
+            cuts.Add((n, 0.62f + rnd.Next01() * 0.22f));
+        }
+        float topY = (0.45f + rnd.Next01() * 0.12f) * squash;
+        for (int i = 0; i < v.Count; i++)
+        {
+            var d = v[i];
+            var p = d * (0.92f + 0.22f * (Fbm3(d * 1.2f + off, 1400 + variant) - 0.5f));
+            foreach (var (n, dd) in cuts) { float e = Vector3.Dot(p, n) - dd; if (e > 0f) p -= n * e; }
+            p.y *= squash;
+            if (p.y > topY) p.y = topY + (p.y - topY) * 0.12f;
+            if (p.y < -0.32f) p.y = Mathf.Lerp(p.y, -0.32f, 0.7f);
+            v[i] = p;
+        }
+        // 拆顶点：平面法线；UV 按面朝向挑投影轴
+        var fv = new List<Vector3>(); var fuv = new List<Vector2>(); var ft = new List<int>();
+        for (int i = 0; i < t.Count; i += 3)
+        {
+            Vector3 a = v[t[i]], b = v[t[i + 1]], c = v[t[i + 2]];
+            var fn = Vector3.Cross(b - a, c - a);
+            if (fn.sqrMagnitude < 1e-10f) continue;
+            fn.Normalize();
+            float ax = Mathf.Abs(fn.x), ay = Mathf.Abs(fn.y), az = Mathf.Abs(fn.z);
+            foreach (var p in new[] { a, b, c })
+            {
+                ft.Add(fv.Count); fv.Add(p);
+                fuv.Add(ay >= ax && ay >= az ? new Vector2(p.x, p.z) : ax >= az ? new Vector2(p.z, p.y) : new Vector2(p.x, p.y));
+            }
+        }
+        string nm = (subdiv >= 2 ? "CliffRock_" : "CliffRockLo_") + variant;
+        var mesh = new Mesh { name = nm };
+        mesh.SetVertices(fv); mesh.SetUVs(0, fuv); mesh.SetTriangles(ft, 0);
+        mesh.RecalculateNormals(); mesh.RecalculateTangents(); mesh.RecalculateBounds();
+        return SaveMesh(mesh, NatureMeshRoot + "/" + nm + ".asset");
+    }
+
     // 团簇：若干个鼓包拼成一团；法线往团簇中心方向偏，阴影是一整团的软过渡，不是一个个球
     static void AddBlobCluster(List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs, List<int> tris,
                                Vector3 center, float radius, int blobs, float flatten, int seed, float bend = 0.6f)
@@ -452,8 +501,9 @@ public static partial class IslandBuilder
         var flowerP = FlatMat("NatureFlowerPink", new Color32(0xf0, 0xa8, 0xb4, 255), 0.2f);
         var flowerY = FlatMat("NatureFlowerYellow", new Color32(0xf2, 0xcf, 0x6a, 255), 0.2f);
 
-        var rocks = new Mesh[6]; for (int i = 0; i < rocks.Length; i++) rocks[i] = RockMesh(i);
-        var rocksLo = new Mesh[6]; for (int i = 0; i < rocksLo.Length; i++) rocksLo[i] = RockMesh(i, 1);   // 80 面，用在小石头和水下
+        // 第四轮：圆石换成有棱角的岩块（RockMesh 圆石不再用）
+        var rocks = new Mesh[6]; for (int i = 0; i < rocks.Length; i++) rocks[i] = CliffRockMesh(i, 2);
+        var rocksLo = new Mesh[6]; for (int i = 0; i < rocksLo.Length; i++) rocksLo[i] = CliffRockMesh(i, 1);   // 80 面，用在小石头和水下
         Mesh RockFor(float size, float y) => (size > 1.5f && y > 0.5f) ? rocks[nRockStatic++ % 6] : rocksLo[nRockStatic++ % 6];
         var trees = new Mesh[5]; for (int i = 0; i < trees.Length; i++) trees[i] = TreeMesh(i);
         var bushes = new Mesh[4]; for (int i = 0; i < bushes.Length; i++) bushes[i] = BushMesh(i);
@@ -529,6 +579,22 @@ public static partial class IslandBuilder
                         }
                     }
 
+                    // 第四轮：高崖面上零星长出花草（目标图灯塔岬角、海边崖壁上都挂着一丛丛花），树叶花丛不挡人
+                    if (drop > 1.5f && rnd.Next01() < 0.45f)
+                    {
+                        float ty = Mathf.Lerp(Mathf.Max(lower, 0f) + 0.5f, t.y - 0.45f, rnd.Next01());
+                        float ts = 0.55f + rnd.Next01() * 0.35f;
+                        var tp2 = e + outN * 0.12f;
+                        var tp = new Vector3(tp2.x, ty, tp2.y);
+                        if (!BlocksWalk(walks, tp, 0.4f * ts, ty - 0.3f, ty + 0.5f, 0.05f) && !NearBuilding(tp, 0.3f))
+                        {
+                            bool bloom = rnd.Next01() < 0.6f;
+                            Place(bushRoot, "CliffTuft", bloom ? blossoms[nBush % blossoms.Length] : bushes[nBush % bushes.Length],
+                                  bloom ? Blossom(nBush) : new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
+                                  tp, new Vector3(ts, ts * 0.8f, ts), rnd.Next01() * 360f);
+                            nBush++;
+                        }
+                    }
                     // 第三轮：镇子里面台地之间（下面还是台地，不是海岸 / 海）目标图是干净的浅色石墙，不堆圆石
                     if (t.id != "coast" && lower > 0.35f) continue;
                     float yb = Mathf.Max(lower, -0.4f);
@@ -703,6 +769,59 @@ public static partial class IslandBuilder
                 nTree++;
             }
         }
+
+        // 3c. 第四轮：空草坪补花坛和小树（目标图喷泉两边、学校东边的草地上是花坛、矮树、灌木，不是一整片空草）
+        int nBed = 0, nSmall = 0;
+        foreach (var t in layout.tiers)
+        {
+            if (t.x == null || t.x.Length < 3 || t.walk || t.zone != "grass" || (t.id != "main" && t.id != "houses")) continue;
+            var poly = new List<Vector2>();
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            for (int i = 0; i < t.x.Length; i++)
+            {
+                poly.Add(new Vector2(t.x[i], t.z[i]));
+                x0 = Mathf.Min(x0, t.x[i]); x1 = Mathf.Max(x1, t.x[i]); z0 = Mathf.Min(z0, t.z[i]); z1 = Mathf.Max(z1, t.z[i]);
+            }
+            for (float x = x0 + 1f; x < x1; x += 2.2f)
+            for (float z = z0 + 1f; z < z1; z += 2.2f)
+            {
+                var p2 = new Vector2(x + (rnd.Next01() - 0.5f) * 1.4f, z + (rnd.Next01() - 0.5f) * 1.4f);
+                float roll = rnd.Next01();
+                if (roll < 0.35f || !InPolyXZ(poly, p2) || DistToEdge(poly, p2) < 0.9f) continue;
+                float gy = GroundBelow(p2.x, p2.y, t.y + 0.3f);
+                if (Mathf.Abs(gy - t.y) > 0.1f) continue;                       // 上面压着别的台地 / 路
+                var p = new Vector3(p2.x, gy, p2.y);
+                if (BlocksWalk(walks, p, 0.75f, gy - 0.5f, gy + 2f, 0.35f) || NearBuilding(p, 1.2f)) continue;
+                bool crowded = false;
+                foreach (var q in placed) if ((q - p2).sqrMagnitude < 1.7f * 1.7f) { crowded = true; break; }
+                if (crowded) continue;
+                placed.Add(p2);
+                if (roll < 0.7f)
+                {
+                    // 花坛：三丛开花灌木挤成一团
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float a = k * 2.1f + rnd.Next01();
+                        var bp = p + new Vector3(Mathf.Cos(a) * 0.45f, 0f, Mathf.Sin(a) * 0.45f);
+                        float bs = 0.6f + rnd.Next01() * 0.3f;
+                        Place(bushRoot, "LawnBed", blossoms[(nBush + k) % blossoms.Length], Blossom(nBush + k), bp, new Vector3(bs, bs * 0.85f, bs), rnd.Next01() * 360f);
+                    }
+                    nBush += 3; nBed++;
+                }
+                else
+                {
+                    bool shadows = false;
+                    foreach (var f in footprints)
+                        if (Mathf.Abs(p.x - f.x) < f.w * 0.5f + 0.5f && p.z < f.z && p.z > f.z - f.d * 0.5f - 3f) { shadows = true; break; }
+                    if (shadows) continue;
+                    float s = 0.55f + rnd.Next01() * 0.25f;
+                    var crown = rnd.Next01() < 0.35f ? leafPink : leafMats[nTree % 3];
+                    Place(treeRoot, "LawnTree", trees[nTree % trees.Length], new[] { crown, trunk }, p, new Vector3(s, s * 0.95f, s), rnd.Next01() * 360f);
+                    nTree++; nSmall++;
+                }
+            }
+        }
+        Debug.Log($"LAWN beds={nBed} smallTrees={nSmall}");
 
         // 3b. 住宅组团小广场中心的大树（目标图左组团中间那棵）
         foreach (var sp in plazaTreeSpots)

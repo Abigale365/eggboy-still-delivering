@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 WORLD = ROOT / "Assets/TideTown/Data/Resources/World"
 RADIUS = 0.42
+PLAT_R = 0.30   # EggboyPlayer.PlatR：带顶面的碰撞（轮廓小圆）按这个半径推人
 STEP = 0.22   # 和 EggboyPlayer.Step 一致（2026-11-07 opt-p0 改成 0.22）
 SAMPLE = 0.02
 GRID = 0.1
@@ -35,7 +36,15 @@ def contains(xs, zs, x, z):
 class World:
     def __init__(self):
         self.lay = json.loads((WORLD / "world_layout.json").read_text(encoding="utf-8"))
-        self.boxes = json.loads((WORLD / "building_footprints.json").read_text(encoding="utf-8"))["buildings"]
+        fp = json.loads((WORLD / "building_footprints.json").read_text(encoding="utf-8"))
+        self.boxes = fp["buildings"]
+        # 轮廓小圆按 1 米格子分桶，每个圆放进它影响到的所有格子
+        self.circle_hash = {}
+        for c in fp.get("circles", []):
+            reach = c["r"] + PLAT_R
+            for gx in range(math.floor(c["x"] - reach), math.floor(c["x"] + reach) + 1):
+                for gz in range(math.floor(c["z"] - reach), math.floor(c["z"] + reach) + 1):
+                    self.circle_hash.setdefault((gx, gz), []).append(c)
         self.segs = []
         for r in self.lay["roads"]:
             def slope(i):
@@ -86,6 +95,18 @@ class World:
         for b in self.boxes:
             if abs(x - b["x"]) < b["w"] / 2 + RADIUS and abs(z - b["z"]) < b["d"] / 2 + RADIUS:
                 return b["instance"]
+        # 2026-11-08：按模型外轮廓的小圆（带顶面，和 EggboyPlayer 一样：带顶面的按 PlatR 推人，站得比顶面高、或者一步迈得上去的不挡）
+        g = None
+        for c in self.circle_hash.get((math.floor(x), math.floor(z)), ()):
+            dx, dz = x - c["x"], z - c["z"]
+            lim = c["r"] + PLAT_R
+            if dx * dx + dz * dz >= lim * lim:
+                continue
+            if g is None:
+                g = self.ground(x, z)[0]
+            if g >= c["top"] - 0.03 or c["top"] - g <= STEP:
+                continue
+            return "轮廓:" + c.get("owner", "?")
         return None
 
 

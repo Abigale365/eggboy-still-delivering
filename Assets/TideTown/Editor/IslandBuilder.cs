@@ -26,7 +26,7 @@ public static partial class IslandBuilder
     [Serializable] public class Layout { public Pt[] points; public Coast coast; public Area[] tiers; public Area[] walk; public RoadDef[] roads; public Bld[] buildings; public Cam[] cameras; }
 
     [Serializable] public class Footprint { public string instance; public float x, z, w, d; }
-    [Serializable] class FootprintList { public List<Footprint> buildings; }
+    [Serializable] class FootprintList { public List<Footprint> buildings; public List<CircleFootprint> circles; }
     [Serializable] class RoutePoint { public string id; public bool stop; public float x, z; }
     [Serializable] class RouteFile { public RoutePoint[] route; }
 
@@ -78,6 +78,7 @@ public static partial class IslandBuilder
 
         // 2026-11-07 草地、沙滩、崖壁换成程序贴图（IslandBuilder.Nature.cs），不再是纯色
         var grass = NatureMat("IslandGrass", "NatureGrass", NatureKind.Grass, new Color32(0x8a, 0xa6, 0x4a, 255), 53, 6f, 2.5f);
+        grass.SetColor("_BaseColor", new Color(0.86f, 0.94f, 0.80f, 1f));   // 第四轮：目标图草色更深更绿，原色偏黄发亮
         var sand = NatureMat("IslandSand", "NatureSand", NatureKind.Sand, new Color32(0xe6, 0xcd, 0x9c, 255), 57, 3f, 3f);
         sand.SetColor("_BaseColor", new Color(0.9f, 0.8f, 0.66f, 1f));   // 2026-11-08：贴图有缓存，在材质上压暗；新灯光下原色发白
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
@@ -128,8 +129,6 @@ public static partial class IslandBuilder
         // 2026-11-08：旧的街具摆放（按旧路名和旧坐标）停用，栅栏和路灯改由 BuildStreetscape 沿新的石板路摆
         // BuildStreetProps(generated.transform, layout);
         BuildDog(route, generated.transform);
-        // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
-        File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints }, true));
 
         if (layout.points != null)
             foreach (var p in layout.points)
@@ -143,6 +142,11 @@ public static partial class IslandBuilder
 
         // 2026-11-07 旧的圆球石头 + 棒棒糖树（ScatterRocksAndTrees）换成 BuildNature
         BuildNature(layout, generated.transform);
+        // 2026-11-08 第四轮：所有东西摆完以后，按模型外轮廓统一生成碰撞（IslandBuilder.Contour.cs）
+        Physics.SyncTransforms();
+        BuildContourCollision(layout, generated.transform);
+        // 给 tools/preview/route_check.py 用，和场景里的碰撞是同一份数字
+        File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints, circles = contourCircles }, true));
         BuildCamera(layout, generated.transform);
         BuildLight(generated.transform);
         var game = new GameObject("Game");

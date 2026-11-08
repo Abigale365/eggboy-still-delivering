@@ -158,9 +158,13 @@ public static partial class IslandBuilder
                     // 留口子：外面 0.5 m 是别的可走区（路口），或者贴着建筑/摊位
                     var probe = c + outN * 0.5f;
                     bool gap = NearBuilding(new Vector3(c.x, w.y, c.y), 0.9f);
+                    // 第四轮：剧情站位旁边不立栏杆（灯塔塔脚 31 原来正好站在栏杆上；栏杆现在按外形挡人，会让人走不到）
+                    if (!gap && layout.points != null)
+                        foreach (var pt in layout.points)
+                            if (pt.id != "FOUNTAIN" && Mathf.Abs(pt.y - w.y) < 1f && (new Vector2(pt.x, pt.z) - c).sqrMagnitude < 0.9f * 0.9f) { gap = true; break; }
                     if (!gap)
                         foreach (var o in walks)
-                            if (o != w && Mathf.Abs(o.y - w.y) < 3f && DistToPoly(o.poly, probe) < 0.35f) { gap = true; break; }
+                            if (o != w && Mathf.Abs(o.y - w.y) < 3f && (DistToPoly(o.poly, probe) < 0.35f || DistToPoly(o.poly, c) < 0.6f)) { gap = true; break; }   // 第四轮：坡道口转角的立柱也去掉（按外形挡人后会卡人）
                     if (gap) { prev = null; continue; }
                     AddFenceBox(verts, tris, new Vector3(c.x, w.y, c.y), new Vector3(0.11f, 0.75f, 0.11f), 0f);
                     if (prev.HasValue)
@@ -413,6 +417,8 @@ public static partial class IslandBuilder
         gold.SetFloat("_Metallic", 0.7f);
         var go = new GameObject("Fountain_placeholder");
         go.transform.SetParent(parent, false);
+        // 第四轮：池子半径 1.9 → 1.6、往南挪 0.3 m。原来池子北沿离北坡道口不到 1 m，夹着住宅台地的墙角只剩一条缝
+        basePos.z -= 0.3f;
         go.transform.position = basePos;
         void Part(PrimitiveType type, string name, Vector3 local, Vector3 scale, Material mat)
         {
@@ -424,21 +430,15 @@ public static partial class IslandBuilder
             p.transform.localScale = scale;
             p.GetComponent<Renderer>().sharedMaterial = mat;
         }
-        Part(PrimitiveType.Cylinder, "basin", new Vector3(0, 0.25f, 0), new Vector3(3.8f, 0.25f, 3.8f), stone);
-        Part(PrimitiveType.Cylinder, "water", new Vector3(0, 0.46f, 0), new Vector3(3.4f, 0.02f, 3.4f), water);
+        Part(PrimitiveType.Cylinder, "basin", new Vector3(0, 0.25f, 0), new Vector3(3.2f, 0.25f, 3.2f), stone);
+        Part(PrimitiveType.Cylinder, "water", new Vector3(0, 0.46f, 0), new Vector3(2.8f, 0.02f, 2.8f), water);
         Part(PrimitiveType.Cylinder, "pillar", new Vector3(0, 0.9f, 0), new Vector3(0.45f, 0.45f, 0.45f), stone);
         Part(PrimitiveType.Cylinder, "bowl", new Vector3(0, 1.4f, 0), new Vector3(1.6f, 0.08f, 1.6f), stone);
         Part(PrimitiveType.Cylinder, "bowl_water", new Vector3(0, 1.49f, 0), new Vector3(1.4f, 0.01f, 1.4f), water);
         Part(PrimitiveType.Cylinder, "stem", new Vector3(0, 1.75f, 0), new Vector3(0.22f, 0.3f, 0.22f), stone);
         Part(PrimitiveType.Sphere, "moon", new Vector3(0, 2.4f, 0), new Vector3(0.75f, 0.75f, 0.2f), gold);
 
-        var col = new GameObject("Fountain_collider");
-        col.transform.SetParent(go.transform, false);
-        col.transform.localPosition = new Vector3(0, 0.5f, 0);
-        col.layer = 7;
-        var box = col.AddComponent<BoxCollider>();
-        box.size = new Vector3(3.6f, 1f, 3.6f);
-        col.AddComponent<TownObstacle>();
+        // 碰撞由 BuildContourCollision 按池子外沿统一生成（原来是 3.6 m 方块，四个角是空气墙）
         Debug.Log($"FOUNTAIN placeholder at ({basePos.x:F2},{basePos.y:F2},{basePos.z:F2})");
     }
 }

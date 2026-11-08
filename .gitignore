@@ -12,3 +12,7 @@ __pycache__/
 
 # headless chrome temp profile (browser session data, not evidence)
 chrome-profile/
+
+# GLB 内嵌贴图的压缩副本：GlbTextureCompressor 从 SourceGLB 原样取出、固定 GUID，打开工程时自动补
+Assets/TideTown/Art/GlbTex/
+Assets/TideTown/Art/GlbTex.meta

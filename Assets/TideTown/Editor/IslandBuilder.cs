@@ -154,6 +154,9 @@ public static partial class IslandBuilder
         game.AddComponent<PrototypeGame>();
         game.AddComponent<GameBootstrap>();
 
+        // 2026-11-08：GLB 内嵌贴图换成压缩版（GlbTextureCompressor.cs），网页版 data 文件 492 MB 的主因
+        GlbTextureCompressor.ReplaceInScene();
+
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, ScenePath);
 

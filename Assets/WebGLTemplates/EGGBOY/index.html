@@ -37,9 +37,34 @@
     productVersion: "{{{ PRODUCT_VERSION }}}",
     showBanner: false
   };
-  createUnityInstance(canvas, config, (progress) => {
+  // 2026-11-08：GitHub 单个文件不能超过 100 MB，发布时 tools/webgl_split.py 会把 data 文件切成几块，
+  // 写一个 <data>.parts.json。有这个文件就先分块下载、在浏览器里拼回原文件再交给 Unity；没有就照常直接加载。
+  async function resolveDataUrl() {
+    let parts = null;
+    try {
+      const r = await fetch(config.dataUrl + ".parts.json", { cache: "no-cache" });
+      if (r.ok) parts = await r.json();
+    } catch (e) { parts = null; }
+    if (!parts || !parts.files || !parts.files.length) return;
+    const chunks = [];
+    let got = 0;
+    for (const name of parts.files) {
+      const resp = await fetch("Build/" + name);
+      if (!resp.ok) throw new Error("下载 " + name + " 失败（" + resp.status + "）");
+      const reader = resp.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        got += value.length;
+        loading.textContent = "EGGBOY 正在下载小镇… " + Math.round(got / parts.size * 100) + "%";
+      }
+    }
+    config.dataUrl = URL.createObjectURL(new Blob(chunks));
+  }
+  resolveDataUrl().then(() => createUnityInstance(canvas, config, (progress) => {
     loading.textContent = "EGGBOY 正在开机… " + Math.round(progress * 100) + "%";
-  }).then(() => {
+  })).then(() => {
     loading.style.display = "none";
   }).catch((message) => {
     loading.style.display = "none";

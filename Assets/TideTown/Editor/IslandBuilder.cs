@@ -82,6 +82,7 @@ public static partial class IslandBuilder
         sand.SetColor("_BaseColor", new Color(0.9f, 0.8f, 0.66f, 1f));   // 2026-11-08：贴图有缓存，在材质上压暗；新灯光下原色发白
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
         var cliff = NatureMat("IslandCliff", "NatureCliff", NatureKind.Rock, new Color32(0x96, 0x7c, 0x6a, 255), 59, 3f, 6f);
+        var wall = NatureMat("IslandWall", "NatureWall", NatureKind.Rock, new Color32(0xd6, 0xbe, 0x98, 255), 63, 2.5f, 5f);
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
         var trunk = Mat("IslandTrunk", new Color32(0x6b, 0x4d, 0x31, 255));
@@ -102,7 +103,8 @@ public static partial class IslandBuilder
         {
             var t = layout.tiers[i];
             var top = t.zone == "stone" ? cobble : t.zone == "sand" ? sand : t.zone == "rock" ? cliff : grass;
-            BuildTier(t, generated.transform, top, cliff);
+            // 2026-11-08 第三轮：住宅台地的侧面在镇子正中，目标图是浅色石墙，不是深褐土崖
+            BuildTier(t, generated.transform, top, t.id == "houses" ? wall : cliff);
         }
         if (layout.roads != null)
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);

@@ -317,32 +317,35 @@ public static partial class IslandBuilder
         return SaveMesh(mesh, NatureMeshRoot + "/Tree_" + variant + ".asset");
     }
 
-    static Mesh BushMesh(int variant)
+    // blossom = 开满花的花丛（目标图崖顶、海岸那种粉紫色绣球似的花团）：花朵更多更大，远看是一团颜色
+    static Mesh BushMesh(int variant, bool blossom = false)
     {
         var verts = new List<Vector3>(); var normals = new List<Vector3>(); var uvs = new List<Vector2>();
         var leaf = new List<int>(); var flower = new List<int>();
         AddBlobCluster(verts, normals, uvs, leaf, new Vector3(0, 0.28f, 0), 0.5f, 4, 0.75f, 700 + variant * 13, 0.7f);
 
         // 小花：只长在上半球
-        var rnd = new Lcg(800 + variant);
+        var rnd = new Lcg((blossom ? 900 : 800) + variant);
         var sv = new List<Vector3>(); var st = new List<int>();
         Icosphere(0, sv, st);
-        int count = 10 + variant * 2;
+        int count = blossom ? 24 + variant * 2 : 10 + variant * 2;
         for (int k = 0; k < count; k++)
         {
-            float ang = rnd.Next01() * Mathf.PI * 2f, el = 0.25f + rnd.Next01() * 0.9f;
+            float ang = rnd.Next01() * Mathf.PI * 2f, el = (blossom ? 0.15f : 0.25f) + rnd.Next01() * (blossom ? 1.2f : 0.9f);
             var dir = new Vector3(Mathf.Cos(ang) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Sin(ang) * Mathf.Cos(el));
             var c = new Vector3(0, 0.28f, 0) + new Vector3(dir.x * 0.55f, dir.y * 0.38f, dir.z * 0.55f);
             int o = verts.Count;
-            float fr = 0.045f + rnd.Next01() * 0.03f;
-            foreach (var d in sv) { verts.Add(c + d * fr); normals.Add((d + Vector3.up).normalized); uvs.Add(Vector2.zero); }
+            float fr = blossom ? 0.09f + rnd.Next01() * 0.06f : 0.045f + rnd.Next01() * 0.03f;
+            var sq = blossom ? new Vector3(1f, 0.75f, 1f) : Vector3.one;
+            foreach (var d in sv) { verts.Add(c + Vector3.Scale(d, sq) * fr); normals.Add((d + Vector3.up).normalized); uvs.Add(Vector2.zero); }
             foreach (var idx in st) flower.Add(o + idx);
         }
-        var mesh = new Mesh { name = "Bush_" + variant, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+        string nm = (blossom ? "BlossomBush_" : "Bush_") + variant;
+        var mesh = new Mesh { name = nm, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
         mesh.SetVertices(verts); mesh.SetNormals(normals); mesh.SetUVs(0, uvs);
         mesh.subMeshCount = 2; mesh.SetTriangles(leaf, 0); mesh.SetTriangles(flower, 1);
         mesh.RecalculateTangents(); mesh.RecalculateBounds();
-        return SaveMesh(mesh, NatureMeshRoot + "/Bush_" + variant + ".asset");
+        return SaveMesh(mesh, NatureMeshRoot + "/" + nm + ".asset");
     }
 
     // ---------- 摆放 ----------
@@ -457,6 +460,14 @@ public static partial class IslandBuilder
         Material[] leafMats = { leafA, leafB, leafC };
         var leafPink = NatureMat("NatureLeafPink", "NatureLeafPink", NatureKind.Leaves, new Color32(0xec, 0xa6, 0xc4, 255), 89, 1.6f, 5f);   // 开花树
         Material[] flowerMats = { flowerW, flowerP, flowerY };
+        // 2026-11-08 第三轮：目标图崖顶和海岸是成片粉、紫、白的开花灌木
+        // 花色要比普通小花深一档：日光下浅粉、浅紫远看都发白
+        var blossomP = FlatMat("NatureBlossomPink", new Color32(0xe2, 0x7e, 0xaa, 255), 0.2f);
+        var blossomL = FlatMat("NatureBlossomLilac", new Color32(0xa6, 0x8a, 0xdc, 255), 0.2f);
+        var blossomR = FlatMat("NatureBlossomRose", new Color32(0xd2, 0x62, 0x90, 255), 0.2f);
+        Material[] blossomMats = { blossomP, blossomL, flowerW, blossomR, blossomL, blossomP };
+        var blossoms = new Mesh[4]; for (int i = 0; i < blossoms.Length; i++) blossoms[i] = BushMesh(i, true);
+        Material[] Blossom(int n) => new[] { n % 2 == 0 ? leafC : leafA, blossomMats[(n / 2) % blossomMats.Length] };
 
         var walks = new List<WalkArea>();
         if (layout.walk != null)
@@ -512,12 +523,14 @@ public static partial class IslandBuilder
                         var bp = new Vector3(bp2.x, t.y - 0.12f, bp2.y);
                         if (!BlocksWalk(walks, bp, 0.45f * bs, t.y - 0.3f, t.y + 0.7f, 0.1f) && !NearBuilding(bp, 0.4f))
                         {
-                            Place(bushRoot, "EdgeBush", bushes[nBush % bushes.Length], new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
+                            Place(bushRoot, "EdgeBush", blossoms[nBush % blossoms.Length], Blossom(nBush),
                                   bp, new Vector3(bs, bs * 0.85f, bs), rnd.Next01() * 360f);
                             nBush++;
                         }
                     }
 
+                    // 第三轮：镇子里面台地之间（下面还是台地，不是海岸 / 海）目标图是干净的浅色石墙，不堆圆石
+                    if (t.id != "coast" && lower > 0.35f) continue;
                     float yb = Mathf.Max(lower, -0.4f);
                     // 从下往上一排排堆；台地只堆到下半截（上半截露崖面，崖顶是花丛），海岸底座照旧堆满
                     float stackTop = t.id == "coast" ? t.y + 0.1f : yb + (t.y - yb) * 0.55f;
@@ -621,10 +634,13 @@ public static partial class IslandBuilder
                         continue;
                     }
                 }
-                if (!onBeach && (inland || roll < 0.25f))
+                // 第三轮：靠海那圈也多给花丛（0.25 → 0.45），石头少一点，花多一点
+                if (!onBeach && (inland || roll < 0.45f))
                 {
                     float bs = 1.1f + rnd.Next01() * 0.8f;
-                    Place(bushRoot, "ShoreBush", bushes[nBush % bushes.Length], new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
+                    bool bloom = !inland || rnd.Next01() < 0.6f;
+                    Place(bushRoot, "ShoreBush", bloom ? blossoms[nBush % blossoms.Length] : bushes[nBush % bushes.Length],
+                          bloom ? Blossom(nBush) : new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
                           new Vector3(p2.x, 0.12f, p2.y), new Vector3(bs, bs * 0.8f, bs), rnd.Next01() * 360f);
                     nBush++;
                     continue;
@@ -680,7 +696,9 @@ public static partial class IslandBuilder
                 if (crowded) continue;
                 placed.Add(p2);
                 float s = 0.85f + rnd.Next01() * 0.55f;
-                var crown = (t.id == "main" && rnd.Next01() < 0.3f) ? leafPink : leafMats[nTree % 3];   // 主街草地上三成是粉色开花树
+                // 主街草地上四成、住宅区两成是粉色开花树（目标图镇子里粉树不少）
+                float pinkOdds = t.id == "main" ? 0.4f : t.id == "houses" ? 0.2f : 0f;
+                var crown = rnd.Next01() < pinkOdds ? leafPink : leafMats[nTree % 3];
                 Place(treeRoot, "Tree", trees[nTree % trees.Length], new[] { crown, trunk }, p, new Vector3(s, s * (0.9f + rnd.Next01() * 0.25f), s), rnd.Next01() * 360f);
                 nTree++;
             }
@@ -715,7 +733,9 @@ public static partial class IslandBuilder
                     if (BlocksWalk(walks, p, 0.45f * sc, gy - 0.3f, gy + 0.6f, 0.08f)) continue;
                     if (NearBuilding(p, 0.3f)) continue;
                     int v = nBush % bushes.Length;
-                    Place(bushRoot, "Bush", bushes[v], new[] { leafMats[(nBush + 1) % 3], flowerMats[(nBush / 4) % 3] }, p,
+                    bool bloom = nBush % 3 == 0;   // 路边三成是开满花的
+                    Place(bushRoot, "Bush", bloom ? blossoms[v] : bushes[v],
+                          bloom ? Blossom(nBush) : new[] { leafMats[(nBush + 1) % 3], flowerMats[(nBush / 4) % 3] }, p,
                           new Vector3(sc, sc * (0.85f + rnd.Next01() * 0.3f), sc), rnd.Next01() * 360f);
                     nBush++;
                 }

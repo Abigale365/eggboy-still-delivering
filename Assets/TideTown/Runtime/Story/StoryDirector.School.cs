@@ -1,4 +1,4 @@
-// WP-07 剧情推进，WP-11 起覆盖面包店：到点自动读信、火柴/柴火/烤炉链条、回忆线索和第一枚邮戳。
+// WP-07 剧情推进，WP-13 覆盖学校：拖鞋 3D 检视、鲁班玩具木锁、红球滚入狗碗、小黑探头与逐行读信。
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,15 +8,22 @@ public sealed partial class StoryDirector : MonoBehaviour
 {
     public void InspectSlipper()
     {
-        if (!ready || State.step != "S1_slipper") return;
+        if (!ready) return;
+        if (!State.flags.Contains("slipper_seen")) State.flags.Add("slipper_seen");
         if (game != null) game.SetExpression(ExprId.curious);
-        ui.ShowToast("拖鞋上有小黑的牙印，爪印一直通到操场");
-        AdvanceTo("S2_ball");
+        const string text = "拖鞋上有小黑的牙印，爪印一直通到操场";
+        ui.ShowToast(text);
+        if (State.carrying == "ball") AdvanceTo("S3_bowl");
+        else AdvanceTo("S2_ball");
+        if (!IsAuditMode)
+        {
+            ObjectInspectModal.Open("slipper", "被咬过的拖鞋", text, State, store, player, ui, gate);
+        }
     }
 
     public void TakeBall()
     {
-        if (!ready || State.step != "S2_ball" || State.flags.Contains("ball_taken")) return;
+        if (!ready || State.flags.Contains("ball_taken")) return;
         State.flags.Add("ball_taken");
         State.carrying = "ball";
         store.Save(State);
@@ -24,21 +31,50 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (game != null) game.SetExpression(ExprId.happy);
         else if (player != null) player.PlayEmote("hop");
         ui.SetCarried(CarryLabel());
-        ui.ShowToast("红球上有小黑的牙印");
+        ui.ShowToast("红球上有小黑的牙印 · 快拿去学校后院的狗碗吧");
         AdvanceTo("S3_bowl");
     }
 
     public void PutBallInBowl()
     {
-        if (!ready || State.step != "S3_bowl" || State.carrying != "ball") return;
+        if (!ready || State.carrying != "ball" || State.flags.Contains("ball_in_bowl")) return;
+        WoodenMechanismPuzzleModal.OpenOrRun("school_lock", State, store, player, ui, gate, CompletePutBallInBowl);
+    }
+
+    void CompletePutBallInBowl()
+    {
+        if (!ready || State.flags.Contains("ball_in_bowl")) return;
         State.flags.Add("ball_in_bowl");
         State.carrying = "";
         store.Save(State);
-        if (ball != null) ball.PlaceInBowl();
+        if (ball != null) ball.RollIntoBowl();
         ui.SetCarried("");
         if (game != null) game.SetExpression(ExprId.surprised);
         else if (player != null) player.PlayEmote("look");
+        TideTownAchievementSystem.Unlock("classic_ball");
         ui.ShowToast("碗里多了个红球。滑梯下面有动静。");
+        if (dog != null) dog.ShowAt(dog.PeekPoint);
+        AdvanceTo("S4_read");
+        StartCoroutine(ReadSchoolLetter());
+    }
+
+    // 方案 B / C：玩家按喜好为小黑实时 3D 造出心仪美食或新玩具，同样可唤出小黑并解锁对应多解成就！
+    public void CompleteSchoolWithCustomGift(string giftName, bool isFood)
+    {
+        if (!ready) return;
+        TideTownAchievementSystem.Unlock(isFood ? "chef_dog" : "toy_dog");
+        if (State.flags.Contains("ball_in_bowl"))
+        {
+            if (ui != null) ui.ShowToast("小黑欢快地围着你造出的「" + giftName + "」打转！", 3.5f);
+            return;
+        }
+        State.flags.Add("ball_in_bowl");
+        State.carrying = "";
+        store.Save(State);
+        ui.SetCarried("");
+        if (game != null) game.SetExpression(ExprId.excited);
+        else if (player != null) player.PlayEmote("hop");
+        ui.ShowToast("碗旁放上了热气腾腾的「" + giftName + "」。滑梯下面传来了小黑惊喜的动静！", 3.8f);
         if (dog != null) dog.ShowAt(dog.PeekPoint);
         AdvanceTo("S4_read");
         StartCoroutine(ReadSchoolLetter());
@@ -110,8 +146,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (game != null) game.SetExpression(ExprId.happy);
         else if (player != null) player.PlayEmote("hop");
         ui.SetCarried("");
-        ui.ShowToast("邮戳 2/3 · 学校");
-        // S4 读完信后才接上灯塔段；提前合上信也走这里，避免停在 S4_read
+        ui.ShowToast("邮戳 2/3 · 学校 · 小黑摇着尾巴跟上了你的脚步");
         if (State.step == "S4_read") AdvanceTo("L0_cross");
         else ApplyStepGoal();
     }

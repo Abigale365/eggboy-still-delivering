@@ -39,6 +39,105 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
         if (groundMask == 0) groundMask = LayerMask.GetMask("Ground");
         if (obstacleMask == 0) obstacleMask = LayerMask.GetMask("TownObstacle");
         CollectObstacles();
+        CleanVisualRoadAndTierSeams();
+    }
+
+    // 仅调整视觉 MeshFilter（绝不改动 MeshCollider 物理碰撞，保证寻路与审计 100% 一致）：
+    // 1. 移除坡道 Road_* 外扩 93cm 的凸起碎石边/路缘/悬空裙边（避免切穿石板路和栅栏造成穿模）；
+    // 2. 将 Road_* 与 3.0m 主街交界处的顶面微压 2.5cm，避免与石板路 Z-fighting 闪烁；
+    // 3. 消除 Tier_pad_grass_3_0_0（操场草坪 y=3.02）与 Tier_pad_stone_3_0_0（石板路 y=3.02）同高重叠导致的草坪三角穿模。
+    void CleanVisualRoadAndTierSeams()
+    {
+        Material cobbleMat = null;
+        var stoneTier = GameObject.Find("Tier_pad_stone_3_0_0");
+        if (stoneTier != null)
+        {
+            var stoneMr = stoneTier.GetComponent<MeshRenderer>();
+            if (stoneMr != null) cobbleMat = stoneMr.sharedMaterial;
+        }
+
+        var grassTier = GameObject.Find("Tier_pad_grass_3_0_0");
+        if (grassTier != null)
+        {
+            var gmf = grassTier.GetComponent<MeshFilter>();
+            if (gmf != null && gmf.sharedMesh != null)
+            {
+                var m = Instantiate(gmf.sharedMesh);
+                var v = m.vertices;
+                for (int i = 0; i < v.Length; i++)
+                {
+                    // 操场草坪整体微降 0.8cm（仍高于 Tier_main 3.00m），但在秋千/滑梯操场内部区域略抬高以盖住石板多边形凹角
+                    if (v[i].x > 8.2f && v[i].x < 23.2f && v[i].z > -7.1f && v[i].z < 8.5f)
+                        v[i].y = 3.028f;
+                    else
+                        v[i].y = 3.012f;
+                }
+                m.vertices = v;
+                m.RecalculateBounds();
+                gmf.sharedMesh = m;
+            }
+        }
+
+        if (stoneTier != null)
+        {
+            var smf = stoneTier.GetComponent<MeshFilter>();
+            if (smf != null && smf.sharedMesh != null)
+            {
+                var m = Instantiate(smf.sharedMesh);
+                var v = m.vertices;
+                for (int i = 0; i < v.Length; i++)
+                {
+                    // 石板路在操场护栏内侧的折角顶点压到草坪下方，消除草坪里的斜三角石板穿模
+                    if (v[i].x > 8.5f && v[i].x < 23.8f && v[i].z > -7.9f && v[i].z < -4.5f)
+                        v[i].y = 3.005f;
+                    else
+                        v[i].y = 3.024f;
+                }
+                m.vertices = v;
+                m.RecalculateBounds();
+                smf.sharedMesh = m;
+            }
+        }
+
+        foreach (var mf in FindObjectsOfType<MeshFilter>())
+        {
+            if (mf == null || mf.sharedMesh == null) continue;
+            string goName = mf.gameObject.name;
+            if (!goName.StartsWith("Road_")) continue;
+
+            var mesh = Instantiate(mf.sharedMesh);
+            if (mesh.subMeshCount >= 4)
+            {
+                // 只保留主路面（subMesh 0），去掉两侧外扩 93cm 穿入石板路/栅栏/悬空的路缘、碎石边和裙边
+                mesh.SetTriangles(new int[0], 1);
+                mesh.SetTriangles(new int[0], 2);
+                mesh.SetTriangles(new int[0], 3);
+            }
+
+            var verts = mesh.vertices;
+            for (int i = 0; i < verts.Length; i++)
+            {
+                // 坡道与 y=3.02 石板主街平齐的起止端微压到石板层下方，彻底消除路面交界处 Z-fighting 穿模
+                if (verts[i].y >= 2.95f && verts[i].y <= 3.05f)
+                {
+                    verts[i].y = 3.010f;
+                }
+            }
+            mesh.vertices = verts;
+            mesh.RecalculateBounds();
+            mf.sharedMesh = mesh;
+
+            if (cobbleMat != null && goName != "Road_to_dock")
+            {
+                var mr = mf.GetComponent<MeshRenderer>();
+                if (mr != null && mr.sharedMaterials != null && mr.sharedMaterials.Length > 0)
+                {
+                    var mats = mr.sharedMaterials;
+                    mats[0] = cobbleMat;
+                    mr.sharedMaterials = mats;
+                }
+            }
+        }
     }
 
     void CollectObstacles()

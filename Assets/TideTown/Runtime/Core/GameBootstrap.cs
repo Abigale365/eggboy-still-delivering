@@ -161,6 +161,7 @@ public sealed class GameBootstrap : MonoBehaviour
             var city = FindObjectOfType<CityGlow>();
             if (city != null) city.Show();
             ui.ShowSubtitle("所有的信，都送到了。");
+            gameObject.AddComponent<EndingDispatch>();
             ui.SetGoal("");
         }
 
@@ -188,6 +189,10 @@ public sealed class GameBootstrap : MonoBehaviour
         gameObject.AddComponent<MenuController>().Init(ui, map, director);
         // WP-22/P1：F3 显示碰撞盒线框
         gameObject.AddComponent<CollisionDebugView>();
+        // 方向 B：潮汐海风浪涌 & 护送重心平衡挑战
+        gameObject.AddComponent<TidalWindChallenge>().Init(player, ui, world, state);
+        // 创新方向 D / E / F / G：拆字成物、透视拓印、潮汐回声分身、光影成形与八音盒
+        gameObject.AddComponent<AvantGardeGameplayHub>().Init(player, ui, world, director, state);
 
         // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过；WP-16 真实开局先给标题画面
         var args = Environment.GetCommandLineArgs();

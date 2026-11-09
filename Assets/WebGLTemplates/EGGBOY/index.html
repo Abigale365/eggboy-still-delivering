@@ -19,7 +19,17 @@
 </style>
 </head>
 <body>
-<div id="loading">EGGBOY 正在开机…</div>
+<div id="loading">
+  <div style="max-width: 600px; margin: 0 auto; padding: 0 24px; text-align: center;">
+    <p style="font-size: 26px; font-weight: 600; margin: 0 0 36px 0; letter-spacing: 1px; color: #3b2a1a;">EGGBOY · Still Delivering</p>
+    <p style="font-size: 16px; line-height: 1.9; margin: 0 0 28px 0; color: #6b4a2a; text-align: left; text-indent: 2em;">潮汐镇的人都搬走了，海水一天天涨上来。小机器人邮差 EGGBOY 还在送信：每封信寄给一个已经不在的人，靠收信人留下的东西，一站一站拼出他们的故事。最后一封信，是寄给它自己的。</p>
+    <div style="width: 100%; height: 8px; background: rgba(59,42,26,0.15); border-radius: 4px; margin: 0 0 12px 0; overflow: hidden;">
+      <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff9a4d, #ffb574); transition: width 0.2s;"></div>
+    </div>
+    <p id="loading-text" style="font-size: 15px; margin: 0 0 32px 0; color: #8a5a3a;">正在开机…</p>
+    <p style="font-size: 13px; line-height: 1.7; margin: 0; color: #9a7a5a;">操作：WASD 移动，Shift 跑，空格跳，E 互动，M 地图，Esc 暂停</p>
+  </div>
+</div>
 <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
 <div id="error"></div>
 <script src="Build/{{{ LOADER_FILENAME }}}"></script>
@@ -57,13 +67,17 @@
         if (done) break;
         chunks.push(value);
         got += value.length;
-        loading.textContent = "EGGBOY 正在下载小镇… " + Math.round(got / parts.size * 100) + "%";
+        const pct = Math.round(got / parts.size * 100);
+        document.getElementById("loading-text").textContent = "正在下载小镇… " + pct + "%";
+        document.getElementById("progress-bar").style.width = pct + "%";
       }
     }
     config.dataUrl = URL.createObjectURL(new Blob(chunks));
   }
   resolveDataUrl().then(() => createUnityInstance(canvas, config, (progress) => {
-    loading.textContent = "EGGBOY 正在开机… " + Math.round(progress * 100) + "%";
+    const pct = Math.round(progress * 100);
+    document.getElementById("loading-text").textContent = "正在开机… " + pct + "%";
+    document.getElementById("progress-bar").style.width = pct + "%";
   })).then(() => {
     loading.style.display = "none";
   }).catch((message) => {

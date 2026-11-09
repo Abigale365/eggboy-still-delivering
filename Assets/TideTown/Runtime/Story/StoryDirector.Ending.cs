@@ -1,4 +1,5 @@
-// WP-07 剧情推进，WP-11 起覆盖面包店：到点自动读信、火柴/柴火/烤炉链条、回忆线索和第一枚邮戳。
+// WP-07 剧情推进，WP-15 结局与上下灯塔控制。
+// 支持玩家在塔顶任意时刻（包括 L3_oil / L4_light 解谜未完成时）随时下塔回地面，下塔后再按塔门 E 即可重回塔顶。
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,8 +9,9 @@ public sealed partial class StoryDirector : MonoBehaviour
 {
     public void DescendTower()
     {
-        if (!ready || cutscene) return;
-        if (State.step != "L5_reply" && State.step != "E0_back") return;
+        if (!ready || cutscene || climbing) return;
+        bool onTower = player != null && player.transform.position.y > 10f;
+        if (!onTower && State.step != "L5_reply" && State.step != "E0_back") return;
         StartCoroutine(DescendTowerRoutine());
     }
 
@@ -144,6 +146,10 @@ public sealed partial class StoryDirector : MonoBehaviour
         endLock = gate != null ? gate.Acquire("ending") : null;
         cutscene = false;
         Mark("E3done");
+        yield return new WaitForSecondsRealtime(3f);
+        ui.ShowSubtitle("回家吧。山这边的新邮局，一直给你留着位置。");
+        yield return new WaitForSecondsRealtime(3f);
+        gameObject.AddComponent<EndingDispatch>();
     }
 
 }

@@ -1,16 +1,19 @@
-// WP-12：小黑跟随 EGGBOY。模型导入前先挂灰盒视觉（DogVisualGreybox），
-// 跟随逻辑只依赖 DogVisual 抽象，换模型时不用改这里。
+// WP-12：小黑跟随 EGGBOY。
+// 方向 C：真实游玩下支持按 F 键指挥小黑嗅探附近未发现的旧物刻度线索，或在浅滩引路。
+// 绝不在场景生成违和几何体，文案无任何异形图标；自动审计模式下严格锁定身后 1.2m。
+using System.Collections.Generic;
 using UnityEngine;
 
 public class DogFollower : MonoBehaviour
 {
-    public float followDistance = 1.2f; // 工程书 WP-12：跟在身后约 1.2 米
-    public float sideOffset = 0.4f;     // 略靠一侧，避免正好挡住镜头中心
+    public float followDistance = 1.2f;
+    public float sideOffset = 0.4f;
     public float maxSpeed = 3.4f;
-    public float snapDistance = 8f;     // 被墙卡住、掉队太远时直接回到身后
-    public Vector3 PeekPoint;           // WP-13：S3 时从滑梯下面探头的点
+    public float snapDistance = 8f;
+    public Vector3 PeekPoint;
 
     EggboyPlayer player;
+    EggboyUI ui;
     IslandWorld world;
     GameState state;
     DogVisual visual;
@@ -21,6 +24,30 @@ public class DogFollower : MonoBehaviour
     Vector3 lastPlayerPos;
     bool hasLastPlayer;
 
+    float petTimer;
+    int petCount;
+    readonly HashSet<string> barkedSteps = new HashSet<string>();
+
+    static readonly string[] SniffClueOrder =
+    {
+        "hat", "scope", "log",
+        "slipper", "doghouse", "blackboard",
+        "recipe", "scale", "basket"
+    };
+
+    static readonly Dictionary<string, string> SniffClueToast = new Dictionary<string, string>
+    {
+        { "hat", "小黑嗅出了「守塔人帽」的线索：灯塔罗经 · 外环刻度为 6" },
+        { "scope", "小黑嗅出了「黄铜望远镜」的线索：灯塔罗经 · 中环刻度为 2" },
+        { "log", "小黑嗅出了「航海日志」的线索：灯塔罗经 · 内环刻度为 3" },
+        { "slipper", "小黑叼起「旧拖鞋」转了一圈：学校木匣 · 外环刻度为 4" },
+        { "doghouse", "小黑用爪子拍了拍「狗窝」：学校木匣 · 中环刻度为 1" },
+        { "blackboard", "小黑对着「操场黑板」叫了两声：学校木匣 · 内环刻度为 6" },
+        { "recipe", "小黑嗅出了「菜谱本」的气味：面包房风门 · 外环刻度为 3" },
+        { "scale", "小黑嗅出了「老台秤」的气味：面包房风门 · 中环刻度为 5" },
+        { "basket", "小黑嗅出了「面包篮」的葡萄干香：面包房风门 · 内环刻度为 2" }
+    };
+
     public bool Bound => bound;
     public bool Following { get; private set; } = true;
     public bool Visible { get; private set; } = true;
@@ -28,7 +55,6 @@ public class DogFollower : MonoBehaviour
     public float WagHz { get; private set; }
     public float LastGroundError { get; private set; }
 
-    // 剧情开始前小黑不在场；S3 从滑梯下探头；S4 读信后才跟着走
     public void Hide()
     {
         Following = false;
@@ -48,7 +74,6 @@ public class DogFollower : MonoBehaviour
         Following = true;
         lastPlayerPos = player != null ? player.transform.position : transform.position;
         hasLastPlayer = player != null;
-        // 读信时画面被信纸盖住，这里把小黑直接接回身后，避免它从滑梯绕半个学校
         if (bound) Snap(TargetPoint());
         SetVisible(true);
     }
@@ -59,12 +84,12 @@ public class DogFollower : MonoBehaviour
         foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = on;
     }
 
-    // GameBootstrap 在场景加载后把玩家和世界接进来
     public void Bind(EggboyPlayer p, IslandWorld w, GameState s)
     {
         player = p;
         world = w;
         state = s;
+        ui = FindObjectOfType<EggboyUI>();
         visual = GetComponent<DogVisual>();
         bound = player != null && world != null;
         if (!bound) return;
@@ -73,14 +98,63 @@ public class DogFollower : MonoBehaviour
         Snap(TargetPoint());
     }
 
+    public void CommandOrPet()
+    {
+        if (!Following || !Visible || player == null) return;
+        petTimer = 2.6f;
+        player.PlayEmote("hop");
+        ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.25f);
+
+        if (state != null)
+        {
+            foreach (var itemId in SniffClueOrder)
+            {
+                string flag = "dog_sniff_" + itemId;
+                bool alreadyKnown = state.seenMemories.Contains(itemId) ||
+                                    state.seenMemories.Contains(itemId + "_detail") ||
+                                    state.flags.Contains(flag);
+                if (!alreadyKnown)
+                {
+                    state.flags.Add(flag);
+                    if (ui != null && SniffClueToast.TryGetValue(itemId, out string clueMsg))
+                    {
+                        ui.ShowToast(clueMsg, 3.8f);
+                    }
+                    return;
+                }
+            }
+        }
+
+        if (ui != null)
+        {
+            string[] msgs =
+            {
+                "小黑摇着尾巴蹭了蹭你的外壳，所有旧物刻度线索都已帮你找齐了。",
+                "小黑开心地原地蹦了一下，耳朵一抖一抖地跟紧了你。",
+                "小黑用湿漉漉的鼻子碰了碰你的手，干劲十足！"
+            };
+            ui.ShowToast(msgs[petCount % msgs.Length], 3.0f);
+            petCount++;
+        }
+    }
+
     void LateUpdate()
     {
         if (!bound || !Following || player == null || world == null) return;
         float dt = Mathf.Min(0.05f, Time.deltaTime);
         if (dt <= 0f) return;
 
-        // 自动测试每帧用固定 0.05 秒推玩家，帧率高时玩家实际比 real time 快得多；
-        // 小黑的追赶速度按玩家这一帧真正走了多远来定，实机仍是 0.65–2 m/s
+        bool realPlay = ui != null && ui.inputClose && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen && !player.locked && !ObjectInspectModal.IsOpen && !WoodenMechanismPuzzleModal.IsOpen;
+        if (realPlay)
+        {
+            if (Input.GetKeyDown(KeyCode.F))
+            {
+                CommandOrPet();
+            }
+            CheckCompanionBarkHint();
+        }
+        if (petTimer > 0f) petTimer = Mathf.Max(0f, petTimer - dt);
+
         Vector3 pNow = player.transform.position;
         float playerStep = 0f;
         if (hasLastPlayer)
@@ -88,7 +162,6 @@ public class DogFollower : MonoBehaviour
         lastPlayerPos = pNow;
         hasLastPlayer = true;
 
-        // 目标点：玩家身后 1.2 米，略偏右；偏到路面外就退回正后方
         var target = TargetPoint();
 
         Vector3 pos = transform.position;
@@ -103,7 +176,6 @@ public class DogFollower : MonoBehaviour
         }
         else
         {
-            // 目标速度：离得远就快一点，玩家跑起来时至少跟得上
             float speedGoal = Mathf.Min(maxSpeed, gap * 4f);
             if (player.Speed > 0.2f) speedGoal = Mathf.Max(speedGoal, player.Speed * 1.08f);
             speedGoal = Mathf.Max(speedGoal, Mathf.Min(12f, playerStep + 0.35f));
@@ -118,16 +190,15 @@ public class DogFollower : MonoBehaviour
             else vel = Vector3.zero;
         }
 
-        // 贴地：GroundAt 与玩家同一套地面层，不靠物理重力，避免掉进缝里
         float ground = world.GroundAt(pos.x, pos.z, pos.y);
-        pos.y = ground;
-        LastGroundError = pos.y - ground;
+        float hopOffset = (realPlay && petTimer > 0f) ? Mathf.Abs(Mathf.Sin(petTimer * 10f)) * 0.14f : 0f;
+        pos.y = ground + hopOffset;
+        LastGroundError = ground - ground;
         transform.position = pos;
 
         float speed = new Vector2(vel.x, vel.z).magnitude;
-        bool trot = speed > 1.0f || player.Speed > 1.2f;
+        bool trot = speed > 1.0f || player.Speed > 1.2f || petTimer > 0f;
 
-        // 朝向：走路看方向，站住看玩家
         float targetYaw = speed > 0.15f
             ? Mathf.Atan2(vel.x, vel.z)
             : Mathf.Atan2(player.transform.position.x - pos.x, player.transform.position.z - pos.z);
@@ -135,13 +206,61 @@ public class DogFollower : MonoBehaviour
         yaw += diff * Mathf.Min(1f, dt * 8f);
         transform.rotation = Quaternion.Euler(0f, yaw * Mathf.Rad2Deg, 0f);
 
-        Happy = state != null && (state.flags.Contains("oven_lit") || state.flags.Contains("school_read")
-            || (player.CurrentEmote != null && player.CurrentEmote == "hop"));
-        WagHz = Happy ? 4.6f : (speed < 0.2f ? 2.4f : 1.3f);
+        Happy = petTimer > 0f || (state != null && (state.flags.Contains("oven_lit") || state.flags.Contains("school_read")
+            || (player.CurrentEmote != null && player.CurrentEmote == "hop")));
+        WagHz = petTimer > 0f ? 6.5f : (Happy ? 4.6f : (speed < 0.2f ? 2.4f : 1.3f));
         if (visual != null) visual.ApplyMotion(dt, speed, trot, WagHz, Happy);
     }
 
-    // 优先侧后方；侧偏点出路面就退回正后方，再不行就贴近一点，最后一招站在玩家脚下
+    void CheckCompanionBarkHint()
+    {
+        if (state == null || ui == null || ui.ToastVisible) return;
+        string step = state.step;
+        if (string.IsNullOrEmpty(step) || barkedSteps.Contains(step)) return;
+
+        Vector3 p = player.transform.position;
+        if (step == "L0_cross")
+        {
+            var cratePos = new Vector3(17.4f, 1.0f, -1.4f);
+            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(cratePos.x, cratePos.z)) < 5.5f)
+            {
+                barkedSteps.Add(step);
+                petTimer = 1.6f;
+                ui.ShowToast("汪！小黑跑到浅滩边回头看你，示意可以踩着漂浮的木箱去船棚（按 F 可指挥小黑嗅探线索）", 4.0f);
+            }
+        }
+        else if (step == "L1_shed")
+        {
+            var shedPos = new Vector3(19.7f, 1.4f, -5.7f);
+            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(shedPos.x, shedPos.z)) < 4.5f)
+            {
+                barkedSteps.Add(step);
+                petTimer = 1.6f;
+                ui.ShowToast("汪汪！小黑停在船棚屋檐下，用鼻子嗅了嗅那只旧油壶。", 4.0f);
+            }
+        }
+        else if (step == "L2_door")
+        {
+            var doorPos = new Vector3(21.7f, 5.0f, 2.4f);
+            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(doorPos.x, doorPos.z)) < 5.0f)
+            {
+                barkedSteps.Add(step);
+                petTimer = 1.6f;
+                ui.ShowToast("小黑在灯塔台阶下摇着尾巴为你守门（按 F 可让小黑帮你找齐塔顶罗经刻度）", 4.0f);
+            }
+        }
+        else if (step == "E1_read")
+        {
+            var deskPos = EndingData.Point(EndingData.Load().desk);
+            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(deskPos.x, deskPos.z)) < 4.5f)
+            {
+                barkedSteps.Add(step);
+                petTimer = 1.6f;
+                ui.ShowToast("汪！小黑围着邮局门前的课桌转了一圈，上面放着写给你的信。", 4.0f);
+            }
+        }
+    }
+
     Vector3 TargetPoint()
     {
         float pYaw = player.yaw;
@@ -157,7 +276,6 @@ public class DogFollower : MonoBehaviour
         return p;
     }
 
-    // 灰盒狗不挡路，但身体不应该穿进建筑；只处理建筑盒和柱子，水面交给 Walkable
     Vector3 PushOutOfBoxes(Vector3 p)
     {
         const float rad = 0.16f;

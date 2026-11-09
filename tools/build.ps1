@@ -12,15 +12,36 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $unity = 'C:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe'
+if (-not (Test-Path -LiteralPath $unity)) {
+    $alt = 'H:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe'
+    if (Test-Path -LiteralPath $alt) { $unity = $alt }
+}
 if (-not (Test-Path -LiteralPath $unity)) { throw "Unity not found: $unity" }
 
 . (Join-Path $PSScriptRoot 'project-lock.ps1')
 $lock = Enter-ProjectLock $ProjectPath
+$substDrive = $null
 try {
+    $unityProjectPath = $ProjectPath
+    if ($ProjectPath.Length -gt 48 -or $ProjectPath -match '[^\x00-\x7F]') {
+        $parentDir = Split-Path -Parent $ProjectPath
+        $leafDir = Split-Path -Leaf $ProjectPath
+        foreach ($letter in @('Z','Y','X','W','V','U')) {
+            if (-not (Test-Path "${letter}:\")) {
+                & subst "${letter}:" "$parentDir"
+                if (Test-Path "${letter}:\$leafDir") {
+                    $substDrive = "${letter}:"
+                    $unityProjectPath = "${letter}:\$leafDir"
+                    break
+                }
+            }
+        }
+    }
+
     $isPlayerBuild = -not $Method
     if ($isPlayerBuild) { $Method = if ($OnlyWindows) { 'TideBuild.Windows' } else { 'TideBuild.All' } }
     # A new file per run: an old log can never be mistaken for this run's result.
-    $log = Join-Path $ProjectPath ("Logs\build_{0}_{1:yyyyMMdd_HHmmss}.log" -f ($Method -replace '[^A-Za-z0-9]', '_'), (Get-Date))
+    $log = Join-Path $unityProjectPath ("Logs\build_{0}_{1:yyyyMMdd_HHmmss}.log" -f ($Method -replace '[^A-Za-z0-9]', '_'), (Get-Date))
     New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
 
     function Get-SceneHashes {
@@ -33,7 +54,7 @@ try {
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $unity
-    $psi.Arguments = '-batchmode -nographics -quit -projectPath "{0}" -executeMethod {1} -logFile "{2}"' -f $ProjectPath, $Method, $log
+    $psi.Arguments = '-batchmode -nographics -quit -projectPath "{0}" -executeMethod {1} -logFile "{2}"' -f $unityProjectPath, $Method, $log
     $psi.UseShellExecute = $false
     $proc = [System.Diagnostics.Process]::Start($psi)
     if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
@@ -74,4 +95,7 @@ try {
     }
     Write-Host "BUILD_OK $Method"
 }
-finally { Exit-ProjectLock $lock }
+finally {
+    if ($substDrive) { & subst $substDrive /D | Out-Null }
+    Exit-ProjectLock $lock
+}

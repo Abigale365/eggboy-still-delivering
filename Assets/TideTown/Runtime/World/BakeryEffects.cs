@@ -1,4 +1,5 @@
 // WP-11 炉火与烟囱：点火后亮起暖光，烟从烟囱一直飘向山那边。
+// P2-1：支持划亮火柴后的三段“拉动风箱助燃”微交互，炉火与炊烟逐级升温。
 using UnityEngine;
 
 public sealed class BakeryEffects : MonoBehaviour
@@ -9,6 +10,7 @@ public sealed class BakeryEffects : MonoBehaviour
     public Material ParticleMaterial;
 
     public bool Lit { get; private set; }
+    public int BellowsStage { get; private set; }
     public bool HasSmoke => smoke != null && smoke.isPlaying;
     public int FireCount => fire != null ? fire.particleCount : 0;
     public int SmokeCount => smoke != null ? smoke.particleCount : 0;
@@ -18,13 +20,39 @@ public sealed class BakeryEffects : MonoBehaviour
     Light fireLight;
     ParticleSystem fire, smoke;
     float t;
+    float boostPulse;
 
     public void Light()
     {
         if (Lit) return;
         Lit = true;
+        BellowsStage = 0;
         BuildFire();
         BuildSmoke();
+    }
+
+    public int BoostBellows()
+    {
+        if (!Lit) Light();
+        if (BellowsStage < 3) BellowsStage++;
+        boostPulse = 1.25f;
+        if (fire != null)
+        {
+            var em = fire.emission;
+            em.rateOverTime = 55f + BellowsStage * 32f;
+            fire.Emit(18 + BellowsStage * 8);
+        }
+        if (smoke != null)
+        {
+            var em = smoke.emission;
+            em.rateOverTime = 7f + BellowsStage * 3.5f;
+            smoke.Emit(6 + BellowsStage * 4);
+        }
+        if (fireLight != null)
+        {
+            fireLight.range = 4.5f + BellowsStage * 1.4f;
+        }
+        return BellowsStage;
     }
 
     void BuildFire()
@@ -152,6 +180,8 @@ public sealed class BakeryEffects : MonoBehaviour
     {
         if (fireLight == null) return;
         t += Time.deltaTime;
-        fireLight.intensity = 1.9f + Mathf.PerlinNoise(t * 7f, 0.3f) * 0.9f;
+        if (boostPulse > 0f) boostPulse = Mathf.Max(0f, boostPulse - Time.deltaTime);
+        float baseIntensity = 1.9f + BellowsStage * 0.45f + boostPulse * 1.1f;
+        fireLight.intensity = baseIntensity + Mathf.PerlinNoise(t * 7f, 0.3f) * 0.9f;
     }
 }

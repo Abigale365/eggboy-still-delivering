@@ -1,4 +1,5 @@
 // WP-14：山那边的新城，约 40 个手电光点逐个亮起，一闪一闪。
+// P0-2：支持按玩家灯塔闪光信号分批点亮回应（1/3 → 2/3 → 3/3），同时保留自动全亮流程。
 using System.Collections;
 using UnityEngine;
 
@@ -25,6 +26,18 @@ public sealed class FlashlightReply : MonoBehaviour
         if (started || Done) return;
         started = true;
         StartCoroutine(Run());
+    }
+
+    public void RevealUpTo(int count)
+    {
+        if (dots == null) return;
+        int clamped = Mathf.Clamp(count, 0, Total);
+        for (int i = 0; i < clamped; i++)
+        {
+            if (dots[i] != null) dots[i].enabled = true;
+        }
+        if (clamped > LitCount) LitCount = clamped;
+        if (LitCount >= Total && Total > 0) Done = true;
     }
 
     public void SetDoneInstant()

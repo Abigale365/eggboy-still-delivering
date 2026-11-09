@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "hidden_when_off": true,
+  "unregistered_when_off": true,
+  "visible_when_on": true,
+  "prompt_unsupported": true,
+  "prompt": "暂未开放",
+  "errors": ""
+}

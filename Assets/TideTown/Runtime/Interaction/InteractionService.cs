@@ -11,10 +11,17 @@ public interface IInteractable
     void Interact(GameState s, InteractionService svc);
 }
 
+public interface IHoldInteraction
+{
+    float HoldSeconds(GameState state);
+}
+
 public sealed class InteractionService : MonoBehaviour
 {
-    public float range = 1.6f;
+    public float range = 1.85f;
 
+    IInteractable heldTarget;
+    float heldTime;
     EggboyPlayer player;
     EggboyUI ui;
     ControlGate gate;
@@ -30,38 +37,77 @@ public sealed class InteractionService : MonoBehaviour
     public void Register(IInteractable item) { if (!items.Contains(item)) items.Add(item); }
     public bool IsRegistered(IInteractable item) => items.Contains(item);
 
+    static int Priority(IInteractable it, GameState s)
+    {
+        if (it == null) return -1;
+        // 主线任务可交互物永远优先于周边回忆旧物，避免回忆旧物抢走摊位/柴火/烤炉的 E 键
+        if (!(it is MemoryInteractable))
+            return it.CanInteract(s) ? 3 : 1;
+        return 2;
+    }
+
+    IInteractable FindBest(GameState s, bool requireCanInteract)
+    {
+        IInteractable best = null;
+        float bestD = range;
+        int bestPrio = -1;
+        foreach (var it in items)
+        {
+            if (requireCanInteract && !it.CanInteract(s)) continue;
+            string p = it.Prompt(s);
+            if (string.IsNullOrEmpty(p)) continue;
+            float d = Vector3.Distance(player.transform.position, it.Position);
+            if (d >= range) continue;
+            int prio = Priority(it, s);
+            if (prio > bestPrio || (prio == bestPrio && d < bestD))
+            {
+                bestPrio = prio;
+                bestD = d;
+                best = it;
+            }
+        }
+        return best;
+    }
+
     void Update()
     {
         if (player == null || ui == null) return;
         if (ui.Paused || ui.TitleShowing || player.locked || (gate != null && gate.Locked))
-        { ui.SetPrompt(""); return; }
+        { heldTarget = null; ui.SetPrompt(""); return; }
 
         var s = state();
-        IInteractable best = null;
-        float bestD = range;
-        foreach (var it in items)
-        {
-            float d = Vector3.Distance(player.transform.position, it.Position);
-            if (d < bestD && !string.IsNullOrEmpty(it.Prompt(s)))
-            {
-                bestD = d; best = it;
-            }
-        }
+        IInteractable best = FindBest(s, false);
 
-        ui.SetPrompt(best != null ? best.Prompt(s) : "");
-        if (best != null && Input.GetKeyDown(KeyCode.E)) best.Interact(s, this);
-        else if (best is MemoryInteractable memory && !ui.ToastVisible) memory.ShowNearby();
+        string prompt = best != null ? best.Prompt(s) : "";
+        float duration = best is IHoldInteraction action ? action.HoldSeconds(s) : 0f;
+        if (heldTarget != best || !Input.GetKey(KeyCode.E)) heldTarget = null;
+        if (best != null && best.CanInteract(s))
+        {
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                if (duration <= 0f) best.Interact(s, this);
+                else { heldTarget = best; heldTime = 0f; }
+            }
+
+            if (heldTarget != null && duration > 0f)
+            {
+                heldTime += Time.unscaledDeltaTime;
+                if (heldTime >= duration)
+                {
+                    heldTarget = null;
+                    best.Interact(s, this);
+                }
+                else prompt += $"  {Mathf.FloorToInt(100f * heldTime / duration)}%";
+            }
+            else if (best is MemoryInteractable memory && !ui.ToastVisible) memory.ShowNearby();
+        }
+        ui.SetPrompt(prompt);
     }
 
     public bool TryInteractNearest()
     {
         var s = state();
-        IInteractable best = null; float bestD = range;
-        foreach (var it in items)
-        {
-            float d = Vector3.Distance(player.transform.position, it.Position);
-            if (d < bestD && it.CanInteract(s) && !string.IsNullOrEmpty(it.Prompt(s))) { bestD = d; best = it; }
-        }
+        IInteractable best = FindBest(s, true);
         if (best == null) return false;
         best.Interact(s, this);
         return true;

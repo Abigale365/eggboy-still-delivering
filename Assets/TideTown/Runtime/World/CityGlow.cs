@@ -26,6 +26,27 @@ public sealed class CityGlow : MonoBehaviour
     {
         if (Shown) return;
         Shown = true;
+        var prefab = Resources.Load<GameObject>("Ending/NewPostOffice");
+        if (prefab != null)
+        {
+            var office = Instantiate(prefab, transform);
+            office.name = "NewPostOffice";
+            office.transform.localPosition = Vector3.down * 2f;
+            var direction = Vector3.ProjectOnPlane(-transform.position, Vector3.up);
+            if (direction.sqrMagnitude > 0.01f)
+                office.transform.rotation = Quaternion.LookRotation(direction);
+            office.transform.localScale *= 2f;
+            foreach (var collider in office.GetComponentsInChildren<Collider>()) collider.enabled = false;
+
+            var porch = new GameObject("NewPostOfficeWelcomeLight");
+            porch.transform.SetParent(transform, false);
+            porch.transform.localPosition = Vector3.up * 3f + direction.normalized * 5f;
+            var light = porch.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color32(255, 206, 147, 255);
+            light.range = 18f;
+            light.intensity = 2.1f;
+        }
         if (windows != null)
             foreach (var w in windows) if (w != null) w.enabled = true;
         if (signal != null) signal.gameObject.SetActive(true);

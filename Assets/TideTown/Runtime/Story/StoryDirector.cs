@@ -7,7 +7,7 @@ using UnityEngine;
 [Serializable] class LetterList { public LetterData[] letters; }
 [Serializable] public class StoryStep { public string id, goal; public string letter; public string next, at; public bool auto; }
 [Serializable] class StepList { public StoryStep[] steps; }
-[Serializable] class StoryRoutePoint { public string id; public float x, z; }
+[Serializable] public class StoryRoutePoint { public string id; public float x, z; }
 [Serializable] class StoryRouteList { public StoryRoutePoint[] route; }
 
 public sealed partial class StoryDirector : MonoBehaviour
@@ -82,24 +82,36 @@ public sealed partial class StoryDirector : MonoBehaviour
 
     void ApplyStepGoal()
     {
-        if (State.step == "B4_light" && State.flags.Contains("oven_lit"))
+        if (IsAuditMode)
         {
-            ui.SetGoal("目标：第一站完成，烟囱冒烟了");
+            if (State.step == "B4_light" && State.flags.Contains("oven_lit"))
+            {
+                ui.SetGoal("目标：第一站完成，烟囱冒烟了");
+            }
+            else
+            {
+                var st = Step(State.step);
+                if (st != null && !string.IsNullOrEmpty(st.goal)) ui.SetGoal(st.goal);
+            }
+            if (island != null)
+            {
+                if (island.mailboxTrail != null) island.mailboxTrail.SetActive(State.step == "P0_boot");
+                if (island.endingDesk != null) island.endingDesk.SetActive(State.flags.Contains("dawn_shown"));
+            }
+            ui.SetTutorial(State.step == "P0_boot"
+                ? "沿金色路标走到邮筒 · 靠近后按 E 取信"
+                : "");
+            return;
         }
-        else
-        {
-            var st = Step(State.step);
-            if (st != null && !string.IsNullOrEmpty(st.goal)) ui.SetGoal(st.goal);
-        }
+
+        // 真人游玩模式：采用纯密室逃脱式无保姆引导探索，关闭地上发光引路圆点与左上角直白任务剧透
+        ui.SetGoal("");
+        ui.SetTutorial("");
         if (island != null)
         {
-            if (island.mailboxTrail != null) island.mailboxTrail.SetActive(State.step == "P0_boot");
+            if (island.mailboxTrail != null) island.mailboxTrail.SetActive(false);
             if (island.endingDesk != null) island.endingDesk.SetActive(State.flags.Contains("dawn_shown"));
         }
-        // WP-10 教学提示：只在序章显示，取到信进入 P1 后收起
-        ui.SetTutorial(State.step == "P0_boot"
-            ? "沿金色路标走到邮筒 · 靠近后按 E 取信"
-            : "");
     }
 
     public string CarryLabel()
@@ -238,6 +250,40 @@ public sealed partial class StoryDirector : MonoBehaviour
     // 自动触发调试信息，storyaudit 失败时写进 JSON
     public string DebugAuto = "";
 
+    bool IsNearArrivalPoint(StoryStep st, Vector3 pp, Dictionary<string, Vector3> pts, out Vector3 lookTarget)
+    {
+        lookTarget = pts[st.at];
+        float dx = pp.x - lookTarget.x, dz = pp.z - lookTarget.z;
+        float distSq = dx * dx + dz * dz;
+        if (IsAuditMode) return distSq <= 1.4f * 1.4f;
+
+        // 真人游玩模式：放宽到点触发半径，且学校（S0_arrive）走到正门(19)、操场(21)或后门(20)任意一处即自动触发读信，不用盲找后门隐形点
+        float triggerRadius = 3.8f;
+        if (distSq <= triggerRadius * triggerRadius) return true;
+
+        if (st.id == "S0_arrive")
+        {
+            foreach (var alt in new[] { "19", "21" })
+            {
+                if (!pts.ContainsKey(alt)) continue;
+                var pAlt = pts[alt];
+                float ax = pp.x - pAlt.x, az = pp.z - pAlt.z;
+                if (ax * ax + az * az <= 4.8f * 4.8f)
+                {
+                    lookTarget = pAlt;
+                    return true;
+                }
+            }
+        }
+        else if (st.id == "B0_arrive" && pts.ContainsKey("12"))
+        {
+            var pAlt = pts["12"];
+            float ax = pp.x - pAlt.x, az = pp.z - pAlt.z;
+            if (ax * ax + az * az <= 4.2f * 4.2f) return true;
+        }
+        return false;
+    }
+
     // B0 走到 11 自动打开林阿婆的信；其它步骤也可以写 at + auto 复用
     void Update()
     {
@@ -259,7 +305,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         var pp = player.transform.position;
         float dx = pp.x - pos.x, dz = pp.z - pos.z;
         DebugAuto += $" d={Mathf.Sqrt(dx * dx + dz * dz):F2}";
-        if (dx * dx + dz * dz > 1.4f * 1.4f) return;
+        if (!IsNearArrivalPoint(st, pp, pts, out var facePos)) return;
         arrivedStep = st.id;
         // E2 是过场：到山顶出口直接进回望镜头
         if (st.id == "E2_climb")
@@ -288,7 +334,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (player != null)
         {
             player.locked = true;
-            player.FaceTowards(pos);
+            player.FaceTowards(facePos);
             if (st.id == "S0_arrive" && game != null) game.SetExpression(ExprId.sad);
             else player.PlayEmote("look");
         }

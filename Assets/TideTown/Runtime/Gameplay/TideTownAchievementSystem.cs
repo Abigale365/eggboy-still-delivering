@@ -64,6 +64,13 @@ public sealed class TideTownAchievementSystem : MonoBehaviour
         ui = u;
     }
 
+    public void Init(EggboyUI u, GameState s) => Init(s, null, u);
+
+    public int UnlockedCount => GetUnlockedCount(state);
+    public int TotalCount => AllAchievements.Length;
+    public IReadOnlyList<AchDef> AllDefinitions => AllAchievements;
+    public bool IsUnlocked(string id) => state != null && state.flags.Contains("ach_" + id);
+
     public static void Unlock(string achId)
     {
         if (Instance == null) return;

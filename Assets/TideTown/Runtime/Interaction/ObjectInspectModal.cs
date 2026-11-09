@@ -203,6 +203,12 @@ public sealed class ObjectInspectModal : MonoBehaviour
         instance.TryPressPin(Mathf.Clamp(pinIndex, 0, 2));
     }
 
+    public static void ExternalClearDust(bool byBreath)
+    {
+        if (!IsOpen) return;
+        instance.ClearSaltDust(byBreath);
+    }
+
     public static void ExternalAutoCalibrateByAI()
     {
         if (!IsOpen || instance.currentMeta == null) return;

@@ -38,6 +38,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
     bool winchRaised;
     bool nearWinchPromptShown;
     float surgePenaltyCooldown;
+    Collider[] pontoonColliders;
+    bool pontoonCollidersOn, pontoonCollidersInit;
 
     // 三站心愿展台
     readonly Transform[] wishPedestals = new Transform[3];
@@ -368,6 +370,14 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             float bob = winchRaised ? Mathf.Sin(Time.time * 2.1f) * 0.04f : -0.68f;
             Vector3 targetPos = new Vector3(crossingChannelCenter.x, pontoonBaseY + bob, crossingChannelCenter.z);
             pontoonBridgeRoot.position = Vector3.Lerp(pontoonBridgeRoot.position, targetPos, dt * 4.5f);
+            // 沉在水下的浮桥不能踩：碰撞只在升起后生效，否则会把渡口地面垫出一个台阶
+            if (pontoonColliders == null) pontoonColliders = pontoonBridgeRoot.GetComponentsInChildren<Collider>(true);
+            if (pontoonCollidersOn != winchRaised || !pontoonCollidersInit)
+            {
+                pontoonCollidersInit = true;
+                pontoonCollidersOn = winchRaised;
+                foreach (var c in pontoonColliders) if (c != null) c.enabled = winchRaised;
+            }
         }
 
         if (player == null || ui == null || !ui.inputClose || player.locked || ui.TitleShowing || ui.Paused || ui.LetterOpen)
@@ -408,7 +418,9 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         }
 
         // 3. 未升起浮桥且未造船时强行涉水：急流冲退回岸边
-        if (!winchRaised && surgePenaltyCooldown <= 0f)
+        // 只有海水真的涨到渡口（L2 起）才冲人；水位低时这里是干的石阶，不能把人瞬移走
+        bool tideOverCrossing = WaterLevel.StaticY >= WaterLevel.LevelYs[2] - 0.05f;
+        if (!winchRaised && tideOverCrossing && surgePenaltyCooldown <= 0f)
         {
             Vector2 pXZ = new Vector2(player.transform.position.x, player.transform.position.z);
             Vector2 cXZ = new Vector2(crossingChannelCenter.x, crossingChannelCenter.z);

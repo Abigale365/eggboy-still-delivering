@@ -4,7 +4,7 @@
 # Old result files are deleted first, so a result can only come from this run.
 param(
     [string]$ProjectPath = (Split-Path -Parent $PSScriptRoot),
-    [ValidateSet('route','shot','water','scan','story','map','collision')][string]$Mode = 'route',
+    [ValidateSet('route','shot','water','scan','story','map','collision','innov')][string]$Mode = 'route',
     [string]$Shot = 'preview',
     [switch]$IdPass,
     [string]$OutDir = '',
@@ -44,6 +44,10 @@ try {
         $argv += ' -mapaudit'
         $files = @('map-audit.json', 'shots\map_03.png', 'shots\map_07.png', 'shots\map_11.png',
                    'shots\map_20.png', 'shots\map_31.png', 'shots\map_letter_blocked.png')
+    } elseif ($Mode -eq 'innov') {
+        # 创新方向审计：Lux3D 用 mock 网关（3 秒假延迟），不联网不花积分
+        $argv += ' -innovaudit -lux3d mock -lux3ddelay 3'
+        $files = @('innov-audit.json')
     } elseif ($Mode -eq 'collision') {
         $argv += ' -shot preview -collisiondebug'
         $files = @('shots\preview.png')
@@ -118,6 +122,12 @@ try {
         $steps = @($audit.steps.PSObject.Properties)
         $failed = @($steps | Where-Object { $_.Value -isnot [bool] -or -not $_.Value })
         if ($audit.status -ne 'passed' -or $audit.errors -ne '' -or $steps.Count -ne 22 -or $failed.Count) { exit 2 }
+    }
+    if ($Mode -eq 'innov') {
+        $content = [IO.File]::ReadAllText((Join-Path $dir 'innov-audit.json'))
+        Write-Host $content
+        if ($OutDir) { Get-ChildItem (Join-Path $dir 'shots') -Filter 'innov_*.png' | Copy-Item -Destination $dest -Force }
+        if ($content -notmatch '"status"\s*:\s*"passed"') { exit 2 }
     }
     if ($Mode -eq 'map') {
         $content = [IO.File]::ReadAllText((Join-Path $dir 'map-audit.json'))

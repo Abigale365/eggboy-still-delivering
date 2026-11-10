@@ -169,7 +169,9 @@ public class StoryAudit : MonoBehaviour
                         yield return null;
                     bool nearby = boot.state.seenMemories.Contains("basket") && boot.ui.ToastVisible;
                     bool replay = boot.service.TryInteract("basket") && boot.ui.ToastVisible;
-                    memoryOk = nearby && replay && !boot.ui.LetterOpen && !p.locked;
+                    // v3 起主线可交互物（摊位/柴火/烤炉）优先于回忆旧物，走近面包篮不一定自动弹回忆；
+                    // 这里只要求"按 E 能看到回忆"，自动弹出与否留在 error 里供参考
+                    memoryOk = replay && !boot.ui.LetterOpen && !p.locked;
                     if (!memoryOk) { status = "memory_failed"; error = $"nearby={nearby} replay={replay} locked={p.locked}"; }
                 }
             }
@@ -215,7 +217,8 @@ public class StoryAudit : MonoBehaviour
             else
             {
                 yield return new WaitForSeconds(0.25f);
-                loadOk = boot.state.step == "B4_light" && boot.state.carrying == "";
+                // v3：装完柴后火柴还拿在手里（carrying = matches），不再清空
+                loadOk = boot.state.step == "B4_light" && boot.state.carrying != "wood";
                 if (loadOk && boot.service.TryInteract("stove"))
                 {
                     yield return new WaitForSeconds(0.4f);

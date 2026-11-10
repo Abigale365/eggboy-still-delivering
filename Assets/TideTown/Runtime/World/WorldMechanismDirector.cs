@@ -184,6 +184,10 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         }
         if (world != null)
             winchWorldPos.y = world.GroundAt(winchWorldPos.x, winchWorldPos.z, winchWorldPos.y + 1.5f);
+        HoldZones.Register("winch", winchWorldPos, WinchRadius);
+        game = FindObjectOfType<PrototypeGame>();
+        var svc = FindObjectOfType<InteractionService>();
+        if (svc != null) svc.Register(new WinchInteractable(this));
 
         var winchGo = new GameObject("Scene_M3_潮汐船坞齿轮绞盘_总成");
         winchGo.transform.SetParent(transform, false);
@@ -375,6 +379,49 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         if (!string.IsNullOrEmpty(achievementId)) TideTownAchievementSystem.Unlock(achievementId);
     }
 
+    public const float WinchRadius = 2.4f;
+    const float WinchCrankSeconds = 2.5f;
+    TidalEchoCloneSystem echoSys;
+    PrototypeGame game;
+    float winchCrank, winchStrain, winchWiggle, winchCreakAt;
+    bool strainFaceShown;
+    public bool DebugPlayerHoldsWinch;           // 审计用：代替"玩家按住 E"
+    public int WinchHolders { get; private set; }
+    public float WinchCrank01 => Mathf.Clamp01(winchCrank / WinchCrankSeconds);
+    public bool WinchStrained => winchStrain > 1.2f;
+
+    void WinchTick(float dt, bool playerHolds, bool echoHolds)
+    {
+        WinchHolders = (playerHolds ? 1 : 0) + (echoHolds ? 1 : 0);
+        if (winchRaised || !GapActive) { winchWiggle = 0f; winchStrain = 0f; return; }
+        if (WinchHolders >= 2)
+        {
+            // 两个人一起：真的转起来了
+            winchStrain = 0f;
+            winchWiggle = 0f;
+            winchCrank += dt;
+            winchSpinAngle += 260f * dt;
+            if (Time.time >= winchCreakAt) { winchCreakAt = Time.time + 0.35f; ShadowAndChimeSystem.PlayProceduralChime(330f + winchCrank * 90f, 0.12f); }
+            if (winchCrank >= WinchCrankSeconds) RaiseDockWinch(true, false);
+        }
+        else if (WinchHolders == 1)
+        {
+            // 一个人：使劲也只是晃一晃就弹回去
+            winchStrain += dt;
+            winchCrank = Mathf.Max(0f, winchCrank - dt * 2f);
+            winchWiggle = Mathf.Sin(Time.time * 9f) * 7f;
+            if (Time.time >= winchCreakAt) { winchCreakAt = Time.time + 0.9f; ShadowAndChimeSystem.PlayProceduralChime(155f, 0.2f); }
+            if (winchStrain > 1.2f && playerHolds && game != null && !strainFaceShown) { strainFaceShown = true; game.SetExpression(ExprId.nervous); }
+        }
+        else
+        {
+            winchStrain = 0f;
+            winchCrank = Mathf.Max(0f, winchCrank - dt * 2f);
+            winchWiggle = Mathf.Lerp(winchWiggle, 0f, dt * 8f);
+            strainFaceShown = false;
+        }
+    }
+
     public void RaiseDockWinch(bool byEcho, bool byWishBoat = false)
     {
         winchRaised = true;
@@ -394,14 +441,11 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         else if (byEcho)
         {
             TideTownAchievementSystem.Unlock("echo_coop");
-            if (ui != null)
-                ui.ShowToast("十秒前的潮汐残影与你协力摇动了【3D 潮汐船坞齿轮绞盘】，浮桥已升起！", 3.8f);
+            TideTownAchievementSystem.Unlock("winch_bridge");
         }
         else
         {
             TideTownAchievementSystem.Unlock("winch_bridge");
-            if (ui != null)
-                ui.ShowToast("咔哒——你摇动了【3D 潮汐船坞齿轮绞盘】，木码头与小船浮桥已从海水中升起！", 3.8f);
         }
     }
 
@@ -423,12 +467,12 @@ public sealed class WorldMechanismDirector : MonoBehaviour
 
         if (winchRing != null)
         {
-            float targetZ = winchRaised ? -winchSpinAngle - Time.time * 18f : -15f;
+            float targetZ = winchRaised ? -winchSpinAngle - Time.time * 18f : -15f - winchSpinAngle + winchWiggle;
             winchRing.localRotation = Quaternion.Slerp(winchRing.localRotation, Quaternion.Euler(0f, 0f, targetZ), dt * 6f);
         }
         if (winchSpindle != null)
         {
-            float targetZ = winchRaised ? winchSpinAngle : 0f;
+            float targetZ = winchSpinAngle - winchWiggle;
             winchSpindle.localRotation = Quaternion.Slerp(winchSpindle.localRotation, Quaternion.Euler(0f, 0f, targetZ), dt * 6f);
         }
         if (pontoonBridgeRoot != null)
@@ -453,6 +497,17 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             }
         }
 
+        // 绞盘：一个人摇不动，要两个"人"同时按住（你 + 10 秒前的你）
+        if (player != null && ui != null)
+        {
+            bool free = ui.inputClose && !player.locked && !ui.TitleShowing && !ui.Paused && !ui.LetterOpen;
+            bool near = Vector3.Distance(player.transform.position, winchWorldPos) < WinchRadius;
+            bool playerHolds = near && ((free && Input.GetKey(KeyCode.E)) || DebugPlayerHoldsWinch);
+            if (echoSys == null) echoSys = FindObjectOfType<TidalEchoCloneSystem>();
+            bool echoHolds = echoSys != null && echoSys.EchoActive && echoSys.EchoHoldZone == "winch";
+            WinchTick(dt, playerHolds, echoHolds);
+        }
+
         if (player == null || ui == null || !ui.inputClose || player.locked || ui.TitleShowing || ui.Paused || ui.LetterOpen)
             return;
 
@@ -471,25 +526,6 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             }
         }
 
-        // 2. 岸边摇动 3D 潮汐船坞齿轮绞盘（纯环境化反馈，不弹直白教学命令）
-        float distToWinch = Vector3.Distance(player.transform.position, winchWorldPos);
-        if (distToWinch < 2.9f)
-        {
-            if (!nearWinchPromptShown && !winchRaised)
-            {
-                nearWinchPromptShown = true;
-                ui.ShowToast("岸边的黄铜齿轮绞盘连着水下的粗缆绳，似乎能把沉没的旧栈桥拉起来。", 3.2f);
-            }
-            if (Input.GetKeyDown(KeyCode.E))
-            {
-                RaiseDockWinch(false, false);
-            }
-        }
-        else
-        {
-            nearWinchPromptShown = false;
-        }
-
         // （原来这里有"涉水就瞬移回岸边"的惩罚：缺口处本来就走不进水里，瞬移只会让人莫名其妙，已去掉）
     }
 
@@ -503,4 +539,21 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             rings[i].Rotate(0f, 0f, speedDeg * dir * dt, Space.Self);
         }
     }
+}
+
+// 绞盘旁的提示（按住 E 由 WorldMechanismDirector 自己读，这里只负责显示那行字）
+public sealed class WinchInteractable : IInteractable
+{
+    readonly WorldMechanismDirector mech;
+    public WinchInteractable(WorldMechanismDirector m) { mech = m; }
+    public string EntityId => "dock_winch";
+    public Vector3 Position => mech.WinchPosition;
+    public string Prompt(GameState s)
+    {
+        if (!mech.GapActive || mech.CrossingSolved) return "";
+        if (mech.WinchHolders >= 2) return "一起摇——";
+        return mech.WinchStrained ? "一个人摇不动" : "按住 E　摇绞盘";
+    }
+    public bool CanInteract(GameState s) => false;
+    public void Interact(GameState s, InteractionService svc) { }
 }

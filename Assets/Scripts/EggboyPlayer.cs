@@ -288,6 +288,25 @@ public class EggboyPlayer : MonoBehaviour
         }
     }
 
+    // 潮汐残影用：不读输入、不做碰撞，直接摆到录下来的位置；速度照录下来的给，
+    // 这样 LateUpdate 里的步态层会和真人一样迈腿、摆臂。要在 Update 阶段调用（Animation 更新之前）。
+    public void PuppetStep(Vector3 pos, float yawRad, Vector3 velocity, bool isGrounded, float dt)
+    {
+        if (Bones != null) { if (disableAnim) Bones.RestoreBindPose(); else Bones.RestoreClean(); }
+        transform.position = pos;
+        yaw = yawRad;
+        transform.rotation = Quaternion.Euler(0f, yawRad * Mathf.Rad2Deg, 0f);
+        vel = velocity;
+        grounded = isGrounded;
+        if (dt > 0f)
+        {
+            Vector3 raw = (vel - prevVel) / dt;
+            acc = Vector3.Lerp(acc, raw, Mathf.Min(1f, dt * 12f));
+            prevVel = vel;
+        }
+        if (emote != null && Time.time >= emoteEnd) EndEmote();
+    }
+
     // 在 Animation 更新之后跑程序层
     void LateUpdate()
     {

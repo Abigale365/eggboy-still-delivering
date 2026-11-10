@@ -38,8 +38,20 @@ public sealed class WorldMechanismDirector : MonoBehaviour
     bool winchRaised;
     bool nearWinchPromptShown;
     float surgePenaltyCooldown;
+    readonly List<FloatingCrate> gapCrates = new List<FloatingCrate>();
+    Vector3 crossingDir = Vector3.forward;
+    public Vector3 CrossingDirection => crossingDir;
+    public bool GapActive => Features.crossingGap && !Features.classicAudit && gapCrates.Count > 0;
+    public bool CrossingSolved => winchRaised;
+
+    static int CrateIndex(string name)
+    {
+        int i = name.LastIndexOf('_');
+        return i >= 0 && int.TryParse(name.Substring(i + 1), out int n) ? n : 999;
+    }
     Collider[] pontoonColliders;
     bool pontoonCollidersOn, pontoonCollidersInit;
+    bool boatBridge;
 
     // 三站心愿展台
     readonly Transform[] wishPedestals = new Transform[3];
@@ -137,8 +149,41 @@ public sealed class WorldMechanismDirector : MonoBehaviour
 
         crossingChannelCenter = cPos + new Vector3(0.8f, 0f, 1.2f);
         winchWorldPos = cPos + new Vector3(-1.55f, 0f, -1.35f);
+
+        // 2026-11-10：渡口挪到真正被水淹的那段路上。浮箱按编号排成一串，中间三只是"缺口"：
+        // 真人游玩时它们不出现，要靠绞盘 / 心愿船 / 残影等办法补上；主线审计时照旧全部出现。
+        var crates = new List<FloatingCrate>(FindObjectsOfType<FloatingCrate>());
+        crates.Sort((a, b) => CrateIndex(a.name).CompareTo(CrateIndex(b.name)));
+        if (crates.Count >= 5)
+        {
+            int g0 = crates.Count / 2 - 1, g1 = crates.Count / 2 + 1;
+            Vector3 sum = Vector3.zero;
+            for (int i = g0; i <= g1; i++) { gapCrates.Add(crates[i]); sum += crates[i].transform.position; }
+            crossingChannelCenter = sum / gapCrates.Count;
+            crossingChannelCenter.y = crates[g0].bedY;
+            crossingDir = crates[crates.Count - 1].transform.position - crates[0].transform.position;
+            crossingDir.y = 0f; crossingDir.Normalize();
+            // 绞盘放在来路这一侧的岸上：从第一只箱子往回找一块 L2 时不会被淹的可走地面
+            Vector3 first = crates[0].transform.position;
+            winchWorldPos = first - crossingDir * 1.6f;
+            if (world != null)
+            {
+                Vector3 side = new Vector3(-crossingDir.z, 0f, crossingDir.x);
+                float bestScore = float.MaxValue;
+                for (float back = 1.0f; back <= 3.6f; back += 0.4f)
+                    for (float lat = -1.6f; lat <= 1.6f; lat += 0.4f)
+                    {
+                        Vector3 q = first - crossingDir * back + side * lat;
+                        if (!world.InWalkArea(q.x, q.z)) continue;
+                        float gy = world.GroundAt(q.x, q.z, first.y + 3f);
+                        if (gy < WaterLevel.LevelYs[2] + 0.15f) continue; // L2 也不淹
+                        float score = back + Mathf.Abs(Mathf.Abs(lat) - 0.9f); // 靠近、稍微偏在路边
+                        if (score < bestScore) { bestScore = score; winchWorldPos = new Vector3(q.x, gy, q.z); }
+                    }
+            }
+        }
         if (world != null)
-            winchWorldPos.y = world.GroundAt(winchWorldPos.x, winchWorldPos.z, cPos.y + 0.3f);
+            winchWorldPos.y = world.GroundAt(winchWorldPos.x, winchWorldPos.z, winchWorldPos.y + 1.5f);
 
         var winchGo = new GameObject("Scene_M3_潮汐船坞齿轮绞盘_总成");
         winchGo.transform.SetParent(transform, false);
@@ -161,38 +206,39 @@ public sealed class WorldMechanismDirector : MonoBehaviour
 
         var pontoonGo = new GameObject("Scene_DockPontoonBridge");
         pontoonGo.transform.SetParent(transform, false);
-        pontoonBaseY = cPos.y - 0.06f;
-        pontoonGo.transform.position = new Vector3(
-            crossingChannelCenter.x,
-            winchRaised ? pontoonBaseY : (pontoonBaseY - 0.68f),
-            crossingChannelCenter.z);
+        pontoonBaseY = crossingChannelCenter.y;
+        pontoonGo.transform.position = new Vector3(crossingChannelCenter.x, pontoonBaseY - 0.9f, crossingChannelCenter.z);
+        pontoonGo.transform.rotation = Quaternion.LookRotation(crossingDir, Vector3.up);
         pontoonBridgeRoot = pontoonGo.transform;
 
-        var dock = TideTownStyleUI.CloneSceneLux3D("S8_木码头_分享包版", 2.4f, true);
+        // 沉在水下的旧栈桥：顺着过海方向摆，升起后正好补上缺口
+        var dock = TideTownStyleUI.CloneSceneLux3D("S8_木码头_分享包版", 2.3f, false);
         if (dock != null)
         {
             dock.transform.SetParent(pontoonBridgeRoot, false);
-            dock.transform.localPosition = new Vector3(-0.4f, 0f, -0.3f);
-            dock.transform.localRotation = Quaternion.Euler(0f, 28f, 0f);
+            dock.transform.localPosition = Vector3.zero;
+            dock.transform.localRotation = Quaternion.identity;
+            // 码头模型最长的一边要顺着过海方向（本地 Z）
+            var db = Lux3DModelFit.WorldBounds(dock);
+            Vector3 local = pontoonBridgeRoot.InverseTransformVector(db.size);
+            if (Mathf.Abs(local.x) > Mathf.Abs(local.z)) dock.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
         }
+        // 可踩的范围单独给一块顺着过海方向的板，不依赖模型外形
+        int groundLayer = LayerMask.NameToLayer("Ground");
+        pontoonGo.layer = groundLayer >= 0 ? groundLayer : 6;
+        var deck = pontoonGo.AddComponent<BoxCollider>();
+        deck.center = new Vector3(0f, 0.2f, 0f);
+        deck.size = new Vector3(1.0f, 0.4f, 2.4f);
+        deck.enabled = false;
 
-        var boat = TideTownStyleUI.CloneSceneLux3D("S9_小船_分享包版", 2.1f, true);
-        if (boat != null)
-        {
-            boat.transform.SetParent(pontoonBridgeRoot, false);
-            boat.transform.localPosition = new Vector3(0.95f, 0.04f, 0.65f);
-            boat.transform.localRotation = Quaternion.Euler(0f, -62f, 0f);
-        }
-
-        var oar = TideTownStyleUI.CloneSceneLux3D("D4O_船桨_v2", 1.15f, false);
+        var oar = TideTownStyleUI.CloneSceneLux3D("D4O_船桨_v2", 1.0f, false);
         if (oar != null)
         {
             oar.transform.SetParent(pontoonBridgeRoot, false);
-            oar.transform.localPosition = new Vector3(0.85f, 0.32f, 0.65f);
-            oar.transform.localRotation = Quaternion.Euler(18f, 15f, 72f);
+            oar.transform.localPosition = new Vector3(0.35f, 0.45f, 0.2f);
+            oar.transform.localRotation = Quaternion.Euler(8f, 15f, 80f);
         }
     }
-
     void SpawnLighthouseSceneMechanism()
     {
         var lampGo = GameObject.Find("LH_lamp");
@@ -313,6 +359,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
     public void RaiseDockWinch(bool byEcho, bool byWishBoat = false)
     {
         winchRaised = true;
+        if (byWishBoat) boatBridge = true;
         winchSpinAngle += 720f;
         if (state != null && !state.flags.Contains("dock_winch_raised"))
             state.flags.Add("dock_winch_raised");
@@ -367,16 +414,23 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         }
         if (pontoonBridgeRoot != null)
         {
-            float bob = winchRaised ? Mathf.Sin(Time.time * 2.1f) * 0.04f : -0.68f;
-            Vector3 targetPos = new Vector3(crossingChannelCenter.x, pontoonBaseY + bob, crossingChannelCenter.z);
-            pontoonBridgeRoot.position = Vector3.Lerp(pontoonBridgeRoot.position, targetPos, dt * 4.5f);
-            // 沉在水下的浮桥不能踩：碰撞只在升起后生效，否则会把渡口地面垫出一个台阶
+            // 这一局用心愿船补了缺口，栈桥就不用升了（读档后船不在了，栈桥顶上）
+            bool bridgeUp = winchRaised && !boatBridge;
+            // 升起后浮在当前水面上（桥面略高于水），没升起就沉在水底
+            float floatY = Mathf.Max(pontoonBaseY, WaterLevel.StaticY - 0.22f);
+            float bob = bridgeUp ? Mathf.Sin(Time.time * 2.1f) * 0.02f : -0.9f;
+            Vector3 targetPos = new Vector3(crossingChannelCenter.x, (bridgeUp ? floatY : pontoonBaseY) + bob, crossingChannelCenter.z);
+            pontoonBridgeRoot.position = Vector3.Lerp(pontoonBridgeRoot.position, targetPos, dt * 3.5f);
+            // 缺口：真人游玩时中间几只浮箱不出现
+            bool gap = GapActive;
+            foreach (var gc in gapCrates) if (gc != null) gc.suppressed = gap;
+            // 沉在水下的栈桥不能踩：碰撞只在升起后生效
             if (pontoonColliders == null) pontoonColliders = pontoonBridgeRoot.GetComponentsInChildren<Collider>(true);
-            if (pontoonCollidersOn != winchRaised || !pontoonCollidersInit)
+            if (pontoonCollidersOn != bridgeUp || !pontoonCollidersInit)
             {
                 pontoonCollidersInit = true;
-                pontoonCollidersOn = winchRaised;
-                foreach (var c in pontoonColliders) if (c != null) c.enabled = winchRaised;
+                pontoonCollidersOn = bridgeUp;
+                foreach (var c in pontoonColliders) if (c != null) c.enabled = bridgeUp;
             }
         }
 
@@ -417,32 +471,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             nearWinchPromptShown = false;
         }
 
-        // 3. 未升起浮桥且未造船时强行涉水：急流冲退回岸边
-        // 只有海水真的涨到渡口（L2 起）才冲人；水位低时这里是干的石阶，不能把人瞬移走
-        bool tideOverCrossing = WaterLevel.StaticY >= WaterLevel.LevelYs[2] - 0.05f;
-        if (!winchRaised && tideOverCrossing && surgePenaltyCooldown <= 0f)
-        {
-            Vector2 pXZ = new Vector2(player.transform.position.x, player.transform.position.z);
-            Vector2 cXZ = new Vector2(crossingChannelCenter.x, crossingChannelCenter.z);
-            if (Vector2.Distance(pXZ, cXZ) < 1.95f && Mathf.Abs(player.transform.position.y - pontoonBaseY) < 1.3f)
-            {
-                surgePenaltyCooldown = 2.5f;
-                ShadowAndChimeSystem.PlayProceduralChime(196f, 0.4f);
-                Vector3 safePos = winchWorldPos + new Vector3(-0.4f, 0.05f, -0.4f);
-                if (world != null && world.Walkable(safePos.x, safePos.z))
-                    safePos.y = world.GroundAt(safePos.x, safePos.z, safePos.y) + 0.02f;
-                player.transform.position = safePos;
-                player.vel = Vector3.zero;
-
-                string dropExtra = "";
-                if (state != null && state.carrying == "oil" && director != null)
-                {
-                    director.OnGalePenaltyDropItem(out dropExtra);
-                }
-
-                ui.ShowToast("海水漫过了石滩，湍急的暗流将你推回了岸边栓船桩旁。", 3.8f);
-            }
-        }
+        // （原来这里有"涉水就瞬移回岸边"的惩罚：缺口处本来就走不进水里，瞬移只会让人莫名其妙，已去掉）
     }
 
     static void AnimateRings(Transform[] rings, float speedDeg, float dt)

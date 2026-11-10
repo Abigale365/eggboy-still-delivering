@@ -53,3 +53,12 @@
   - `tools/build.ps1` 自动识别 `H:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe` 并通过 `subst` 短路径映射解决深层中文路径下 `TypeDb-All.json` 命令行超长问题。
   - `TideBuild.All`（Windows `Build/Main/TideTown.exe` + WebGL `Build/MainWebGL`）零报错构建成功（`UNITY_EXIT 0`，`BUILD_OK TideBuild.All`）。
   - 五项自动化审计全部通过（证据归档于 `docs/evidence/p0-p2-merge/`）：`story`（22/22 步全过，平均 135.6 FPS，救援 0 次）、`route`（28/28 路点，腾空 0 帧）、`water`（L0–L4 单调涨水、木箱区与掉层救援全过）、`map`（5 点对位与读信互斥全过）、`scan`（预留接口开关验证全过）。
+
+### 2026-11-10 创新工程书开工（INNOVATION_BOOK_20261110）
+
+- WP-00 完成：仓库补全（3185 文件），基线四项审计全过（story 22/22、route 28/28、water、map；188 帧、救援 0）。修了 v3 两个 bug：渡口急流不看水位就瞬移人、沉桥垫高地面；剧情审计按 v3 行为更新两处。提交 722828f。
+- WP-02 基本完成：Runtime/Lux3D（mock / dev-direct / relay / offline 网关、任务队列、缓存、glTFast 运行时加载、先保底再原位替换）；保底库 12 件新模型（卡通风，压到约 0.5 MB/件）。Lux3D 账本 12/30（其中 1 次是续等脚本漏洞多下的单，已修）。实测 G1-Turbo 现在要 100–430 秒。
+- WP-W 第一版：心愿造物笺改走 Lux3DService，去掉烤炉旁跳关。
+- 渡口重摆：v3 的渡口原来在干地上、木箱自动铺满；现在真人游玩时中间 3 只木箱不出现，缺口由绞盘栈桥或心愿船补（-nogap 可关）。
+- 新增 -innovaudit（tools\run-audit.ps1 -Mode innov），26 项全过，证据 docs/evidence/innov-20261110/WP-02。
+- **未做 / 未验证**：渡口重摆之后还没重跑 story / route / water / map 四项主线审计；dev-direct 真连没实测；构建脚本的密钥检查没加；relay 假服务器没写；绞盘位置和栈桥外观没看截图；WP-01 实机截图没做。下一步先重跑四项主线审计。

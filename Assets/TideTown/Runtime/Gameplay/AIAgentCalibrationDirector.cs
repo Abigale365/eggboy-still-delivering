@@ -14,7 +14,6 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 
 public sealed class AIAgentCalibrationDirector : MonoBehaviour
@@ -262,219 +261,161 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         achievementGalleryText.text = sb.ToString();
     }
 
-    // --- 按玩家个人喜好实时生成 3D 物件，并根据所在场景触发一题多解互动与成就 ---
+    // --- 心愿造物：功能由"在哪 + 哪一类"决定（写死、可测），外观交给 Lux3D（先保底，生成好原位替换） ---
+    public Lux3DSpawn LastWishSpawn { get; private set; }
+    public string LastWishKind { get; private set; } = "";
+
+    static bool HasAny(string text, params string[] keys)
+    {
+        foreach (var k in keys) if (text.Contains(k)) return true;
+        return false;
+    }
+
     public void SpawnLiveWishObjectInWorld(string rawDescription)
     {
         if (player == null) return;
         string description = string.IsNullOrWhiteSpace(rawDescription) ? "星空海螺八音盒" : rawDescription.Trim();
+        if (description.Length > 40) description = description.Substring(0, 40);
         forgedCounter++;
-
-        // 1. 若配置了 AHOLO_API_KEY，异步向 https://api.aholo3d.cn 提交云端图生 3D 任务
-        string apiKey = Environment.GetEnvironmentVariable("AHOLO_API_KEY") ?? "";
-        if (!string.IsNullOrEmpty(apiKey))
-        {
-            StartCoroutine(RequestCloudLux3DAsync(description, apiKey));
-        }
 
         var worldMech = FindObjectOfType<WorldMechanismDirector>();
         Vector3 pPos = player.transform.position;
 
-        // 判断心愿语义类别
-        bool isDogFood = description.Contains("骨") || description.Contains("肉") || description.Contains("蛋糕") ||
-                         description.Contains("肠") || description.Contains("鱼") || description.Contains("饼") ||
-                         description.Contains("食") || description.Contains("饭") || description.Contains("奶");
-        bool isDogToy = description.Contains("飞盘") || description.Contains("玩具") || description.Contains("球") ||
-                        (description.Contains("小黄鸭") && !description.Contains("船"));
-        bool isWaterBoat = description.Contains("船") || description.Contains("筏") || description.Contains("浮") ||
-                           description.Contains("桥") || description.Contains("海龟") || description.Contains("艇");
-        bool isOvenHelper = description.Contains("炉") || description.Contains("火") || description.Contains("风罩") ||
-                            description.Contains("风箱") || description.Contains("柴");
+        bool isDogFood = HasAny(description, "骨", "肉", "蛋糕", "肠", "鱼", "饼", "食", "饭", "奶", "糖", "面包", "鸡腿", "罐头");
+        bool isBoat = HasAny(description, "船", "筏", "浮", "桥", "海龟", "艇", "舟", "鲸");
+        bool isDogToy = !isBoat && HasAny(description, "飞盘", "玩具", "球", "鸭", "娃娃", "玩偶", "铃铛");
+        bool isFire = HasAny(description, "柴", "木头", "火", "炉", "炭");
 
-        // A. 如果玩家造的是渡海浮船/海龟浮台（或者正站在涨潮渡口海峡旁）
         Vector3 channelPos = worldMech != null ? worldMech.GetCrossingChannelCenter() : new Vector3(15.3f, 1.35f, 11.7f);
-        if (isWaterBoat || Vector3.Distance(pPos, channelPos) < 7.5f && !isDogFood && !isDogToy)
-        {
-            SpawnCustomWishBoatBridge(description, channelPos, worldMech);
-            RefreshAchievementGallery();
-            return;
-        }
-
-        // B. 如果玩家造的是给小黑的美食或新玩具（或者站在学校狗碗附近）
         Vector3 bowlPos = worldMech != null ? worldMech.GetDogBowlPosition() : new Vector3(17.5f, 3.05f, -5.2f);
-        if (isDogFood || isDogToy || (Vector3.Distance(pPos, bowlPos) < 9.5f && state != null && state.step.StartsWith("S")))
-        {
-            bool treatAsFood = isDogFood || !isDogToy;
-            SpawnCustomGiftForDog(description, treatAsFood, bowlPos);
-            RefreshAchievementGallery();
-            return;
-        }
-
-        // C. 如果玩家造的是面包房助燃防风炉罩（或者站在面包房烤炉旁）
         Vector3 ovenPos = new Vector3(-11.5f, 1.3f, -7.8f);
-        if (isOvenHelper && Vector3.Distance(pPos, ovenPos) < 11f)
-        {
-            SpawnCustomOvenHelper(description, ovenPos);
-            RefreshAchievementGallery();
-            return;
-        }
+        bool nearChannel = Vector3.Distance(pPos, channelPos) < 7.5f;
+        bool nearBowl = Vector3.Distance(pPos, bowlPos) < 9.5f && state != null && state.step.StartsWith("S");
+        bool nearOven = Vector3.Distance(pPos, ovenPos) < 11f;
 
-        // D. 默认/心愿展台模式：在最近的三站「心愿展台」（或玩家正前方）生成高精 3D 纪念摆件并永久装点小镇！
-        SpawnCustomTownKeepsake(description, worldMech);
+        if (isBoat || (nearChannel && !isDogFood && !isDogToy && !isFire)) SpawnWishBoat(description, channelPos, worldMech);
+        else if (isDogFood || isDogToy || nearBowl) SpawnWishDogGift(description, isDogFood || !isDogToy, bowlPos);
+        else if (isFire && nearOven) SpawnWishFirewood(description, ovenPos);
+        else SpawnWishKeepsake(description, worldMech);
         RefreshAchievementGallery();
     }
 
-    void SpawnCustomGiftForDog(string description, bool isFood, Vector3 bowlPos)
+    Lux3DSpawn SpawnWish(string description, string category, Vector3 pos, Quaternion rot, Transform parent, Color32 glow, float glowRange)
     {
-        string luxModel = isFood ? "Bakery_basket" : "D6_救生圈_v2";
-        float size = isFood ? 0.48f : 0.42f;
+        var lux = Lux3DService.Ensure();
+        var entry = lux.Match(description, category);
+        var spawn = lux.Spawn(description, entry, pos, rot, parent);
+        spawn.root.name = "Wish_" + category + "_" + forgedCounter;
+        AttachWarmGlow(spawn.root.transform, glow, glowRange);
+        LastWishSpawn = spawn;
+        LastWishKind = category;
+        if (player != null) player.PlayEmote("give");
+        return spawn;
+    }
 
+    string WaitNote(Lux3DSpawn s)
+    {
+        if (s.state == "generating") return "信已经寄出去了，真正的样子还在路上（大约几分钟），先用这一件。";
+        if (s.state == "cached") return "这件以前造过，马上就换上。";
+        if (s.state == "capped") return "这一趟能寄的心愿用完了，先用镇上现成的这一件。";
+        return "";
+    }
+
+    void SpawnWishDogGift(string description, bool isFood, Vector3 bowlPos)
+    {
         Vector3 spawnPos = Vector3.Distance(player.transform.position, bowlPos) < 12f
-            ? bowlPos + new Vector3(0.28f, 0.12f, 0.22f)
+            ? bowlPos + new Vector3(0.28f, 0.02f, 0.22f)
             : player.transform.position + new Vector3(Mathf.Sin(player.yaw), 0f, Mathf.Cos(player.yaw)) * 1.4f;
-        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, spawnPos.y);
+        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, spawnPos.y + 1f);
 
-        var holder = new GameObject("WishDogGift_" + forgedCounter + "_" + description);
-        holder.transform.SetParent(transform, false);
-        holder.transform.position = spawnPos;
+        var s = SpawnWish(description, isFood ? "food" : "toy", spawnPos, Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f), transform,
+            isFood ? new Color32(255, 195, 110, 255) : new Color32(130, 230, 255, 255), 3.2f);
 
-        var visual = TideTownStyleUI.CloneSceneLux3D(luxModel, size, false);
-        if (visual != null)
-        {
-            visual.transform.SetParent(holder.transform, false);
-            visual.transform.localPosition = Vector3.zero;
-        }
-        AttachWarmGlow(holder.transform, isFood ? new Color32(255, 195, 110, 255) : new Color32(130, 230, 255, 255), 3.2f);
-        forgedRuntimeObjects.Add(holder.transform);
-
-        if (director != null)
+        // 只有放在狗碗附近才算哄到小黑；在别处造出来就只是一件摆在地上的东西
+        if (director != null && Vector3.Distance(spawnPos, bowlPos) < 3f)
             director.CompleteSchoolWithCustomGift(description, isFood);
 
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "已按你的心愿造出 3D 礼物「" + description + "」放在小黑碗旁！小黑闻着味儿跑出来了！";
+            wishFeedbackText.text = "「" + description + "」放在了小黑的碗旁。" + WaitNote(s);
     }
 
-    void SpawnCustomWishBoatBridge(string description, Vector3 channelPos, WorldMechanismDirector worldMech)
+    void SpawnWishBoat(string description, Vector3 channelPos, WorldMechanismDirector worldMech)
     {
-        var holder = new GameObject("WishBoatBridge_" + forgedCounter + "_" + description);
-        holder.transform.SetParent(transform, false);
-        holder.transform.position = new Vector3(channelPos.x, channelPos.y + 0.08f, channelPos.z);
+        var pos = new Vector3(channelPos.x, Mathf.Max(channelPos.y, WaterLevel.StaticY) - 0.05f, channelPos.z);
+        // 船身顺着过海的方向，正好补在浮箱的缺口上
+        Vector3 dir = worldMech != null ? worldMech.CrossingDirection : (channelPos - player.transform.position);
+        dir.y = 0f;
+        var rot = dir.sqrMagnitude > 0.01f ? Quaternion.LookRotation(dir.normalized, Vector3.up) : Quaternion.identity;
+        var s = SpawnWish(description, "boat", pos, rot, transform, new Color32(255, 220, 125, 255), 5.0f);
+        s.root.AddComponent<WishBob>();
+        // 能踩的范围固定成一块顺着过海方向的甲板，不跟模型外形走：换成真模型后照样过得去
+        var deck = s.root.GetComponent<BoxCollider>();
+        if (deck == null) deck = s.root.AddComponent<BoxCollider>();
+        int groundLayer = LayerMask.NameToLayer("Ground");
+        s.root.layer = groundLayer >= 0 ? groundLayer : 6;
+        deck.center = new Vector3(0f, 0.1f, 0f);
+        deck.size = new Vector3(1.1f, 0.4f, 2.4f);
+        AlignLongAxisToForward(s.root.transform);
+        s.onSwapped = sp => { if (sp.root != null) AlignLongAxisToForward(sp.root.transform); };
 
-        var boat = TideTownStyleUI.CloneSceneLux3D("S9_小船_分享包版", 2.35f, true);
-        if (boat != null)
-        {
-            boat.transform.SetParent(holder.transform, false);
-            boat.transform.localPosition = new Vector3(0.35f, 0f, 0.2f);
-        }
+        if (worldMech != null) worldMech.RaiseDockWinch(false, true);
+        else TideTownAchievementSystem.Unlock("wish_boat");
 
-        var buoy = TideTownStyleUI.CloneSceneLux3D("D6_救生圈_v2", 0.72f, true);
-        if (buoy != null)
-        {
-            buoy.transform.SetParent(holder.transform, false);
-            buoy.transform.localPosition = new Vector3(-0.55f, 0.28f, -0.25f);
-        }
-
-        AttachWarmGlow(holder.transform, new Color32(255, 220, 125, 255), 5.0f);
-        forgedRuntimeObjects.Add(holder.transform);
-
-        if (worldMech != null)
-            worldMech.RaiseDockWinch(false, true);
-        else
-            TideTownAchievementSystem.Unlock("wish_boat");
-
-        if (ui != null)
-            ui.ShowToast("心愿成真！水面浮起了你亲手造出的「" + description + "」，现在可以直接踩着它渡海了！", 4.0f);
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "已在涨潮渡口为你实时造出可踩踏的 3D 渡海载具：「" + description + "」！";
+            wishFeedbackText.text = "「" + description + "」浮在了渡口的水面上，可以踩着过海。" + WaitNote(s);
     }
 
-    void SpawnCustomOvenHelper(string description, Vector3 ovenPos)
+    // 让模型最长的一边顺着父节点的前方（本地 Z）
+    static void AlignLongAxisToForward(Transform root)
     {
-        var holder = new GameObject("WishOvenHelper_" + forgedCounter + "_" + description);
-        holder.transform.SetParent(transform, false);
-        Vector3 spawnPos = ovenPos + new Vector3(0.85f, 0f, 0.65f);
-        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, ovenPos.y);
-        holder.transform.position = spawnPos;
+        var model = root.Find("Model");
+        if (model == null) return;
+        var keep = root.rotation;
+        root.rotation = Quaternion.identity;
+        var b = Lux3DModelFit.WorldBounds(model.gameObject);
+        if (b.size.x > b.size.z * 1.1f) model.localRotation = Quaternion.Euler(0f, 90f, 0f) * model.localRotation;
+        root.rotation = keep;
+    }
 
-        var mech = TideTownStyleUI.BuildArticulatedMechanism3D("M1_鲁班三环风门机关", 0.62f);
-        mech.transform.SetParent(holder.transform, false);
-        mech.transform.localPosition = new Vector3(0f, 0.55f, 0f);
-        AttachWarmGlow(holder.transform, new Color32(255, 175, 90, 255), 4.5f);
-        forgedRuntimeObjects.Add(mech.transform);
+    // 在烤炉旁许愿要柴 / 火：给你一捆柴并塞进炉膛（省掉去后院抱柴），点火仍然要火柴和风门木匣
+    void SpawnWishFirewood(string description, Vector3 ovenPos)
+    {
+        Vector3 spawnPos = ovenPos + new Vector3(0.85f, 0f, 0.65f);
+        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, ovenPos.y + 1f);
+        var s = SpawnWish(description, "fire", spawnPos, Quaternion.identity, transform, new Color32(255, 175, 90, 255), 4.5f);
 
         var fx = FindObjectOfType<BakeryEffects>();
         if (state != null && director != null)
         {
-            if (!state.flags.Contains("oven_lit"))
-            {
-                if (!state.flags.Contains("matches_taken")) state.flags.Add("matches_taken");
-                if (!state.flags.Contains("wood_loaded")) state.flags.Add("wood_loaded");
-                if (!state.flags.Contains("puzzle_bakery_lock")) state.flags.Add("puzzle_bakery_lock");
-                director.LightOven(fx);
-            }
-            if (fx != null) director.BoostOvenBellows(fx);
+            if (state.flags.Contains("oven_lit")) { if (fx != null) director.BoostOvenBellows(fx); }
+            else if (!state.flags.Contains("wood_loaded")) { director.TakeWood(); director.LoadWood(); }
         }
         TideTownAchievementSystem.Unlock("word_fire");
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "已在烤炉旁造出「" + description + "」，炉膛里的暖火瞬间升腾了起来！";
+            wishFeedbackText.text = "「" + description + "」落在了烤炉旁，炉膛里有柴了。" + WaitNote(s);
     }
 
-    void SpawnCustomTownKeepsake(string description, WorldMechanismDirector worldMech)
+    void SpawnWishKeepsake(string description, WorldMechanismDirector worldMech)
     {
         float yaw = player.yaw;
         Vector3 fwd = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
         Vector3 spawnPos = player.transform.position + fwd * 1.9f;
-        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, player.transform.position.y);
+        if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, player.transform.position.y + 1f);
 
-        Transform targetPedestal = null;
+        Transform parent = transform;
         if (worldMech != null)
         {
             var ped = worldMech.GetNearestWishPedestal(player.transform.position, out float pedDist);
             if (ped != null && pedDist < 14f)
             {
-                targetPedestal = ped;
+                parent = ped;
                 spawnPos = ped.position + new Vector3(0f, 0.72f, 0f);
             }
         }
-
-        var holder = new GameObject("WishTownKeepsake_" + forgedCounter + "_" + description);
-        holder.transform.SetParent(targetPedestal != null ? targetPedestal : transform, false);
-        holder.transform.position = spawnPos;
-        holder.transform.rotation = Quaternion.LookRotation(-fwd, Vector3.up);
-
-        string baseMech = "M4_守塔人黄铜三轴星盘";
-        string luxAccent = "Street_E1";
-        if (description.Contains("猫") || description.Contains("狗") || description.Contains("偶"))
-        {
-            baseMech = "M2_小黑爪印转盘木匣";
-            luxAccent = "S_doghouse";
-        }
-        else if (description.Contains("车") || description.Contains("船") || description.Contains("锚"))
-        {
-            baseMech = "M3_潮汐船坞齿轮绞盘";
-            luxAccent = "D6_救生圈_v2";
-        }
-
-        var mechGo = TideTownStyleUI.BuildArticulatedMechanism3D(baseMech, 0.68f);
-        mechGo.transform.SetParent(holder.transform, false);
-        mechGo.transform.localPosition = new Vector3(0f, 0.48f, 0f);
-
-        var propGo = TideTownStyleUI.CloneSceneLux3D(luxAccent, 0.56f, false);
-        if (propGo != null)
-        {
-            propGo.transform.SetParent(holder.transform, false);
-            propGo.transform.localPosition = Vector3.zero;
-        }
-
-        AttachWarmGlow(holder.transform, new Color32(255, 215, 130, 255), 4.2f);
-        forgedRuntimeObjects.Add(mechGo.transform);
-
-        player.PlayEmote("hop");
+        var s = SpawnWish(description, "keepsake", spawnPos, Quaternion.LookRotation(-fwd, Vector3.up), parent, new Color32(255, 215, 130, 255), 4.2f);
         TideTownAchievementSystem.Unlock("wish_town");
-
-        if (ui != null)
-            ui.ShowToast("心愿造物完成！「" + description + "」已永久陈列在潮汐镇展台上！", 3.8f);
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "已按你的喜好造出 3D 纪念物：「" + description + "」，它将永久装点在小镇展台上并保留至结局！";
+            wishFeedbackText.text = "「" + description + "」留在了潮汐镇，会一直摆到结局。" + WaitNote(s);
     }
 
     static void AttachWarmGlow(Transform parent, Color32 color, float range)
@@ -487,20 +428,6 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         pt.color = color;
         pt.range = range;
         pt.intensity = 2.0f;
-    }
-
-    System.Collections.IEnumerator RequestCloudLux3DAsync(string prompt, string apiKey)
-    {
-        string url = "https://api.aholo3d.cn/api/open/v1/flux/2b/multimodal-to-image";
-        string body = "{\"prompt\":\"Hand-painted cozy 3D island keepsake, " + prompt.Replace("\"", "") + ", white background, PBR\",\"width\":1024,\"height\":1024}";
-        using (var req = new UnityWebRequest(url, "POST"))
-        {
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("X-Aholo-Key", apiKey);
-            yield return req.SendWebRequest();
-        }
     }
 
     void Update()

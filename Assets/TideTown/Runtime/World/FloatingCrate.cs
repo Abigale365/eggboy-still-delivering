@@ -10,6 +10,7 @@ public sealed class FloatingCrate : MonoBehaviour
     public Vector3 size = new Vector3(0.8f, 0.55f, 0.6f);
     public float topAboveWater = 0.18f;
     public float bobAmplitude = 0.03f;
+    public bool suppressed;
 
     IslandWorld world;
     BoxCollider box;
@@ -49,7 +50,8 @@ public sealed class FloatingCrate : MonoBehaviour
     void Apply(bool force)
     {
         float water = WaterLevel.StaticY;
-        bool wet = water > bedY + 0.01f;
+        // suppressed：真人游玩时渡口中间的几只箱子不出现，留一个要自己想办法补的缺口
+        bool wet = !suppressed && water > bedY + 0.01f;
         if (force || wet != floating)
         {
             floating = wet;

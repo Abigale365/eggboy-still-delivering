@@ -187,7 +187,7 @@
     "echo_winch_on_dry_land: winch=(10.59, 1.74, -12.37)",
     "echo_alone_cannot_crank: holders=1 solved=False",
     "echo_needs_buffer: buffered=1.0",
-    "echo_walks: moved=2.52 speed=1.25",
+    "echo_walks: moved=2.56 speed=1.25",
     "echo_legs_move: footSwing=0.088",
     "echo_two_holders: holders=2",
     "echo_crank_raises_bridge: crank=1.00",
@@ -202,7 +202,7 @@
     "word_boat_walkable: applied=True ground=1.38 water=1.15",
     "wish_boat_kind: boat",
     "crossing_gap_blocks_at_L2: channel=(13.30, 1.02, -12.44)",
-    "wish_boat_walkable: before=False after=True ground=1.42 water=1.15",
+    "wish_boat_walkable: before=False after=True ground=1.43 water=1.15",
     "wish_boat_swapped: swapped",
     "wish_keepsake_kind: keepsake",
     "wish_keepsake_swapped: swapped",
@@ -210,7 +210,7 @@
     "wish_session_count: 6->7",
     "wish_offline_fallback_only: offline"
   ],
-  "avg_fps": 171.4,
+  "avg_fps": 163.2,
   "errors": "",
   "status": "passed"
 }

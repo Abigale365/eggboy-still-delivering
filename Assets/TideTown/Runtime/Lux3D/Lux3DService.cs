@@ -194,13 +194,18 @@ public sealed class Lux3DService : MonoBehaviour
         }
     }
 
+    // 开发用：下一次生成不下新单，接着等服务器上这个已有任务（不花积分）
+    public static string DebugResumeTaskId;
+
     IEnumerator Run(Lux3DSpawn s)
     {
         var req = new Lux3DRequest
         {
             prompt = BuildPrompt(s.prompt),
             fallbackId = s.entry != null ? s.entry.id : null,
+            resumeTaskId = DebugResumeTaskId,
         };
+        DebugResumeTaskId = null;
         var res = new Lux3DResult();
         yield return Gateway.Generate(req, res, () => s.root == null);
         running--;

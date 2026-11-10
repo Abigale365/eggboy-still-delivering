@@ -21,7 +21,7 @@ public sealed class GameBootstrap : MonoBehaviour
     // 这些模式测的是别的系统，或需要固定机位，开场镜头会添乱
     static readonly string[] SkipIntroArgs =
     {
-        "-noIntro", "-routeaudit", "-routeaudit2", "-wateraudit", "-scanaudit", "-innovaudit",
+        "-noIntro", "-routeaudit", "-routeaudit2", "-wateraudit", "-scanaudit", "-innovaudit", "-lux3dlive",
         "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture", "-mapaudit",
     };
 
@@ -225,6 +225,8 @@ public sealed class GameBootstrap : MonoBehaviour
             gameObject.AddComponent<ScanAudit>().Begin(this);
         if (Array.Exists(args, a => a == "-innovaudit"))
             gameObject.AddComponent<InnovationAudit>().Begin(this);
+        if (Array.Exists(args, a => a == "-lux3dlive"))
+            gameObject.AddComponent<LiveLux3DCheck>().Begin(this);
         initialized = true;
     }
 }

@@ -128,10 +128,17 @@ public static class GlbTextureCompressor
         return all;
     }
 
-    public static void ReplaceInScene()
+    // 把 GLB 子材质换成 GlbMats 下的副本（副本里的 GLB 贴图换成 GlbTex 里的压缩版）
+    sealed class Replacer
     {
-        var glbs = Extract().ToDictionary(x => x.glb);
-        var texCache = new Dictionary<string, Texture2D>();
+        readonly Dictionary<string, GlbImages> glbs;
+        readonly Dictionary<string, Texture2D> texCache = new Dictionary<string, Texture2D>();
+        readonly Dictionary<Material, Material> matCache = new Dictionary<Material, Material>();
+        readonly HashSet<string> usedNames = new HashSet<string>();
+        public int swappedTex, missing;
+        public int MaterialCount => matCache.Count;
+        public Replacer(List<GlbImages> all) { glbs = all.ToDictionary(x => x.glb); }
+
         Texture2D Compressed(string glb, string texName)
         {
             if (!glbs.TryGetValue(glb, out var info)) return null;
@@ -142,16 +149,14 @@ public static class GlbTextureCompressor
             if (!texCache.TryGetValue(info.files[i], out var t)) texCache[info.files[i]] = t = AssetDatabase.LoadAssetAtPath<Texture2D>(info.files[i]);
             return t;
         }
-        var matCache = new Dictionary<Material, Material>();
-        var usedNames = new HashSet<string>();
-        int swappedTex = 0, missing = 0, renderers = 0;
-        if (!AssetDatabase.IsValidFolder(MatRoot)) AssetDatabase.CreateFolder("Assets/TideTown/Art", "GlbMats");
-        Material Replace(Material src)
+
+        public Material Replace(Material src)
         {
             if (src == null) return null;
             string glb = AssetDatabase.GetAssetPath(src);
             if (!glb.EndsWith(".glb", StringComparison.OrdinalIgnoreCase)) return src;
             if (matCache.TryGetValue(src, out var done)) return done;
+            if (!AssetDatabase.IsValidFolder(MatRoot)) AssetDatabase.CreateFolder("Assets/TideTown/Art", "GlbMats");
             string dir = MatRoot + "/" + GlbId(glb);
             if (!AssetDatabase.IsValidFolder(dir)) AssetDatabase.CreateFolder(MatRoot, GlbId(glb));
             string baseName = $"{dir}/{Safe(src.name)}";
@@ -173,22 +178,101 @@ public static class GlbTextureCompressor
             matCache[src] = copy;
             return copy;
         }
+
+        public int ReplaceOn(GameObject root)
+        {
+            int n = 0;
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                bool changed = false;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    var m = Replace(mats[i]);
+                    if (m != mats[i]) { mats[i] = m; changed = true; }
+                }
+                if (changed) { r.sharedMaterials = mats; n++; }
+            }
+            return n;
+        }
+    }
+
+    public static void ReplaceInScene()
+    {
+        var rep = new Replacer(Extract());
+        int renderers = 0;
         foreach (var r in UnityEngine.Object.FindObjectsOfType<Renderer>(true))
         {
             var mats = r.sharedMaterials;
             bool changed = false;
             for (int i = 0; i < mats.Length; i++)
             {
-                var n = Replace(mats[i]);
+                var n = rep.Replace(mats[i]);
                 if (n != mats[i]) { mats[i] = n; changed = true; }
             }
             if (changed) { r.sharedMaterials = mats; renderers++; }
         }
         AssetDatabase.SaveAssets();
-        Debug.Log($"GLBTEX scene: renderers={renderers} materials={matCache.Count} textures_swapped={swappedTex} missing={missing}");
+        Debug.Log($"GLBTEX scene: renderers={renderers} materials={rep.MaterialCount} textures_swapped={rep.swappedTex} missing={rep.missing}");
+    }
+
+    // 只给主场景换压缩材质（IslandBuilder.BuildMain 最后也会做这一步；单独跑不用重建整个场景）
+    // 命令行：tools\build.ps1 -Method GlbTextureCompressor.ReplaceInMainScene
+    public static void ReplaceInMainScene()
+    {
+        var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/TideTown/Scenes/TideTown_Main.unity");
+        ReplaceInScene();
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(scene);
+        UnityEditor.SceneManagement.EditorSceneManager.SaveScene(scene);
+    }
+
+    // 2026-11-11：v3 加的 Resources/Lux3D 预制体直接引用 GLB 原始贴图、Resources/Mechanisms 干脆是整个 GLB，
+    // 打包时未压缩贴图全进了包（网页版 data 404 MB）。这里：
+    //   1. 机关 GLB 挪到 SourceGLB/Mechanisms（MoveAsset 保留 GUID），原位换成同名预制体（材质用压缩版）；
+    //   2. Resources/Lux3D 下每个预制体的材质换成压缩版。
+    // 命令行：tools\build.ps1 -Method GlbTextureCompressor.CompressResources
+    public static void CompressResources()
+    {
+        const string mechRes = "Assets/TideTown/Resources/Mechanisms";
+        const string luxRes = "Assets/TideTown/Resources/Lux3D";
+        string mechSrc = SourceRoot + "/Mechanisms";
+        if (!AssetDatabase.IsValidFolder(mechSrc)) AssetDatabase.CreateFolder(SourceRoot, "Mechanisms");
+        var moved = new List<string>();
+        foreach (var path in Directory.GetFiles(mechRes, "*.glb"))
+        {
+            string p = path.Replace('\\', '/');
+            string dst = mechSrc + "/" + Path.GetFileName(p);
+            string err = AssetDatabase.MoveAsset(p, dst);
+            if (!string.IsNullOrEmpty(err)) Debug.LogError("GLBTEX move " + p + ": " + err);
+            else moved.Add(dst);
+        }
+        foreach (var f in Directory.GetFiles(mechSrc, "*.glb")) { string p = f.Replace('\\', '/'); if (!moved.Contains(p)) moved.Add(p); }
+        AssetDatabase.Refresh();
+        var rep = new Replacer(Extract());
+        int prefabs = 0;
+        foreach (var glbPath in moved)
+        {
+            var src = AssetDatabase.LoadAssetAtPath<GameObject>(glbPath);
+            if (src == null) { Debug.LogError("GLBTEX cannot load " + glbPath); continue; }
+            var inst = UnityEngine.Object.Instantiate(src);
+            inst.name = Path.GetFileNameWithoutExtension(glbPath);
+            rep.ReplaceOn(inst);
+            PrefabUtility.SaveAsPrefabAsset(inst, mechRes + "/" + inst.name + ".prefab");
+            UnityEngine.Object.DestroyImmediate(inst);
+            prefabs++;
+        }
+        foreach (var path in Directory.GetFiles(luxRes, "*.prefab"))
+        {
+            string p = path.Replace('\\', '/');
+            var root = PrefabUtility.LoadPrefabContents(p);
+            if (rep.ReplaceOn(root) > 0) PrefabUtility.SaveAsPrefabAsset(root, p);
+            PrefabUtility.UnloadPrefabContents(root);
+            prefabs++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"GLBTEX resources: prefabs={prefabs} mechanisms_moved={moved.Count} materials={rep.MaterialCount} textures_swapped={rep.swappedTex} missing={rep.missing}");
     }
 }
-
 // GlbTex 目录里的贴图：最大 1024、crunch；法线 / 线性数据按文件名后缀
 public class GlbTexturePostprocessor : AssetPostprocessor
 {

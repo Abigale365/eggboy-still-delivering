@@ -98,6 +98,10 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
 
     void StartMicrophoneCapture()
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // 网页版没有 Unity 的 Microphone 类（编译都过不了）：吹气用键鼠 / 手柄替代（工程书 WP-04 的 jslib 还没做）
+        MicActive = false;
+#else
         try
         {
             if (Microphone.devices != null && Microphone.devices.Length > 0)
@@ -111,6 +115,7 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         {
             MicActive = false;
         }
+#endif
     }
 
     public bool ToggleBuiltInWebcam()
@@ -144,6 +149,10 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
 
     void StartBackgroundUdpThread()
     {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // 网页版没有线程和 UDP（ESP32 手势板只给 Windows 版用）
+        return;
+#endif
         running = true;
         try
         {
@@ -408,6 +417,9 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         leftStick = Vector2.zero;
         rightStick = Vector2.zero;
         buttons = 0u;
+#if !(UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
+        return false; // winmm.dll 只有 Windows 有
+#else
         var info = new JOYINFOEX { dwSize = (uint)Marshal.SizeOf(typeof(JOYINFOEX)), dwFlags = 0xFFu };
         if (joyGetPosEx(joyId, ref info) != 0) return false;
 
@@ -423,18 +435,18 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         rightStick = new Vector2(rx, ry);
         buttons = info.dwButtons;
         return true;
+#endif
     }
 
     void AnalyzeMicrophoneBlow(float dt)
     {
-        // 无麦克风平替：大世界中按 F 键同样可在面包房烤炉旁扇风助燃
-        if (Input.GetKeyDown(KeyCode.F) && !ObjectInspectModal.IsOpen && !WoodenMechanismPuzzleModal.IsOpen && !AIAgentCalibrationDirector.IsOpen)
-        {
-            TriggerBlowEffect(false);
-        }
-
+        // （v3 在大世界里按 F 也算吹气；F 现在是指挥小黑，风箱用烤炉旁的 E）
         if (!MicActive || micClip == null) return;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        int pos = -1;
+#else
         int pos = Microphone.GetPosition(micDeviceName) - micSamples.Length;
+#endif
         if (pos < 0) return;
 
         micClip.GetData(micSamples, pos);

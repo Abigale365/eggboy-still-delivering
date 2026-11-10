@@ -16,6 +16,9 @@ public static class TideBuild
 
     public static void Windows() => Build(WindowsOut, BuildTarget.StandaloneWindows64, "WINDOWS");
 
+    // 开发版：只有开发版里才编进 Lux3D 直连（DevDirectGateway），用来在本机真调一次 Lux3D。不发给别人。
+    public static void WindowsDev() => Build("Build/Dev/TideTown.exe", BuildTarget.StandaloneWindows64, "WINDOWSDEV", BuildOptions.Development);
+
     public static void WebGL()
     {
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
@@ -30,9 +33,9 @@ public static class TideBuild
         WebGL();
     }
 
-    static void Build(string output, BuildTarget target, string tag)
+    static void Build(string output, BuildTarget target, string tag, BuildOptions options = BuildOptions.None)
     {
-        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, BuildOptions.None);
+        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, options);
         Debug.Log($"TIDEBUILD {tag} {report.summary.result} errors={report.summary.totalErrors} size={report.summary.totalSize} scene={Scene}");
         if (report.summary.result != BuildResult.Succeeded)
             throw new System.Exception(tag + " build failed");

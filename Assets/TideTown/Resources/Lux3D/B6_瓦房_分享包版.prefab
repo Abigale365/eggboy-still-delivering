@@ -61,7 +61,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 1757277585620531191, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: 2cd19ee2065f0274994fef23539972da, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -144,7 +144,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -5013457192967989265, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: 277a4a73c5b4b284f90539de97624599, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -227,7 +227,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -4968783360882833508, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: df065bc1a9b7ecf4fb2fd07aa851e24c, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -324,6 +324,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   kind: 0
   topHeight: 0
+  minY: 0
 --- !u!65 &2816081852757417709
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -406,7 +407,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -5605561984652932767, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: 965dff05bf1b577448e61050cb9fce6a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -489,7 +490,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -9219075209931182129, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: 4192e9845ee9bef498627c5914a10eb1, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -572,7 +573,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2874666105250947689, guid: c8d4de70c1c2b9b478b6639774496d25, type: 3}
+  - {fileID: 2100000, guid: 69b8665c7d75ef0469e12980ff0e93e1, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

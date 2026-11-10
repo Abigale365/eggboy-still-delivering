@@ -15,6 +15,7 @@ public sealed class Lux3DRequest
     public string style = "cartoon";
     public int faceCount = 20000;
     public string fallbackId;   // 保底库条目 id（mock 用它决定返回哪个 GLB）
+    public string resumeTaskId; // 直连：不下新单，接着等服务器上已有的任务（不花积分）
 }
 
 public sealed class Lux3DResult
@@ -194,6 +195,8 @@ public sealed class DevDirectGateway : ILux3DGateway
     {
         float t0 = Time.realtimeSinceStartup;
         if (!CanGenerate) { result.error = "no key or ledger"; yield break; }
+        string taskId = req.resumeTaskId;
+        if (!string.IsNullOrEmpty(taskId)) { Debug.Log("LUX3D resume task " + taskId); goto Poll; }
         int row = LedgerRows() + 1;
         if (row > Budget) { result.error = "Lux3D 积分账本已满 " + Budget + " 次，需要用户同意才能继续"; Debug.LogError(result.error); yield break; }
         string stamp = DateTime.UtcNow.AddHours(8).ToString("yyyy-MM-dd HH:mm");
@@ -202,7 +205,6 @@ public sealed class DevDirectGateway : ILux3DGateway
 
         string body = "{\"prompt\":" + Quote(req.prompt) + ",\"style\":" + Quote(req.style) + ",\"version\":\"G1-Turbo\",\"faceCount\":" + req.faceCount
             + ",\"outputFormat\":[\"glb\"],\"enablePbr\":true}";
-        string taskId = null;
         using (var www = new UnityWebRequest(Gateway + "/lux3d/v1/generate/text-to-3d/task/create", "POST"))
         {
             www.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
@@ -212,10 +214,14 @@ public sealed class DevDirectGateway : ILux3DGateway
             www.timeout = 30;
             yield return www.SendWebRequest();
             if (www.result != UnityWebRequest.Result.Success) { Finish(row, "-", "下单失败 " + www.error); result.error = "create: " + www.error; yield break; }
-            taskId = MatchNumber(www.downloadHandler.text, "taskId");
+            // 返回体形如 {"c":"0","d":6319196}：任务号直接放在 d 里（有的版本是 d.taskId）
+            string resp = www.downloadHandler.text;
+            taskId = MatchNumber(resp, "taskId") ?? MatchNumber(resp, "taskid") ?? MatchNumber(resp, "d");
+            if (string.IsNullOrEmpty(taskId)) Debug.LogWarning("LUX3D create response: " + resp);
         }
         if (string.IsNullOrEmpty(taskId)) { Finish(row, "-", "下单失败：没有 taskId"); result.error = "no taskId"; yield break; }
         Mark(row, taskId, "生成中");
+    Poll:
 
         string glbUrl = null;
         while (Time.realtimeSinceStartup - t0 < timeout && glbUrl == null)

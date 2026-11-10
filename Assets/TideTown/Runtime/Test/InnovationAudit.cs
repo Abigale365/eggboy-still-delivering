@@ -36,7 +36,8 @@ public sealed class InnovationAudit : MonoBehaviour
         yield return new WaitForSeconds(1.0f);
         Time.timeScale = 1f;
         string fatal = "";
-        var steps = new IEnumerator[] { AuditHints(), AuditWordSlips(), AuditLux3DAndWish() };
+        TidalWindChallenge.Suppress = true; // 只在测海风那一段放开
+        var steps = new IEnumerator[] { AuditWooden(), AuditWind(), AuditDog(), AuditPrint(), AuditShadowSound(), AuditHints(), AuditWordSlips(), AuditEcho(), AuditLux3DAndWish() };
         foreach (var s in steps)
         {
             // 一个方向出错不影响后面的方向
@@ -120,6 +121,543 @@ public sealed class InnovationAudit : MonoBehaviour
         yield return null;
         hint.DebugAdvance(300f);
         Check("hint_silent_when_away", hint.CurrentTier == 0 && hint.CurrentNodeId == "", $"node={hint.CurrentNodeId} tier={hint.CurrentTier}");
+    }
+
+    // ---- WP-B：海风（只在海边迎风路上刮；蹲住扛过去有顺风；没扛住东西掉在脚边能捡回来） ----
+    IEnumerator AuditWind()
+    {
+        var wind = FindObjectOfType<TidalWindChallenge>();
+        Check("wind_present", wind != null);
+        if (wind == null) yield break;
+        var st = boot.state;
+        TidalWindChallenge.Suppress = false;
+
+        // 面包店不刮
+        Vector3 stove = Vector3.zero;
+        foreach (var it in BakeryData.Load()) if (it.id == "stove") stove = new Vector3(it.x, it.y, it.z);
+        Teleport(FindWalkableNear(stove, 1.5f, 4f));
+        yield return new WaitForSeconds(0.3f);
+        Check("wind_calm_inland", !wind.InWindZone && wind.Phase == "calm");
+
+        // 低洼路（LOW → 24）中间
+        Vector3 low = Vector3.zero, p24 = Vector3.zero;
+        var asset = Resources.Load<TextAsset>("World/route");
+        var list = asset != null ? JsonUtility.FromJson<RouteList>(asset.text) : null;
+        if (list != null) foreach (var r in list.route) { if (r.stop && r.id == "LOW") low = new Vector3(r.x, 0f, r.z); if (r.stop && r.id == "24") p24 = new Vector3(r.x, 0f, r.z); }
+        Vector3 mid = FindWalkableNear((low + p24) * 0.5f, 0f, 2f);
+        st.step = "B3_load"; st.carrying = "wood";
+        Teleport(mid);
+        yield return new WaitForSeconds(0.3f);
+        Check("wind_zone_on_coast", wind.InWindZone, "mid=" + mid.ToString("F1"));
+        // 风是从海那边吹过来的：顺着风往前几米，地面不应该比现在更低（往陆地上吹）
+        Vector3 downwind = mid + wind.WindDir * 5f;
+        Check("wind_blows_from_sea", !boot.world.InWalkArea(mid.x - wind.WindDir.x * 5f, mid.z - wind.WindDir.z * 5f)
+            || boot.world.GroundAt(mid.x - wind.WindDir.x * 5f, mid.z - wind.WindDir.z * 5f) <= boot.world.GroundAt(downwind.x, downwind.z) + 0.05f,
+            "wind=" + wind.WindDir.ToString("F2"));
+
+        // 蹲住：扛过去，有顺风，东西还在手上
+        wind.DebugBrace = true;
+        wind.DebugStartGust();
+        yield return new WaitForSeconds(2.2f);
+        Check("wind_gust_brace_crouches", wind.Phase == "gust" && boot.player.IsStoryCrouched, "phase=" + wind.Phase);
+        yield return Snap("innov_wind_gust.png", boot.player.transform.position, 4.0f, 200f);
+        float t0 = Time.realtimeSinceStartup;
+        while (wind.Phase == "gust" && Time.realtimeSinceStartup - t0 < 5f) yield return null;
+        Check("wind_brace_survives", wind.Survived == 1 && wind.Failures == 0 && st.carrying == "wood" && wind.Phase == "boost", "phase=" + wind.Phase);
+        wind.DebugBrace = false;
+        yield return new WaitForSeconds(3.3f);
+
+        // 不蹲：被吹得踉跄，柴掉在脚边，剧情退回"去抱柴"
+        Teleport(mid);
+        Vector3 before = boot.player.transform.position;
+        wind.DebugStartGust();
+        t0 = Time.realtimeSinceStartup;
+        while (wind.Failures == 0 && Time.realtimeSinceStartup - t0 < 6f) yield return null;
+        float moved = Vector3.Distance(boot.player.transform.position, before);
+        Check("wind_fail_happens", wind.Failures == 1);
+        Check("wind_fail_short_stumble", moved < 7f, "moved=" + moved.ToString("F1"));
+        Check("wind_fail_drops_item_nearby", st.carrying != "wood" && boot.director.LastDroppedItem == "wood"
+            && Vector3.Distance(boot.director.LastDropPosition, boot.player.transform.position) < 5f
+            && boot.world.Walkable(boot.director.LastDropPosition.x, boot.director.LastDropPosition.z),
+            $"carry={st.carrying} step={st.step} drop={boot.director.LastDropPosition:F1}");
+        Check("wind_fail_no_text_banner", GameObject.Find("TidalWindBanner") == null);
+        yield return new WaitForSeconds(1.6f);
+        yield return Snap("innov_wind_dropped.png", boot.director.LastDropPosition, 3.5f, 290f);
+        TidalWindChallenge.Suppress = true;
+        Teleport(boot.director.LastDropPosition);
+        yield return null;
+        bool picked = boot.service.TryInteract("dropped_wood");
+        Check("wind_pickup_restores", picked && st.carrying == "wood" && st.step == "B3_load", "step=" + st.step);
+
+        st.carrying = ""; st.step = "P1_mailbox";
+        boot.player.SetStoryCrouch(false);
+        yield return new WaitForSeconds(0.3f);
+    }
+
+    // ---- WP-G：影子钥匙（布幕上真的拼出钥匙）+ 装声音的瓶子 + 广场八音盒（房子起伏后精确复位） ----
+    IEnumerator AuditShadowSound()
+    {
+        var sp = ShadowLanternPuzzle.Instance;
+        var snd = SoundBottleSystem.Instance;
+        Check("shadow_present", sp != null && sp.enabled && snd != null);
+        if (sp == null || !sp.enabled || snd == null) yield break;
+        var st = boot.state;
+        Check("shadow_off_route", true, "turntable=" + sp.TurntablePos.ToString("F1"));
+        Teleport(FindWalkableNear(sp.TurntablePos, 1.2f, 1.8f));
+        yield return new WaitForSeconds(0.3f);
+
+        // 没转对：不是钥匙（钥匙头的孔这时候不在亮处，或者杆不在）
+        Check("shadow_start_unsolved", !sp.Solved && Mathf.Abs(Mathf.DeltaAngle(0f, sp.Angle)) > 60f);
+        yield return Snap("innov_shadow_start.png", sp.ScreenCenter, 3.2f, Mathf.Atan2(-sp.ScreenCenter.x + sp.TurntablePos.x, -sp.ScreenCenter.z + sp.TurntablePos.z) * Mathf.Rad2Deg + 40f);
+        // 按住 E 转（审计用 DebugHold 代替）
+        sp.DebugHold = true;
+        float t0 = Time.realtimeSinceStartup;
+        while (!sp.Solved && Time.realtimeSinceStartup - t0 < 8f) yield return null;
+        sp.DebugHold = false;
+        Check("shadow_turn_solves", sp.Solved && Mathf.Abs(sp.Angle) < 0.01f, "angle=" + sp.Angle.ToString("F1"));
+        yield return new WaitForSeconds(0.8f);
+
+        // 读布幕上的像素：钥匙头的孔是亮的，钥匙头的圈、杆、两颗齿是暗的，齿下面是亮的
+        var ring = sp.DebugJunk("ring");
+        var shaft = sp.DebugJunk("shaft");
+        bool shapeOk = false; string shapeNote = "missing parts";
+        if (ring != null && shaft != null)
+        {
+            var rb = Lux3DModelFit.WorldBounds(ring.gameObject);
+            var sb = Lux3DModelFit.WorldBounds(shaft.gameObject);
+            Vector2 hole = sp.DebugScreenUV(rb.center);
+            Vector3 side = Vector3.Cross(Vector3.up, (sp.ScreenCenter - sp.TurntablePos).normalized);
+            float ringR = Mathf.Max(rb.extents.x, rb.extents.z) * 0.8f;
+            Vector2 rim = sp.DebugScreenUV(rb.center + Vector3.up * ringR);
+            Vector2 shaftMid = sp.DebugScreenUV(sb.center);
+            Vector2 belowShaft = sp.DebugScreenUV(sb.center + Vector3.down * 0.18f + Vector3.Cross(Vector3.up, (sp.ScreenCenter - sp.TurntablePos).normalized) * -0.05f);
+            bool holeLit = !sp.DebugIsShadow(hole.x, hole.y);
+            bool rimDark = sp.DebugIsShadow(rim.x, rim.y);
+            bool shaftDark = sp.DebugIsShadow(shaftMid.x, shaftMid.y);
+            bool belowLit = !sp.DebugIsShadow(belowShaft.x, belowShaft.y);
+            shapeOk = holeLit && rimDark && shaftDark && belowLit;
+            shapeNote = $"holeLit={holeLit} rimDark={rimDark} shaftDark={shaftDark} belowLit={belowLit} hole={hole} shaft={shaftMid}";
+        }
+        Check("shadow_screen_shows_key", shapeOk, shapeNote);
+        yield return Snap("innov_shadow_key.png", sp.ScreenCenter, 3.2f, Mathf.Atan2(-sp.ScreenCenter.x + sp.TurntablePos.x, -sp.ScreenCenter.z + sp.TurntablePos.z) * Mathf.Rad2Deg + 40f);
+
+        // 拿空瓶
+        Teleport(sp.BottlePos + (boot.player.transform.position - sp.BottlePos).normalized * 0.6f);
+        yield return null;
+        bool took = boot.service.TryInteract("sound_bottle_pickup");
+        yield return new WaitForSecondsRealtime(0.2f);
+        if (boot.ui.LetterOpen) boot.ui.CloseLetter();
+        Check("shadow_gives_bottle", took && snd.HasBottle);
+
+        // 装四种声音
+        var dog = FindObjectOfType<DogFollower>();
+        foreach (var id in SoundBottleSystem.Order)
+        {
+            Vector3 at;
+            if (id == "bark") { dog.Follow(); yield return new WaitForSeconds(0.3f); at = dog.transform.position; }
+            else
+            {
+                var go = GameObject.Find(id == "bell" ? "Bakery_bell" : id == "swing" ? "S_swing" : "Bakery_wood");
+                at = go != null ? go.transform.position : Vector3.zero;
+            }
+            Teleport(FindWalkableNear(at, 0.6f, 1.6f));
+            yield return null;
+            if (id == "bark") { yield return new WaitForSeconds(0.4f); }
+            boot.service.TryInteract("sound_" + id);
+            yield return new WaitForSeconds(0.2f);
+        }
+        Check("sound_all_four", snd.Count == 4, "count=" + snd.Count);
+
+        // 八音盒：房子跟着起伏，演完精确复位
+        Teleport(FindWalkableNear(snd.MusicBoxPos, 0.8f, 1.6f));
+        yield return null;
+        bool played = boot.service.TryInteract("music_box");
+        Check("music_box_starts", played && snd.Playing && snd.HouseCount >= 6, "houses=" + snd.HouseCount);
+        yield return new WaitForSeconds(3.5f);
+        Check("music_box_houses_move", snd.MaxHouseLift > 0.1f, "lift=" + snd.MaxHouseLift.ToString("F2"));
+        yield return Snap("innov_music_box.png", snd.MusicBoxPos + Vector3.up * 1.5f, 9f, 200f);
+        t0 = Time.realtimeSinceStartup;
+        while (snd.Playing && Time.realtimeSinceStartup - t0 < 15f) yield return null;
+        float err = snd.DebugHouseError();
+        Check("music_box_restores_exactly", !snd.Playing && snd.Done && err < 0.001f && !boot.player.locked, "err=" + err.ToString("F5"));
+
+        st.step = "P1_mailbox";
+        yield return new WaitForSeconds(0.3f);
+    }
+
+    // ---- WP-E：透视拓印（快门前后画面不变；对准渡口缺口拍下小木尺就成了桥） ----
+    IEnumerator AuditPrint()
+    {
+        var ps = FindObjectOfType<PerspectivePrintSystem>();
+        var mech = FindObjectOfType<WorldMechanismDirector>();
+        Check("print_present", ps != null && mech != null);
+        if (ps == null || mech == null) yield break;
+        var st = boot.state;
+        var p = boot.player;
+
+        // 1) 面包店门口：快门前后，物件在屏幕上的框不变
+        Vector3 stove = Vector3.zero;
+        foreach (var it in BakeryData.Load()) if (it.id == "stove") stove = new Vector3(it.x, it.y, it.z);
+        Teleport(FindWalkableNear(stove, 3f, 6f));
+        yield return null;
+        ps.OpenViewfinder();
+        yield return null;
+        Check("print_open", ps.IsViewfinderActive && p.locked);
+        bool hidden = true; foreach (var r in p.GetComponentsInChildren<Renderer>()) if (r.enabled) hidden = false;
+        Check("print_hides_player_in_fp", hidden);
+        ps.DebugSelect("ruler");
+        ps.DebugSetView(p.yaw * Mathf.Rad2Deg, 25f, 0.6f, 0f);
+        yield return null;
+        ps.DebugSetView(p.yaw * Mathf.Rad2Deg, 25f, 0.6f, 0f);
+        yield return SnapScreen("innov_print_viewfinder.png");
+        Check("print_aim_valid", ps.AimValid, "k=" + ps.AimScale.ToString("F2"));
+        Rect before = ps.DebugScreenRect(ps.DebugHeldModel);
+        var go = ps.Shutter();
+        Rect after = go != null ? ps.DebugScreenRect(go) : new Rect();
+        float tol = Mathf.Max(before.width, before.height) * 0.03f;
+        bool same = go != null && Mathf.Abs(before.xMin - after.xMin) <= tol && Mathf.Abs(before.xMax - after.xMax) <= tol
+            && Mathf.Abs(before.yMin - after.yMin) <= tol && Mathf.Abs(before.yMax - after.yMax) <= tol;
+        Check("print_screen_rect_unchanged", same, $"before={before} after={after}");
+        Check("print_scaled_up", go != null && go.transform.lossyScale.x > 1.25f, go != null ? "scale=" + go.transform.lossyScale.x.ToString("F2") : "null");
+        Check("print_not_bridge_inland", !ps.LastPrintSnapped);
+        // 对着天上：够不着，拍不出来
+        ps.DebugSetView(p.yaw * Mathf.Rad2Deg, -30f, 0.6f, 0f);
+        Check("print_sky_invalid", !ps.AimValid && ps.Shutter() == null);
+        ps.CloseViewfinder();
+        yield return null;
+        bool shown = false; foreach (var r in p.GetComponentsInChildren<Renderer>()) if (r.enabled) shown = true;
+        Check("print_close_restores", !ps.IsViewfinderActive && !p.locked && shown);
+        if (go != null) yield return Snap("innov_print_inland.png", go.transform.position, 3.5f, 200f);
+        ps.DebugClearPrints();
+
+        // 2) 涨潮的渡口：站在缺口这一头，对准那一头拍下小木尺
+        st.step = "L0_cross";
+        if (WaterLevel.Main != null) WaterLevel.Main.SetInstant(WaterLevel.LevelYs[2]);
+        mech.DebugResetCrossing();
+        yield return new WaitForSeconds(0.4f);
+        mech.GapEndpoints(out Vector3 a, out Vector3 b);
+        Vector3 ab = b - a; ab.y = 0f;
+        Vector3 stand = FindWalkableNear(a - ab.normalized * 1.0f, 0f, 1.2f);
+        Teleport(stand);
+        yield return null;
+        Check("print_gap_blocks", !boot.world.Walkable(((a + b) * 0.5f).x, ((a + b) * 0.5f).z));
+        ps.OpenViewfinder();
+        yield return null;
+        ps.DebugSelect("ruler");
+        // 找一个拍下去能同时盖住缺口两端的姿势（真人就是这样慢慢调的）
+        float yaw = Mathf.Atan2(ab.x, ab.z) * Mathf.Rad2Deg;
+        bool found = false; string tried = "";
+        for (float hy = 0f; hy <= 90f && !found; hy += 90f)
+            for (float hold = 0.35f; hold <= 1.1f && !found; hold += 0.05f)
+                for (float pitch = 5f; pitch <= 50f && !found; pitch += 1.5f)
+                {
+                    ps.DebugSetView(yaw, pitch, hold, hy);
+                    if (!ps.AimValid) continue;
+                    var hb = Lux3DModelFit.WorldBounds(ps.DebugHeldModel);
+                    Vector3 cp = Camera.main.transform.position;
+                    var pb = new Bounds(cp + (hb.center - cp) * ps.AimScale, hb.size * ps.AimScale);
+                    pb.Expand(new Vector3(1.2f, 8f, 1.2f));
+                    if (pb.Contains(new Vector3(a.x, pb.center.y, a.z)) && pb.Contains(new Vector3(b.x, pb.center.y, b.z)))
+                    { found = true; tried = $"heldYaw={hy} hold={hold:F2} pitch={pitch:F1} k={ps.AimScale:F1}"; }
+                }
+        Check("print_gap_aim_found", found, tried);
+        yield return SnapScreen("innov_print_gap_aim.png");
+        var bridge = ps.Shutter();
+        ps.CloseViewfinder();
+        yield return new WaitForSeconds(0.3f);
+        Vector3 mid = (a + b) * 0.5f;
+        Check("print_snaps_to_gap", bridge != null && ps.LastPrintSnapped && mech.CrossingSolved, "snapped=" + ps.LastPrintSnapped);
+        Check("print_bridge_walkable", boot.world.Walkable(mid.x, mid.z) && boot.world.Walkable(Vector3.Lerp(a, b, 0.25f).x, Vector3.Lerp(a, b, 0.25f).z)
+            && boot.world.Walkable(Vector3.Lerp(a, b, 0.75f).x, Vector3.Lerp(a, b, 0.75f).z),
+            $"ground={boot.world.GroundAt(mid.x, mid.z):F2} water={WaterLevel.StaticY:F2}");
+        yield return Snap("innov_print_bridge.png", mid, 4.0f, yaw + 100f);
+
+        ps.DebugClearPrints();
+        mech.DebugResetCrossing();
+        if (WaterLevel.Main != null) WaterLevel.Main.SetInstant(0f);
+        st.step = "P1_mailbox";
+        yield return new WaitForSeconds(0.5f);
+    }
+
+    // ---- WP-C：小黑（F：嗅附近的线索旧物 / 踩浅滩爪印踏板捞木匣 / 摸摸） ----
+    IEnumerator AuditDog()
+    {
+        var dog = FindObjectOfType<DogFollower>();
+        var plate = DogPawPlate.Instance;
+        Check("dog_present", dog != null && plate != null);
+        if (dog == null || plate == null) yield break;
+        var st = boot.state;
+
+        // 1) 面包店：小黑跑到最近的旧物旁嗅，地上留粉笔爪印
+        st.step = "B1_matches";
+        Vector3 recipe = Vector3.zero;
+        foreach (var it in BakeryData.Load()) if (it.id == "recipe") recipe = new Vector3(it.x, it.y, it.z);
+        Teleport(FindWalkableNear(recipe, 1.5f, 3.5f));
+        dog.Follow();
+        yield return new WaitForSeconds(0.6f);
+        dog.CommandOrPet();
+        string cmd = dog.LastCommand;
+        Check("dog_sniff_command", cmd.StartsWith("sniff:"), cmd);
+        string id = cmd.StartsWith("sniff:") ? cmd.Substring(6) : "";
+        Vector3 dogFrom = dog.transform.position;
+        float t0 = Time.realtimeSinceStartup;
+        while (!st.flags.Contains("dog_sniff_" + id) && Time.realtimeSinceStartup - t0 < 8f) yield return null;
+        Check("dog_sniff_runs_and_marks", st.flags.Contains("dog_sniff_" + id) && GameObject.Find("DogClueMark_" + id) != null,
+            $"id={id} ran={Vector3.Distance(dogFrom, dog.transform.position):F1}");
+        var mark = GameObject.Find("DogClueMark_" + id);
+        var tm = mark != null ? mark.GetComponentInChildren<TextMesh>() : null;
+        Check("dog_mark_shows_ring_number", tm != null && tm.text.Contains("环"), tm != null ? tm.text : "null");
+        if (mark != null) yield return Snap("innov_dog_sniff.png", mark.transform.position, 2.4f, 200f);
+
+        // 2) 附近没东西：就是摸摸
+        yield return new WaitForSeconds(2.5f);
+        Vector3 far = Vector3.zero;
+        var asset = Resources.Load<TextAsset>("World/route");
+        var list = asset != null ? JsonUtility.FromJson<RouteList>(asset.text) : null;
+        if (list != null) foreach (var r in list.route) if (r.stop && r.id == "03") far = new Vector3(r.x, 0f, r.z);
+        Teleport(FindWalkableNear(far, 0f, 3f));
+        yield return new WaitForSeconds(0.6f);
+        dog.CommandOrPet();
+        Check("dog_pet_when_nothing_near", dog.LastCommand == "pet", dog.LastCommand);
+        yield return new WaitForSeconds(1.0f);
+
+        // 3) 船棚浅滩：小黑踩踏板，水里升起木匣，打开拿到灯塔星盘的三个刻度
+        st.step = "L1_shed";
+        foreach (var x in new[] { "hat", "scope", "log" }) st.flags.Remove("dog_sniff_" + x);
+        if (WaterLevel.Main != null) WaterLevel.Main.SetInstant(WaterLevel.LevelYs[2]);
+        Check("dog_plate_dry_at_L2", boot.world.Walkable(plate.Center.x, plate.Center.z), "plate=" + plate.Center.ToString("F1"));
+        Teleport(FindWalkableNear(plate.Center, 2.5f, 4f));
+        dog.Follow();
+        yield return new WaitForSeconds(0.8f);
+        Check("dog_plate_not_yet", !plate.Done);
+        dog.CommandOrPet();
+        Check("dog_plate_command", dog.LastCommand == "plate", dog.LastCommand);
+        t0 = Time.realtimeSinceStartup;
+        while (!plate.Done && Time.realtimeSinceStartup - t0 < 8f) yield return null;
+        Check("dog_steps_on_plate", plate.Done);
+        t0 = Time.realtimeSinceStartup;
+        while (!plate.ChestReady && Time.realtimeSinceStartup - t0 < 5f) yield return null;
+        Check("dog_chest_rises", plate.ChestReady && boot.world.Walkable(plate.ChestRest.x, plate.ChestRest.z));
+        yield return Snap("innov_dog_chest.png", (plate.Center + plate.ChestRest) * 0.5f, 3.2f, 200f);
+        Teleport(plate.ChestRest + (boot.player.transform.position - plate.ChestRest).normalized * 0.8f);
+        yield return null;
+        bool opened = boot.service.TryInteract("paw_chest");
+        yield return new WaitForSecondsRealtime(0.3f);
+        Check("dog_chest_gives_lighthouse_code", opened && st.flags.Contains("dog_sniff_hat") && st.flags.Contains("dog_sniff_scope") && st.flags.Contains("dog_sniff_log"));
+        yield return SnapScreen("innov_dog_chest_note.png");
+        if (boot.ui.LetterOpen) boot.ui.CloseLetter();
+
+        // 星盘的邮差笔记里能看到这三个刻度
+        WoodenMechanismPuzzleModal.DebugOpen("lighthouse_lock", st, null, boot.player, boot.ui, boot.gate, null);
+        yield return new WaitForSecondsRealtime(0.3f);
+        var note = GameObject.Find("WoodenMechanismNote");
+        string all = ""; if (note != null) foreach (var tx in note.GetComponentsInChildren<UnityEngine.UI.Text>()) all += tx.text;
+        Check("dog_code_in_lighthouse_note", all.Contains("外环 6") && all.Contains("中环 2") && all.Contains("内环 3"), all.Replace("\n", " / "));
+        WoodenMechanismPuzzleModal.DebugClose();
+
+        st.step = "P1_mailbox";
+        if (WaterLevel.Main != null) WaterLevel.Main.SetInstant(0f);
+        yield return new WaitForSeconds(0.5f);
+    }
+
+    // ---- WP-A：三环木匣（直接摆弄 3D 部件；环上的数字和指针要和真实刻度一致） ----
+    IEnumerator AuditWooden()
+    {
+        var st = boot.state;
+        bool solvedCb = false;
+        bool opened = WoodenMechanismPuzzleModal.DebugOpen("bakery_lock", st, null, boot.player, boot.ui, boot.gate, () => solvedCb = true);
+        yield return new WaitForSecondsRealtime(0.8f);
+        Check("wood_open", opened && WoodenMechanismPuzzleModal.IsOpen);
+        var note = GameObject.Find("WoodenMechanismNote");
+        Check("wood_only_small_note", note != null && note.activeInHierarchy && GameObject.Find("WoodenMechanismParchmentCard") == null);
+
+        bool pointerOk = true; string pointerNote = "";
+        for (int r = 0; r < 3; r++)
+        {
+            int v = WoodenMechanismPuzzleModal.DebugRing(r), seen = WoodenMechanismPuzzleModal.DebugNumberUnderPointer(r);
+            pointerNote += $"r{r}={v}/{seen} ";
+            if (v != seen) pointerOk = false;
+        }
+        Check("wood_numbers_match_rings_at_open", pointerOk, pointerNote);
+        yield return SnapScreen("innov_wood_open.png");
+
+        // 木栓没拨开：环转不动
+        int r0 = WoodenMechanismPuzzleModal.DebugRing(0);
+        WoodenMechanismPuzzleModal.ExternalRotateRing(0, 1);
+        Check("wood_locked_by_latches", WoodenMechanismPuzzleModal.DebugRing(0) == r0 && !WoodenMechanismPuzzleModal.DebugStage1);
+        // 推错一次（木栓还锁着）不扣次数，只震一下
+        WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
+        Check("wood_push_while_locked_free", WoodenMechanismPuzzleModal.DebugAttemptsLeft == 3);
+
+        // 乙栓一拨，三根全开
+        WoodenMechanismPuzzleModal.ExternalToggleLatch(1);
+        Check("wood_latch_b_opens_all", WoodenMechanismPuzzleModal.DebugStage1);
+
+        // 拖外环 60°：外环 +1，中环跟着 +1，内环不动
+        int a0 = WoodenMechanismPuzzleModal.DebugRing(0), a1 = WoodenMechanismPuzzleModal.DebugRing(1), a2 = WoodenMechanismPuzzleModal.DebugRing(2);
+        WoodenMechanismPuzzleModal.DebugDragRing(0, 62f);
+        int b0 = WoodenMechanismPuzzleModal.DebugRing(0), b1 = WoodenMechanismPuzzleModal.DebugRing(1), b2 = WoodenMechanismPuzzleModal.DebugRing(2);
+        Check("wood_drag_outer_couples_middle", b0 == a0 % 6 + 1 && b1 == a1 % 6 + 1 && b2 == a2, $"{a0}{a1}{a2}->{b0}{b1}{b2}");
+        // 拖得不够半格不算
+        WoodenMechanismPuzzleModal.DebugDragRing(0, -20f);
+        Check("wood_small_drag_ignored", WoodenMechanismPuzzleModal.DebugRing(0) == b0);
+        WoodenMechanismPuzzleModal.DebugDragRing(0, 20f);
+        yield return new WaitForSecondsRealtime(0.8f);
+        pointerOk = true; pointerNote = "";
+        for (int r = 0; r < 3; r++)
+        {
+            int v = WoodenMechanismPuzzleModal.DebugRing(r), seen = WoodenMechanismPuzzleModal.DebugNumberUnderPointer(r);
+            pointerNote += $"r{r}={v}/{seen} ";
+            if (v != seen) pointerOk = false;
+        }
+        Check("wood_numbers_follow_rotation", pointerOk, pointerNote);
+
+        // 刻度不对推主轴：扣一次、乙栓弹回
+        WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
+        Check("wood_wrong_push_costs_one", WoodenMechanismPuzzleModal.DebugAttemptsLeft == 2 && !WoodenMechanismPuzzleModal.DebugStage1);
+        var noteText = note != null ? note.GetComponentsInChildren<UnityEngine.UI.Text>() : new UnityEngine.UI.Text[0];
+        string allNote = ""; foreach (var tx in noteText) allNote += tx.text;
+        Check("wood_note_shows_attempts", allNote.Contains("●●○") && allNote.Contains("？"), allNote.Replace("\n", " / "));
+
+        // 反震后三根栓是"开、关、开"：只拨乙栓已经不够了，要换个拨法
+        WoodenMechanismPuzzleModal.ExternalToggleLatch(1);
+        Check("wood_rebound_needs_new_order", !WoodenMechanismPuzzleModal.DebugStage1);
+        WoodenMechanismPuzzleModal.DebugOpenAllLatches();
+        Check("wood_rebound_solvable", WoodenMechanismPuzzleModal.DebugStage1);
+        // 按"外 → 中 → 内"的顺序拨到 3-5-2，推进去
+        int[] target = { 3, 5, 2 };
+        for (int r = 0; r < 3; r++)
+        {
+            int guard = 0;
+            while (WoodenMechanismPuzzleModal.DebugRing(r) != target[r] && guard++ < 8) WoodenMechanismPuzzleModal.ExternalRotateRing(r, 1);
+        }
+        yield return new WaitForSecondsRealtime(0.7f);
+        yield return SnapScreen("innov_wood_aligned.png");
+        Check("wood_aligned", WoodenMechanismPuzzleModal.DebugRing(0) == 3 && WoodenMechanismPuzzleModal.DebugRing(1) == 5 && WoodenMechanismPuzzleModal.DebugRing(2) == 2);
+        WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
+        Check("wood_solves", WoodenMechanismPuzzleModal.DebugSolved);
+        float t0 = Time.realtimeSinceStartup;
+        while (!solvedCb && Time.realtimeSinceStartup - t0 < 3f) yield return null;
+        Check("wood_callback_and_closes", solvedCb && !WoodenMechanismPuzzleModal.IsOpen && st.flags.Contains("puzzle_bakery_lock") && !boot.player.locked);
+        st.flags.Remove("puzzle_bakery_lock");
+
+        // 第三次推错：反震（关掉机关、退回拿火柴那一步）
+        st.step = "B4_light";
+        if (!st.flags.Contains("matches_taken")) st.flags.Add("matches_taken");
+        WoodenMechanismPuzzleModal.DebugOpen("bakery_lock", st, null, boot.player, boot.ui, boot.gate, null);
+        yield return null;
+        for (int i = 0; i < 3; i++) { WoodenMechanismPuzzleModal.DebugOpenAllLatches(); WoodenMechanismPuzzleModal.ExternalAttemptUnlock(); }
+        yield return null;
+        Check("wood_third_failure_jams", !WoodenMechanismPuzzleModal.IsOpen && !st.flags.Contains("matches_taken") && st.step == "B1_matches", "step=" + st.step);
+        WoodenMechanismPuzzleModal.DebugClose();
+        st.step = "P1_mailbox";
+        yield return new WaitForSecondsRealtime(0.3f);
+    }
+
+    // ---- WP-F：潮汐残影（绞盘一个人摇不动；你 + 10 秒前的你一起按住才摇得起来） ----
+    IEnumerator AuditEcho()
+    {
+        var echo = FindObjectOfType<TidalEchoCloneSystem>();
+        var mech = FindObjectOfType<WorldMechanismDirector>();
+        Check("echo_system_present", echo != null && mech != null);
+        if (echo == null || mech == null) yield break;
+        var st = boot.state;
+        st.step = "L0_cross";
+        if (WaterLevel.Main != null) WaterLevel.Main.SetInstant(WaterLevel.LevelYs[2]);
+        mech.DebugResetCrossing();
+        yield return new WaitForSeconds(0.3f);
+        Vector3 ch = mech.GetCrossingChannelCenter();
+        Vector3 winch = mech.WinchPosition;
+        Check("echo_gap_blocks", mech.GapActive && !boot.world.Walkable(ch.x, ch.z), "gap=" + mech.GapActive);
+        Check("echo_winch_on_dry_land", boot.world.Walkable(winch.x, winch.z), "winch=" + winch.ToString("F2"));
+
+        // 一个人：怎么摇都只是晃，不会升桥
+        Teleport(winch + new Vector3(0.3f, 0f, 0.3f));
+        yield return null;
+        mech.DebugPlayerHoldsWinch = true;
+        yield return new WaitForSeconds(3.5f);
+        Check("echo_alone_cannot_crank", !mech.CrossingSolved && mech.WinchHolders == 1 && mech.WinchStrained, $"holders={mech.WinchHolders} solved={mech.CrossingSolved}");
+        mech.DebugPlayerHoldsWinch = false;
+        yield return new WaitForSeconds(0.3f);
+
+        // 攒的时间不够叫不出来
+        echo.DebugClear();
+        for (int i = 0; i < 20; i++) echo.DebugPushFrame(winch, 0f, Vector3.zero, true, "winch");
+        Check("echo_needs_buffer", !echo.Summon() && !echo.EchoActive, "buffered=" + echo.BufferedSeconds.ToString("F1"));
+
+        // 录一段"10 秒前"：先从 3 米外走到绞盘（2 秒），再在绞盘旁按住 E（4 秒）
+        echo.DebugClear();
+        Vector3 start = FindWalkableNear(winch, 2.5f, 3.5f);
+        start.y = boot.world.GroundAt(start.x, start.z, winch.y + 1f);
+        float yawWalk = Mathf.Atan2(winch.x - start.x, winch.z - start.z);
+        for (int i = 0; i <= 40; i++)
+        {
+            float k = i / 40f;
+            Vector3 p = Vector3.Lerp(start, winch, k);
+            p.y = boot.world.GroundAt(p.x, p.z, winch.y + 1f);
+            Vector3 v = (winch - start) / 2f; v.y = 0f;
+            echo.DebugPushFrame(p, yawWalk, i < 40 ? v : Vector3.zero, true, "");
+        }
+        for (int i = 0; i < 80; i++) echo.DebugPushFrame(winch, yawWalk, Vector3.zero, true, "winch");
+        Check("echo_summon", echo.Summon() && echo.EchoActive);
+
+        // 走路那一段：残影真的在走，腿在动（步态层在干活），不是平移
+        Vector3 e0 = echo.EchoPosition;
+        float maxSpeed = 0f, maxLegSwing = 0f;
+        var puppet = GameObject.Find("EGGBOY_TidalEcho");
+        var pp = puppet != null ? puppet.GetComponent<EggboyPlayer>() : null;
+        Transform footL = pp != null && pp.Bones != null ? pp.Bones.Bone("footL") : null;
+        Vector3 footStart = Vector3.zero;
+        float t0 = Time.realtimeSinceStartup;
+        while (Time.realtimeSinceStartup - t0 < 1.6f)
+        {
+            // 要在一帧的末尾量：残影在 Update 里先把骨头还原成站姿，步态层到 LateUpdate 才迈腿
+            yield return new WaitForEndOfFrame();
+            maxSpeed = Mathf.Max(maxSpeed, echo.EchoSpeed);
+            if (footL != null)
+            {
+                Vector3 rel = Quaternion.Inverse(puppet.transform.rotation) * (footL.position - puppet.transform.position);
+                if (footStart == Vector3.zero) footStart = rel;
+                maxLegSwing = Mathf.Max(maxLegSwing, Vector3.Distance(rel, footStart));
+            }
+        }
+        Check("echo_walks", Vector3.Distance(echo.EchoPosition, e0) > 1.0f && maxSpeed > 1.0f, $"moved={Vector3.Distance(echo.EchoPosition, e0):F2} speed={maxSpeed:F2}");
+        Check("echo_legs_move", maxLegSwing > 0.03f, $"footSwing={maxLegSwing:F3}");
+        bool ghostLook = false;
+        if (puppet != null)
+        {
+            var r = puppet.GetComponentInChildren<SkinnedMeshRenderer>();
+            ghostLook = r != null && r.sharedMaterial != null && r.sharedMaterial.name.StartsWith("TidalEchoGhost");
+        }
+        Check("echo_ghost_material", ghostLook);
+        yield return Snap("innov_echo_walk.png", echo.EchoPosition, 3.0f, 200f);
+
+        // 残影走到绞盘旁按住了 E：玩家也按住，两个人一起摇
+        t0 = Time.realtimeSinceStartup;
+        while (echo.EchoHoldZone != "winch" && Time.realtimeSinceStartup - t0 < 3f) yield return null;
+        Check("echo_holds_winch", echo.EchoHoldZone == "winch");
+        Teleport(winch + new Vector3(-0.35f, 0f, 0.25f));
+        mech.DebugPlayerHoldsWinch = true;
+        yield return new WaitForSeconds(0.4f);
+        Check("echo_two_holders", mech.WinchHolders == 2, "holders=" + mech.WinchHolders);
+        yield return Snap("innov_echo_crank.png", winch, 3.2f, 200f);
+        t0 = Time.realtimeSinceStartup;
+        while (!mech.CrossingSolved && Time.realtimeSinceStartup - t0 < 5f) yield return null;
+        mech.DebugPlayerHoldsWinch = false;
+        Check("echo_crank_raises_bridge", mech.CrossingSolved, "crank=" + mech.WinchCrank01.ToString("F2"));
+        yield return new WaitForSeconds(2.0f); // 栈桥浮上来
+        Check("echo_bridge_walkable", boot.world.Walkable(ch.x, ch.z), $"ground={boot.world.GroundAt(ch.x, ch.z):F2} water={WaterLevel.StaticY:F2}");
+        yield return Snap("innov_echo_bridge.png", ch, 5.0f, 200f);
+
+        // 演完会自己化掉；再按一次 R 也能提前收起
+        t0 = Time.realtimeSinceStartup;
+        while (echo.EchoActive && Time.realtimeSinceStartup - t0 < 6f) yield return null;
+        Check("echo_fades_out", !echo.EchoActive && (puppet == null || !puppet.activeSelf));
+
+        // 还原，给后面的心愿造船测试留一个没解决的渡口
+        mech.DebugResetCrossing();
+        echo.DebugClear();
+        yield return new WaitForSeconds(2.0f);
     }
 
     // ---- WP-D：信纸揭字 + 拼字（面包店：湿柴点不着 → 拼出干木柴 → 点着） ----

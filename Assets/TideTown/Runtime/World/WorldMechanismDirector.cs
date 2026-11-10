@@ -159,6 +159,9 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             int g0 = crates.Count / 2 - 1, g1 = crates.Count / 2 + 1;
             Vector3 sum = Vector3.zero;
             for (int i = g0; i <= g1; i++) { gapCrates.Add(crates[i]); sum += crates[i].transform.position; }
+            gapA = crates[Mathf.Max(0, g0 - 1)].transform.position;
+            gapB = crates[Mathf.Min(crates.Count - 1, g1 + 1)].transform.position;
+            hasGapEnds = true;
             crossingChannelCenter = sum / gapCrates.Count;
             crossingChannelCenter.y = crates[g0].bedY;
             crossingDir = crates[crates.Count - 1].transform.position - crates[0].transform.position;
@@ -332,6 +335,16 @@ public sealed class WorldMechanismDirector : MonoBehaviour
 
     public Vector3 GetCrossingChannelCenter() => crossingChannelCenter;
     public Vector3 WinchPosition => winchWorldPos;
+    Vector3 gapA, gapB;
+    bool hasGapEnds;
+    // 缺口两端（缺口外侧最近的两只浮箱，高度按现在的箱顶算）
+    public bool GapEndpoints(out Vector3 a, out Vector3 b)
+    {
+        float top = WaterLevel.StaticY + 0.18f;
+        a = new Vector3(gapA.x, top, gapA.z);
+        b = new Vector3(gapB.x, top, gapB.z);
+        return hasGapEnds;
+    }
 
     public Transform GetNearestWishPedestal(Vector3 pos, out float dist)
     {

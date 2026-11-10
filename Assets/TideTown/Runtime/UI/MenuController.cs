@@ -23,7 +23,7 @@ public sealed class MenuController : MonoBehaviour
     }
 
     bool Blocked =>
-        ui.LetterOpen || letterOpenLastFrame
+        ui.LetterOpen || letterOpenLastFrame || AvantGardeGameplayHub.AnyModalOpen || WoodenMechanismPuzzleModal.IsOpen
         || (map != null && (map.IsOpen || Time.unscaledTime - map.ClosedAt < 0.25f))
         || (director != null && (director.Cutscene || director.Climbing || director.Ended));
 

@@ -50,6 +50,12 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
         var aiDir = gameObject.AddComponent<AIAgentCalibrationDirector>();
         aiDir.Init(p, u, w, d, s);
 
+        // 小黑的浅滩爪印踏板（WP-C）
+        gameObject.AddComponent<DogPawPlate>().Init(w, s, u);
+        // 影子钥匙 + 装声音的瓶子 + 广场八音盒（WP-G）
+        gameObject.AddComponent<ShadowLanternPuzzle>().Init(p, u, w, s);
+        gameObject.AddComponent<SoundBottleSystem>().Init(p, u, w, s);
+
         // 卡住才给提示（要放在最后：它要找到上面这些系统）
         gameObject.AddComponent<HintDirector>().Init(p, u, w, d, s);
     }
@@ -99,6 +105,11 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             TriggerMode(1);
+        }
+        // C：举起取景框（透视拓印）。放下由取景框自己处理（C / Esc），这里只负责打开
+        else if (Input.GetKeyDown(KeyCode.C) && !ui.LetterOpen && perspSys != null && !perspSys.IsViewfinderActive)
+        {
+            perspSys.OpenViewfinder();
         }
         else if (Input.GetKeyDown(KeyCode.R))
         {

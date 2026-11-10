@@ -74,6 +74,31 @@ public sealed class StoveInteractable : IInteractable, IHoldInteraction
     }
 }
 
+// 海风里掉在地上的柴 / 油壶 / 红球：按 E 捡回来（捡的时候走的是原来的 TakeWood / TakeOil / TakeBall）
+public sealed class DroppedItemPickup : IInteractable
+{
+    readonly string item;
+    readonly StoryDirector director;
+    readonly GameObject visual;
+    readonly bool keepVisual;
+    readonly System.Action take;
+    bool gone;
+    public Vector3 Position { get; }
+    public DroppedItemPickup(string itemId, Vector3 pos, StoryDirector d, GameObject v, bool keepVisualObject, System.Action takeAction)
+    { item = itemId; Position = pos; director = d; visual = v; keepVisual = keepVisualObject; take = takeAction; }
+    public string EntityId => "dropped_" + item;
+    bool Valid(GameState s) => !gone && s != null && s.carrying != item;
+    public string Prompt(GameState s) => Valid(s) ? "E　捡起来" : "";
+    public bool CanInteract(GameState s) => Valid(s);
+    public void Interact(GameState s, InteractionService svc)
+    {
+        if (!Valid(s)) return;
+        gone = true;
+        if (visual != null && !keepVisual) Object.Destroy(visual);
+        take?.Invoke();
+    }
+}
+
 public sealed class MemoryInteractable : IInteractable
 {
     public Vector3 Position { get; }

@@ -166,6 +166,90 @@ public sealed partial class StoryDirector : MonoBehaviour
         }, message => Debug.LogWarning(message));
     }
 
+    // ---- WP-B：海风里没站稳，手上的东西掉在脚边 ----
+    // 剧情状态退回"去拿它"那一步（读档后东西回到原处，不会卡关）；地上留一件能按 E 捡回来的。
+    public string LastDroppedItem { get; private set; } = "";
+    public Vector3 LastDropPosition { get; private set; }
+
+    public void DropCarriedNear(Vector3 at)
+    {
+        if (!ready || State == null) return;
+        string item = State.carrying;
+        if (item != "wood" && item != "oil" && item != "ball") return;
+        Vector3 start = at;
+        if (island != null) start.y = Mathf.Max(island.GroundAt(at.x, at.z, at.y + 1f), island.WaterY);
+        Vector3 rest = SafeDropPoint(at);
+        GameObject visual = null;
+        System.Action pickup = null;
+
+        if (item == "wood")
+        {
+            State.carrying = State.flags.Contains("matches_taken") ? "matches" : "";
+            ShowCarriedModel(null);
+            AdvanceTo(State.flags.Contains("matches_taken") ? "B2_wood" : "B1_matches");
+            if (island != null && island.woodModel != null) visual = Instantiate(island.woodModel);
+            pickup = TakeWood;
+        }
+        else if (item == "oil")
+        {
+            State.flags.Remove("oil_taken");
+            State.carrying = "";
+            ShowCarriedModel(null);
+            AdvanceTo("L1_shed");
+            if (island != null && island.oilModel != null) visual = Instantiate(island.oilModel);
+            pickup = TakeOil;
+        }
+        else
+        {
+            State.flags.Remove("ball_taken");
+            State.carrying = "";
+            AdvanceTo("S2_ball");
+            if (ball != null) { ball.transform.SetParent(null, true); visual = ball.gameObject; }
+            pickup = TakeBall;
+        }
+        store.Save(State);
+        ui.SetCarried(CarryLabel());
+        LastDroppedItem = item;
+        LastDropPosition = rest;
+        if (visual != null)
+        {
+            visual.transform.position = start;
+            StartCoroutine(DriftToRest(visual.transform, start, rest));
+        }
+        var svc = FindObjectOfType<InteractionService>();
+        if (svc != null) svc.Register(new DroppedItemPickup(item, rest, this, visual, item == "ball", pickup));
+    }
+
+    // 掉进水里就漂到最近的岸边；本来就在地上就原地
+    Vector3 SafeDropPoint(Vector3 at)
+    {
+        if (island == null) return at;
+        if (island.Walkable(at.x, at.z)) { at.y = island.GroundAt(at.x, at.z, at.y + 1f); return at; }
+        for (float r = 0.5f; r <= 5f; r += 0.5f)
+            for (int a = 0; a < 16; a++)
+            {
+                float ang = a * Mathf.PI / 8f;
+                var q = at + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+                if (island.Walkable(q.x, q.z)) { q.y = island.GroundAt(q.x, q.z, at.y + 1f); return q; }
+            }
+        Vector3 toward = player != null ? player.transform.position : at;
+        toward.y = island.GroundAt(toward.x, toward.z, toward.y + 1f);
+        return toward;
+    }
+
+    System.Collections.IEnumerator DriftToRest(Transform t, Vector3 from, Vector3 to)
+    {
+        float dur = Vector3.Distance(from, to) > 0.3f ? 1.4f : 0.35f;
+        for (float e = 0f; e < dur && t != null; e += Time.deltaTime)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, e / dur);
+            t.position = Vector3.Lerp(from, to, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.25f;
+            t.Rotate(Vector3.up, 200f * Time.deltaTime, Space.World);
+            yield return null;
+        }
+        if (t != null) t.position = to;
+    }
+
     // 真实失衡惩罚：狂风/潮涌中未能稳住重心时，手上的物品会被吹落或打湿，必须回去重新拾取
     public bool OnGalePenaltyDropItem(out string penaltyMessage)
     {
@@ -241,7 +325,7 @@ public sealed partial class StoryDirector : MonoBehaviour
             if (ui != null) ui.SetCarried(CarryLabel());
             AdvanceTo("B1_matches");
             if (ui != null)
-                ui.ShowToast("【机关反震惩罚】连续 3 次刻度错误！倒灌冷风吹灭了火柴，请先端详菜谱、台秤、面包篮找准刻度，再去门前重拿火柴！", 4.8f);
+                ui.ShowToast("风门猛地一震，一股冷风灌出来——火柴灭了。", 3.2f);
         }
         else if (puzzleId == "school_lock")
         {
@@ -251,12 +335,12 @@ public sealed partial class StoryDirector : MonoBehaviour
             if (ui != null) ui.SetCarried("");
             AdvanceTo("S2_ball");
             if (ui != null)
-                ui.ShowToast("【机关反震惩罚】连续 3 次刻度错误！木锁卡簧将红球弹回了秋千下，请先端详拖鞋、狗窝、黑板找准刻度再去捡球！", 4.8f);
+                ui.ShowToast("木匣的卡簧一弹，红球蹦回了秋千底下。", 3.2f);
         }
         else
         {
             if (ui != null)
-                ui.ShowToast("【机关反震惩罚】连续 3 次刻度错误！黄铜罗经卡死复位，请先端详塔顶白檐帽、望远镜、航海日志找准刻度！", 4.8f);
+                ui.ShowToast("星盘咔地一声卡死，又转回了原位。", 3.2f);
         }
     }
 

@@ -1,4 +1,5 @@
 // 方向 A：三大站点核心联动机关（榫卯三连滑栓 + 三环齿轮咬合刻度 + 旧物暗扣线索链 + 试错反震惩罚）。
+// 2026-11-11 WP-A：操作改成直接摆弄 3D 部件，界面只剩左下角一张邮差笔记（见下方说明）。
 // 彻底移除“直接解开机关”作弊按钮与未检视直接剧透答案：
 //   1. 玩家必须先在院子/塔顶翻转 3D 旧物并拆解背面暗扣（或让小黑嗅探）以获知三环密码；
 //   2. 必须先解开第一重「三连榫卯木栓」，才能拨动第二重「三环咬合木轮」；
@@ -7,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;
 
 public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
 {
@@ -109,8 +111,28 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         }
     };
 
+    // ===================================================================================
+    // 2026-11-11 WP-A 改版：去掉左边那张写满说明、十几个按钮的大卡片。
+    //   · 机关摆在画面正中，直接操作 3D 部件：点木栓、拖圆环（绕圆心转，每 60° 咔一格）、点主轴推进去。
+    //   · 刻度数字刻在环上，顶上一枚黄铜指针，指着的就是当前刻度；不再有"当前刻度【3】"这种文字。
+    //   · 左下角只剩一张小小的"邮差笔记"：找到的刻度写成"菜谱 · 外环 3"，没找到的只写纹样。
+    //   · 推错了：整座机关一震、木栓弹回；第三次反震照旧（火柴被吹灭等）。
+    //   · 键盘：↑↓ 选环、←→ 转、1/2/3 拨木栓、空格推主轴、Esc 退出。
+    // ===================================================================================
+
+    // 某件线索旧物对应哪一环、刻度几（小黑嗅探、浅滩木匣用）
+    public static bool ClueInfo(string itemId, out int ring, out int number)
+    {
+        foreach (var spec in Specs.Values)
+            for (int i = 0; i < spec.clueItemIds.Length; i++)
+                if (spec.clueItemIds[i] == itemId) { ring = i; number = spec.targetRings[i]; return true; }
+        ring = -1; number = 0;
+        return false;
+    }
+
     public static bool IsOpen => instance != null && instance.active;
     public static int ActiveRingSelection { get; set; } = 0;
+    public static string OpenPuzzleId => IsOpen && instance.currentSpec != null ? instance.currentSpec.id : "";
 
     public static void ExternalToggleLatch(int index)
     {
@@ -123,7 +145,6 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         if (!IsOpen || instance.puzzleSolved) return;
         instance.latches[0] = instance.latches[1] = instance.latches[2] = true;
         instance.stage1Unlocked = true;
-        instance.feedbackBanner = "【" + sourceLabel + "】三连榫卯木栓已全部震开落槽！现在请拨动三环齿轮。";
         ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.25f);
         instance.RefreshPuzzleUI();
     }
@@ -151,47 +172,78 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         }
         instance.rings[r] = instance.currentSpec.targetRings[r];
         ShadowAndChimeSystem.PlayProceduralChime(523.25f + r * 130f, 0.28f);
-        instance.feedbackBanner = "【声控音律共鸣 · " + noteName + "】第 " + (r + 1) + " 环齿轮已随你的歌声自动共鸣对准刻度【 " + instance.rings[r] + " 】！";
         instance.RefreshPuzzleUI();
     }
 
+    // "鲁班巧思"：只有卡住提示到了最后一层才给（见 HintUnlockReady），一步步替你拨好，不给成就
     public static void ExternalStartAICalibration()
     {
         if (!IsOpen || instance.puzzleSolved) return;
         instance.StopAllCoroutines();
+        instance.assisted = true;
         instance.StartCoroutine(instance.AICalibrateStepByStepRoutine());
     }
 
     System.Collections.IEnumerator AICalibrateStepByStepRoutine()
     {
         if (currentSpec == null) yield break;
-        feedbackBanner = "【AI Agent 实时校准中】正在分析三连木栓耦合矩阵，解开第一重木栓...";
-        RefreshPuzzleUI();
-        yield return new WaitForSecondsRealtime(0.45f);
-
-        latches[0] = latches[1] = latches[2] = true;
-        stage1Unlocked = true;
-        ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.22f);
-        RefreshPuzzleUI();
-
-        string[] rNames = { "外环", "中环", "内环" };
+        yield return new WaitForSecondsRealtime(0.3f);
+        foreach (int li in LatchSolution()) { ToggleLatch(li); yield return new WaitForSecondsRealtime(0.3f); }
+        yield return new WaitForSecondsRealtime(0.2f);
         for (int r = 0; r < 3; r++)
         {
-            int target = currentSpec.targetRings[r];
             int guard = 0;
-            while (rings[r] != target && guard++ < 8)
+            while (rings[r] != currentSpec.targetRings[r] && guard++ < 8)
             {
-                feedbackBanner = "【AI Agent 实时校准中】正在反向补偿啮合齿轮，校准" + rNames[r] + "刻度 -> 【 " + target + " 】";
                 RotateRing(r, 1);
-                yield return new WaitForSecondsRealtime(0.32f);
+                yield return new WaitForSecondsRealtime(0.28f);
             }
         }
-
-        feedbackBanner = "【AI Agent 校准完毕】三环齿轮已全部啮合到位，正在推动中心主轴...";
-        RefreshPuzzleUI();
-        yield return new WaitForSecondsRealtime(0.4f);
-        TriggerSolveSuccess();
+        yield return new WaitForSecondsRealtime(0.35f);
+        AttemptUnlockSpindle();
     }
+
+    // ---- 审计用 ----
+    public static bool DebugOpen(string puzzleId, GameState state, SaveStore store, EggboyPlayer player, EggboyUI ui, ControlGate gate, Action onSolved)
+    {
+        if (instance == null)
+        {
+            var host = new GameObject("WoodenMechanismPuzzleModal");
+            DontDestroyOnLoad(host);
+            instance = host.AddComponent<WoodenMechanismPuzzleModal>();
+        }
+        instance.BeginPuzzle(puzzleId, state, store, player, ui, gate, onSolved);
+        return instance.active;
+    }
+    // 从现在的三根栓状态出发，要拨哪几根才能全开（三种拨法在 GF(2) 上张成全空间，任何状态都有解）
+    List<int> LatchSolution()
+    {
+        var sol = new List<int>();
+        if (latches[0] && latches[1] && latches[2]) return sol;
+        for (int mask = 1; mask < 8; mask++)
+        {
+            bool a = latches[0], b = latches[1], c = latches[2];
+            if ((mask & 1) != 0) { a = !a; b = !b; }
+            if ((mask & 2) != 0) { a = !a; b = !b; c = !c; }
+            if ((mask & 4) != 0) { b = !b; c = !c; }
+            if (a && b && c)
+            {
+                for (int i = 0; i < 3; i++) if ((mask & (1 << i)) != 0) sol.Add(i);
+                return sol;
+            }
+        }
+        return sol;
+    }
+    public static void DebugOpenAllLatches() { if (IsOpen) foreach (int i in instance.LatchSolution()) instance.ToggleLatch(i); }
+    public static int DebugRing(int i) => IsOpen ? instance.rings[i] : -1;
+    public static bool DebugStage1 => IsOpen && instance.stage1Unlocked;
+    public static int DebugAttemptsLeft => IsOpen ? instance.attemptsLeft : -1;
+    public static bool DebugSolved => instance != null && instance.puzzleSolved;
+    public static void DebugClose() { if (IsOpen) instance.CleanupModal(false); }
+    // 每个环上，现在离指针最近的那个数字（看画面读出来的刻度）
+    public static int DebugNumberUnderPointer(int ringIndex) => IsOpen ? instance.NumberUnderPointer(ringIndex) : -1;
+    // 模拟拖动：把屏幕上的一段弧拖过去
+    public static void DebugDragRing(int ringIndex, float degrees) { if (IsOpen) instance.ApplyRingDrag(ringIndex, degrees); }
 
     public static void OpenOrRun(
         string puzzleId,
@@ -233,23 +285,33 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
     bool stage1Unlocked;
     readonly int[] rings = new int[3];
     int attemptsLeft = 3;
-    string feedbackBanner = "";
-    bool puzzleSolved;
-    float solveAnimTimer;
+    bool puzzleSolved, assisted;
+    float solveAnimTimer, openedAt, shakeTimer, spindlePush;
+    int selectedRing;
+    bool assistShown;
+    public const float AssistSeconds = 120f;
+    bool AssistReady => active && !puzzleSolved && Time.unscaledTime - openedAt > AssistSeconds;
 
     GameObject puzzleRig;
     Transform modelPivot;
     readonly Transform[] latchNodes = new Transform[3];
     readonly Vector3[] latchBasePos = new Vector3[3];
+    readonly Vector3[] latchBaseScale = new Vector3[3];
     readonly Transform[] ringNodes = new Transform[3];
     readonly Transform[] gearNodes = new Transform[3];
-    Transform coreSpindleNode;
+    readonly List<TextMesh>[] ringNumbers = { new List<TextMesh>(), new List<TextMesh>(), new List<TextMesh>() };
+    readonly float[] ringVisualAngle = new float[3];
+    Transform coreSpindleNode, pointerNode;
     Vector3 spindleBasePos;
 
-    RectTransform puzzleCard;
-    Text titleText, subtitleText, cluesText, stage1HeaderText, stage2HeaderText, feedbackText;
-    readonly Text[] latchBtnTexts = new Text[3];
-    readonly Text[] ringStatusTexts = new Text[3];
+    // 拖环
+    int dragRing = -1;
+    float dragLastAngle, dragAccum;
+    bool dragMoved;
+    Vector2 dragStartMouse;
+
+    RectTransform noteCard;
+    Text noteTitle, noteBody;
 
     void BeginPuzzle(
         string puzzleId,
@@ -261,45 +323,32 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         Action onSolved)
     {
         if (active) CleanupModal(false);
+        if (!Specs.TryGetValue(puzzleId, out currentSpec)) { onSolved?.Invoke(); return; }
 
-        if (!Specs.TryGetValue(puzzleId, out currentSpec))
-        {
-            onSolved?.Invoke();
-            return;
-        }
-
-        gameState = state;
-        saveStore = store;
-        eggboy = player;
-        eggboyUi = ui;
-        controlGate = gate;
-        solvedCallback = onSolved;
-
-        latches[0] = false;
-        latches[1] = false;
-        latches[2] = false;
+        gameState = state; saveStore = store; eggboy = player; eggboyUi = ui; controlGate = gate; solvedCallback = onSolved;
+        latches[0] = latches[1] = latches[2] = false;
         stage1Unlocked = false;
-
         rings[0] = WrapRing(currentSpec.targetRings[0] + 2);
         rings[1] = WrapRing(currentSpec.targetRings[1] + 3);
         rings[2] = WrapRing(currentSpec.targetRings[2] + 4);
         attemptsLeft = 3;
-        feedbackBanner = "提示：推错主轴 3 次将触发防盗卡簧惩罚（剩余机会：3 / 3）";
-        puzzleSolved = false;
-        solveAnimTimer = 0f;
+        puzzleSolved = false; assisted = false;
+        solveAnimTimer = 0f; shakeTimer = 0f; spindlePush = 0f;
+        selectedRing = 0; dragRing = -1;
+        openedAt = Time.unscaledTime;
 
         if (controlGate != null) gateToken = controlGate.Acquire("wooden_puzzle");
         if (eggboy != null) eggboy.locked = true;
         chaseCam = FindObjectOfType<ChaseCamera>();
         restoreChase = chaseCam != null && chaseCam.enabled;
         if (restoreChase) chaseCam.enabled = false;
-
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
         EnsurePuzzleUI();
-        if (puzzleCard != null) puzzleCard.gameObject.SetActive(true);
+        if (noteCard != null) noteCard.gameObject.SetActive(true);
         Build3DLuxRig();
+        for (int i = 0; i < 3; i++) ringVisualAngle[i] = -rings[i] * 60f;
         RefreshPuzzleUI();
         active = true;
     }
@@ -311,77 +360,20 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         return v;
     }
 
+    // 左下角的邮差笔记：只写找到了什么
     void EnsurePuzzleUI()
     {
-        if (puzzleCard != null) return;
+        if (noteCard != null) return;
         var root = TideTownStyleUI.FindHudCanvasRoot(eggboyUi);
         if (root == null) return;
-
-        puzzleCard = TideTownStyleUI.CreateParchmentCard(root, "WoodenMechanismParchmentCard", 590f, 560f, 10);
-        puzzleCard.anchorMin = puzzleCard.anchorMax = new Vector2(0f, 0.5f);
-        puzzleCard.pivot = new Vector2(0f, 0.5f);
-        puzzleCard.anchoredPosition = new Vector2(28f, 8f);
-
-        titleText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 22, TideTownStyleUI.InkDark, TextAnchor.MiddleLeft,
-            new Vector2(0f, 244f), new Vector2(526f, 32f), true);
-
-        subtitleText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 13, TideTownStyleUI.InkMuted, TextAnchor.UpperLeft,
-            new Vector2(0f, 204f), new Vector2(526f, 40f), false);
-
-        cluesText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 13, TideTownStyleUI.InkDark, TextAnchor.UpperLeft,
-            new Vector2(0f, 134f), new Vector2(526f, 78f), false);
-
-        stage1HeaderText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 15, TideTownStyleUI.InkDark, TextAnchor.MiddleLeft,
-            new Vector2(0f, 72f), new Vector2(526f, 26f), true);
-
-        string[] latchNames = { "甲栓", "乙栓", "丙栓" };
-        for (int i = 0; i < 3; i++)
-        {
-            int idx = i;
-            var btn = TideTownStyleUI.CreateWarmButton(
-                puzzleCard,
-                latchNames[i],
-                new Vector2(-174f + i * 174f, 32f),
-                new Vector2(160f, 34f),
-                false,
-                () => ToggleLatch(idx));
-            latchBtnTexts[i] = btn.GetComponentInChildren<Text>();
-        }
-
-        stage2HeaderText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 15, TideTownStyleUI.InkDark, TextAnchor.MiddleLeft,
-            new Vector2(0f, -12f), new Vector2(526f, 26f), true);
-
-        for (int r = 0; r < 3; r++)
-        {
-            int ringIdx = r;
-            float y = -50f - r * 40f;
-            ringStatusTexts[r] = TideTownStyleUI.CreateText(
-                puzzleCard, "", 14, TideTownStyleUI.InkDark, TextAnchor.MiddleLeft,
-                new Vector2(-96f, y), new Vector2(320f, 28f), true);
-
-            TideTownStyleUI.CreateWarmButton(
-                puzzleCard, "逆转 -1", new Vector2(124f, y), new Vector2(88f, 30f), false, () => RotateRing(ringIdx, -1));
-            TideTownStyleUI.CreateWarmButton(
-                puzzleCard, "顺转 +1", new Vector2(220f, y), new Vector2(88f, 30f), false, () => RotateRing(ringIdx, +1));
-        }
-
-        feedbackText = TideTownStyleUI.CreateText(
-            puzzleCard, "", 13, TideTownStyleUI.AmberAccent, TextAnchor.MiddleLeft,
-            new Vector2(0f, -176f), new Vector2(526f, 28f), true);
-
-        TideTownStyleUI.CreateWarmButton(
-            puzzleCard, "推动主轴开锁（空格）", new Vector2(-176f, -226f), new Vector2(182f, 38f), true, AttemptUnlockSpindle);
-
-        TideTownStyleUI.CreateWarmButton(
-            puzzleCard, "心愿造物笺 (V / Y)", new Vector2(8f, -226f), new Vector2(172f, 38f), false, AIAgentCalibrationDirector.ToggleConsole);
-
-        TideTownStyleUI.CreateWarmButton(
-            puzzleCard, "暂退 / 下塔（Esc）", new Vector2(184f, -226f), new Vector2(164f, 38f), false, () => CleanupModal(false));
+        noteCard = TideTownStyleUI.CreateParchmentCard(root, "WoodenMechanismNote", 330f, 150f, 4);
+        noteCard.anchorMin = noteCard.anchorMax = new Vector2(0f, 0f);
+        noteCard.pivot = new Vector2(0f, 0f);
+        noteCard.anchoredPosition = new Vector2(28f, 96f);
+        noteTitle = TideTownStyleUI.CreateText(noteCard, "", 15, TideTownStyleUI.InkDark, TextAnchor.MiddleLeft,
+            new Vector2(0f, 52f), new Vector2(296f, 24f), true);
+        noteBody = TideTownStyleUI.CreateText(noteCard, "", 14, TideTownStyleUI.InkDark, TextAnchor.UpperLeft,
+            new Vector2(0f, -12f), new Vector2(296f, 90f), false);
     }
 
     void Build3DLuxRig()
@@ -392,30 +384,27 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
 
         puzzleRig = new GameObject("LuxPuzzlePreviewRig");
         puzzleRig.transform.SetParent(cam.transform, false);
-        float dist = 2.25f;
-        float halfH = Mathf.Tan(cam.fieldOfView * Mathf.Deg2Rad * 0.5f) * dist;
-        float offsetX = 0.35f * cam.aspect * halfH;
-        puzzleRig.transform.localPosition = new Vector3(offsetX, 0.04f, dist);
+        puzzleRig.transform.localPosition = new Vector3(0.05f, 0.02f, 1.55f);
         puzzleRig.transform.localRotation = Quaternion.identity;
 
         var lightGo = new GameObject("PuzzleWarmLight");
         lightGo.transform.SetParent(puzzleRig.transform, false);
-        lightGo.transform.localPosition = new Vector3(-0.6f, 0.7f, -0.9f);
+        lightGo.transform.localPosition = new Vector3(-0.5f, 0.6f, -0.8f);
         var l = lightGo.AddComponent<Light>();
         l.type = LightType.Point;
         l.color = new Color32(255, 224, 178, 255);
-        l.range = 4.5f;
-        l.intensity = 2.4f;
+        l.range = 4f;
+        l.intensity = 1.7f;
 
         var pivotGo = new GameObject("Pivot");
         pivotGo.transform.SetParent(puzzleRig.transform, false);
-        pivotGo.transform.localRotation = Quaternion.Euler(8f, -12f, 0f);
+        // 机关正面朝向镜头（圆环在本地 +Z 那面），稍微俯一点
+        pivotGo.transform.localRotation = Quaternion.Euler(6f, 180f, 0f);
         modelPivot = pivotGo.transform;
 
-        // 1. 实例化可动多部件 3D 机关主体（Latch_0..2, Ring_0..2, Gear_0..2, Core_Spindle）
         var mechGo = TideTownStyleUI.BuildArticulatedMechanism3D(currentSpec.mechanism3DName, 0.92f);
         mechGo.transform.SetParent(modelPivot, false);
-        mechGo.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+        mechGo.transform.localPosition = Vector3.zero;
 
         for (int i = 0; i < 3; i++)
         {
@@ -423,86 +412,187 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
             if (latchNodes[i] != null)
             {
                 latchBasePos[i] = latchNodes[i].localPosition;
+                latchBaseScale[i] = latchNodes[i].localScale;
                 latchNodes[i].gameObject.name = "MechLatch_" + i;
-                var col = latchNodes[i].gameObject.AddComponent<BoxCollider>();
-                col.size = new Vector3(0.16f, 0.28f, 0.16f);
+                AddFittedBox(latchNodes[i], 1.6f);
             }
-
             ringNodes[i] = TideTownStyleUI.FindDeepChild(mechGo.transform, "Ring_" + i);
             if (ringNodes[i] != null)
             {
                 ringNodes[i].gameObject.name = "MechRing_" + i;
-                float rSize = (i == 0) ? 0.72f : (i == 1 ? 0.48f : 0.28f);
-                var col = ringNodes[i].gameObject.AddComponent<BoxCollider>();
-                col.size = new Vector3(rSize, rSize, 0.09f);
+                AddFittedBox(ringNodes[i], 1f);
             }
-
             gearNodes[i] = TideTownStyleUI.FindDeepChild(mechGo.transform, "Gear_" + i);
         }
-
         coreSpindleNode = TideTownStyleUI.FindDeepChild(mechGo.transform, "Core_Spindle");
         if (coreSpindleNode != null)
         {
             spindleBasePos = coreSpindleNode.localPosition;
             coreSpindleNode.gameObject.name = "MechSpindle";
-            var col = coreSpindleNode.gameObject.AddComponent<SphereCollider>();
-            col.radius = 0.095f;
+            AddFittedBox(coreSpindleNode, 1.8f);
         }
+        BuildRingNumbers();
+        BuildPointer();
+        SetupOverlayCamera(cam);
+    }
 
-        // 2. 底座托架：搭载站点真实 Lux3D 物件作为机关基座
-        var clone = TideTownStyleUI.CloneSceneLux3D(currentSpec.lux3DModelName, 0.46f, false);
-        if (clone != null)
+    // 木匣画在整个场景最上面：镜头和木匣之间有房子、柱子也挡不住（OverlayRender 叠加相机）
+    bool overlayHeld;
+    void SetupOverlayCamera(Camera cam)
+    {
+        OverlayRender.SetLayerRecursive(puzzleRig, OverlayRender.Layer);
+        OverlayRender.LimitLights(puzzleRig);
+        OverlayRender.Acquire(cam);
+        overlayHeld = true;
+    }
+
+    void TeardownOverlayCamera()
+    {
+        if (!overlayHeld) return;
+        overlayHeld = false;
+        OverlayRender.Release();
+    }
+    // 碰撞盒按部件自己的网格大小来（GLB 版和程序版尺寸不同）
+    static void AddFittedBox(Transform t, float grow)
+    {
+        var mf = t.GetComponent<MeshFilter>() ?? t.GetComponentInChildren<MeshFilter>();
+        var box = t.gameObject.AddComponent<BoxCollider>();
+        if (mf != null && mf.sharedMesh != null)
         {
-            clone.transform.SetParent(modelPivot, false);
-            clone.transform.localPosition = new Vector3(0f, -0.52f, -0.05f);
+            var b = mf.sharedMesh.bounds;
+            if (mf.transform != t)
+            {
+                // 子节点的网格：换算到 t 的本地空间
+                Vector3 c = t.InverseTransformPoint(mf.transform.TransformPoint(b.center));
+                Vector3 s = Vector3.Scale(b.size, mf.transform.lossyScale);
+                s = new Vector3(s.x / Mathf.Max(1e-5f, t.lossyScale.x), s.y / Mathf.Max(1e-5f, t.lossyScale.y), s.z / Mathf.Max(1e-5f, t.lossyScale.z));
+                box.center = c; box.size = s * grow;
+            }
+            else { box.center = b.center; box.size = b.size * grow; }
         }
+    }
+
+    // 环面（本地 XY 平面）上的半径和朝镜头那一面的 z
+    static void RingGeometry(Transform ring, out float radius, out float frontZ)
+    {
+        radius = 0.2f; frontZ = 0f;
+        var mf = ring.GetComponent<MeshFilter>() ?? ring.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null) return;
+        var b = mf.sharedMesh.bounds;
+        if (mf.transform != ring)
+        {
+            float k = mf.transform.lossyScale.x / Mathf.Max(1e-5f, ring.lossyScale.x);
+            radius = Mathf.Max(b.extents.x, b.extents.y) * k;
+            frontZ = ring.InverseTransformPoint(mf.transform.TransformPoint(b.center)).z + b.extents.z * k;
+        }
+        else
+        {
+            radius = Mathf.Max(b.extents.x, b.extents.y);
+            frontZ = b.max.z;
+        }
+    }
+
+    static Font numberFont;
+    void BuildRingNumbers()
+    {
+        if (numberFont == null) numberFont = Resources.Load<Font>("Fonts/NotoSansSC-VF");
+        if (numberFont == null) numberFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        Color ink = currentSpec.id == "lighthouse_lock" ? new Color(0.22f, 0.12f, 0.04f) : new Color(0.98f, 0.93f, 0.82f);
+        for (int r = 0; r < 3; r++)
+        {
+            ringNumbers[r].Clear();
+            var ring = ringNodes[r];
+            if (ring == null) continue;
+            RingGeometry(ring, out float radius, out float frontZ);
+            // 三个环叠在一起：数字写在各自那一圈露出来的地方
+            float rr = radius * (r == 0 ? 0.86f : r == 1 ? 0.8f : 0.72f);
+            for (int k = 1; k <= 6; k++)
+            {
+                var go = new GameObject("RingNumber_" + r + "_" + k);
+                go.transform.SetParent(ring, false);
+                // 环转到 rings[r] == k 时（本地 z 旋转 -k*60°），这个数字正好转到最上面
+                float phi = (90f + 60f * k) * Mathf.Deg2Rad;
+                go.transform.localPosition = new Vector3(Mathf.Cos(phi) * rr, Mathf.Sin(phi) * rr, frontZ + 0.004f);
+                // 文字朝镜头（本地 -Z 是背面，所以绕 Y 转 180°），字头朝外
+                // 字面朝镜头（镜头在环的 +Z 那一侧，TextMesh 从自己的 -Z 方向看才是正的），字头朝外
+                go.transform.localRotation = Quaternion.LookRotation(Vector3.back, new Vector3(Mathf.Cos(phi), Mathf.Sin(phi), 0f));
+                var tm = go.AddComponent<TextMesh>();
+                tm.font = numberFont;
+                tm.text = k.ToString();
+                tm.fontSize = 64;
+                tm.characterSize = radius * (r == 2 ? 0.05f : 0.035f);
+                tm.anchor = TextAnchor.MiddleCenter;
+                tm.alignment = TextAlignment.Center;
+                tm.color = ink;
+                var mr = go.GetComponent<MeshRenderer>();
+                mr.sharedMaterial = numberFont.material;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                ringNumbers[r].Add(tm);
+            }
+        }
+    }
+
+    // 顶上一枚黄铜指针：指着的数字就是现在的刻度
+    void BuildPointer()
+    {
+        var ring0 = ringNodes[0];
+        if (ring0 == null) return;
+        RingGeometry(ring0, out float radius, out float frontZ);
+        var go = new GameObject("RingPointer");
+        go.transform.SetParent(ring0.parent, false);
+        go.transform.localPosition = ring0.localPosition + new Vector3(0f, radius * 1.12f * ring0.localScale.y, frontZ * ring0.localScale.z + 0.01f);
+        go.transform.localRotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
+        var tm = go.AddComponent<TextMesh>();
+        tm.font = numberFont;
+        tm.text = "▼";
+        tm.fontSize = 64;
+        tm.characterSize = radius * 0.05f * ring0.localScale.x;
+        tm.anchor = TextAnchor.LowerCenter;
+        tm.color = new Color(0.86f, 0.62f, 0.22f);
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.sharedMaterial = numberFont.material;
+        pointerNode = go.transform;
+    }
+
+    int NumberUnderPointer(int r)
+    {
+        var cam = Camera.main;
+        if (cam == null || ringNumbers[r].Count == 0) return -1;
+        int best = -1; float bestY = float.MinValue;
+        foreach (var tm in ringNumbers[r])
+        {
+            float y = cam.transform.InverseTransformPoint(tm.transform.position).y;
+            if (y > bestY) { bestY = y; best = int.Parse(tm.text); }
+        }
+        return best;
     }
 
     void RefreshPuzzleUI()
     {
-        if (puzzleCard == null || currentSpec == null) return;
-        titleText.text = currentSpec.title;
-        subtitleText.text = currentSpec.subtitle;
-
-        // 只有真正完成了 3D 旧物背面暗扣拆解（_detail）或小黑嗅探（dog_sniff_）才显示真实刻度数字！
+        if (noteCard == null || currentSpec == null) return;
+        string dots = "";
+        for (int i = 0; i < 3; i++) dots += i < attemptsLeft ? "●" : "○";
+        noteTitle.text = "邮差笔记　" + dots + (AssistReady ? "　·　H 鲁班巧思" : "");
         bool deskShortcut = currentSpec.id == "school_lock" && gameState != null && gameState.seenMemories.Contains("desk_detail");
-        string clueLines = "";
+        string[] ringNames = { "外环", "中环", "内环" };
+        string body = "";
         for (int i = 0; i < 3; i++)
         {
             string itemId = currentSpec.clueItemIds[i];
             bool found = deskShortcut || (gameState != null &&
-                (gameState.seenMemories.Contains(itemId + "_detail") ||
-                 gameState.flags.Contains("dog_sniff_" + itemId)));
-
-            clueLines += (i > 0 ? "\n" : "") + "· " + (found ? currentSpec.clueTexts[i] : currentSpec.lockedCluePrompts[i]);
+                (gameState.seenMemories.Contains(itemId + "_detail") || gameState.flags.Contains("dog_sniff_" + itemId)));
+            body += (i > 0 ? "\n" : "") + (found
+                ? currentSpec.clueItemNames[i] + " · " + ringNames[i] + " " + currentSpec.targetRings[i]
+                : ringNames[i] + " · " + Glyph(currentSpec.lockedCluePrompts[i]) + " · ？");
         }
-        cluesText.text = clueLines;
+        noteBody.text = body;
+    }
 
-        stage1Unlocked = latches[0] && latches[1] && latches[2];
-        stage1HeaderText.text = stage1Unlocked
-            ? "第一重：三连榫卯木栓（已全部开槽）"
-            : "第一重：三连榫卯木栓";
-
-        string[] lNames = { "甲栓", "乙栓", "丙栓" };
-        for (int i = 0; i < 3; i++)
-        {
-            if (latchBtnTexts[i] != null)
-                latchBtnTexts[i].text = lNames[i] + (latches[i] ? " · 已开槽" : " · 锁死");
-        }
-
-        stage2HeaderText.text = stage1Unlocked
-            ? "第二重：三环啮合齿轮"
-            : "第二重：三环啮合齿轮（受上方木栓锁止）";
-
-        string[] rNames = { "外环木轮", "中环木轮", "内环木轮" };
-        for (int r = 0; r < 3; r++)
-        {
-            if (ringStatusTexts[r] != null)
-                ringStatusTexts[r].text = rNames[r] + "：当前刻度【 " + rings[r] + " 】";
-        }
-
-        if (feedbackText != null)
-            feedbackText.text = feedbackBanner;
+    // "外环轮缘：镌刻着一枚「翻开的书页」纹样" → "翻开的书页"
+    static string Glyph(string s)
+    {
+        int a = s.IndexOf('「'), b = s.IndexOf('」');
+        return a >= 0 && b > a ? s.Substring(a + 1, b - a - 1) : s;
     }
 
     void ToggleLatch(int index)
@@ -511,11 +601,9 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         if (index == 0) { latches[0] = !latches[0]; latches[1] = !latches[1]; }
         else if (index == 1) { latches[0] = !latches[0]; latches[1] = !latches[1]; latches[2] = !latches[2]; }
         else if (index == 2) { latches[1] = !latches[1]; latches[2] = !latches[2]; }
-
+        bool was = stage1Unlocked;
         stage1Unlocked = latches[0] && latches[1] && latches[2];
-        if (stage1Unlocked)
-            feedbackBanner = "咔哒！三根木栓已全部退入槽内。";
-        ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.2f);
+        ShadowAndChimeSystem.PlayProceduralChime(stage1Unlocked && !was ? 880f : 587.33f, 0.2f);
         RefreshPuzzleUI();
     }
 
@@ -524,46 +612,43 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         if (puzzleSolved) return;
         if (!stage1Unlocked)
         {
-            feedbackBanner = "木轮被上方的三连木栓锁止，无法拨动。";
-            ShadowAndChimeSystem.PlayProceduralChime(220f, 0.2f);
-            RefreshPuzzleUI();
+            // 被木栓卡着：环晃一下就回来
+            shakeTimer = Mathf.Max(shakeTimer, 0.18f);
+            ShadowAndChimeSystem.PlayProceduralChime(220f, 0.15f);
             return;
         }
-
         rings[ringIndex] = WrapRing(rings[ringIndex] + delta);
         if (ringIndex == 0) rings[1] = WrapRing(rings[1] + delta);
         else if (ringIndex == 1) rings[2] = WrapRing(rings[2] - delta);
+        ShadowAndChimeSystem.PlayProceduralChime(659.25f + ringIndex * 60f, 0.12f);
+    }
 
-        ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.18f);
-        RefreshPuzzleUI();
+    // 拖动累计的角度，每满 60° 转一格（顺时针为正）
+    void ApplyRingDrag(int ringIndex, float degrees)
+    {
+        dragAccum += degrees;
+        while (dragAccum >= 30f) { RotateRing(ringIndex, +1); dragAccum -= 60f; }
+        while (dragAccum <= -30f) { RotateRing(ringIndex, -1); dragAccum += 60f; }
     }
 
     void AttemptUnlockSpindle()
     {
         if (puzzleSolved || currentSpec == null) return;
-
+        spindlePush = 1f;
         if (!stage1Unlocked)
         {
-            feedbackBanner = "第一重「三连木栓」尚未全部解开，主轴无法推动！";
+            shakeTimer = 0.25f;
             ShadowAndChimeSystem.PlayProceduralChime(220f, 0.25f);
-            RefreshPuzzleUI();
             return;
         }
-
-        int correctCount = 0;
-        for (int i = 0; i < 3; i++)
-            if (rings[i] == currentSpec.targetRings[i])
-                correctCount++;
-
-        if (correctCount == 3)
-        {
-            TriggerSolveSuccess();
-            return;
-        }
+        int correct = 0;
+        for (int i = 0; i < 3; i++) if (rings[i] == currentSpec.targetRings[i]) correct++;
+        if (correct == 3) { TriggerSolveSuccess(); return; }
 
         attemptsLeft--;
+        shakeTimer = 0.55f;
         ShadowAndChimeSystem.PlayProceduralChime(196f, 0.35f);
-
+        ShadowAndChimeSystem.PlayProceduralChime(147f, 0.4f);
         if (attemptsLeft <= 0)
         {
             string pid = currentSpec.id;
@@ -572,10 +657,9 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
             if (dir != null) dir.OnMechanismJamPenalty(pid);
             return;
         }
-
+        // 反震：中间那根木栓弹回去
         latches[1] = false;
         stage1Unlocked = false;
-        feedbackBanner = "【卡簧反震】当前仅有 " + correctCount + " / 3 个齿轮刻度吻合！木栓被震回锁止（剩余机会：" + attemptsLeft + " 次）";
         RefreshPuzzleUI();
     }
 
@@ -585,121 +669,132 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         puzzleSolved = true;
         stage1Unlocked = true;
         latches[0] = latches[1] = latches[2] = true;
-        if (currentSpec != null)
-        {
-            rings[0] = currentSpec.targetRings[0];
-            rings[1] = currentSpec.targetRings[1];
-            rings[2] = currentSpec.targetRings[2];
-        }
-        feedbackBanner = "主轴咬合成功！机关已解开！";
-        RefreshPuzzleUI();
-        solveAnimTimer = 0.65f;
+        solveAnimTimer = 1.1f;
         ShadowAndChimeSystem.PlayProceduralChime(880f, 0.45f);
-
+        ShadowAndChimeSystem.PlayProceduralChime(1174.66f, 0.6f);
         if (gameState != null && currentSpec != null)
         {
             string flag = "puzzle_" + currentSpec.id;
             if (!gameState.flags.Contains(flag)) gameState.flags.Add(flag);
             if (saveStore != null) saveStore.Save(gameState);
-
-            if (currentSpec.id == "bakery_lock")
-                TideTownAchievementSystem.Unlock("luban_oven");
-            else if (currentSpec.id == "school_lock")
-                TideTownAchievementSystem.Unlock("classic_ball");
+            if (!assisted)
+            {
+                if (currentSpec.id == "bakery_lock") TideTownAchievementSystem.Unlock("luban_oven");
+                else if (currentSpec.id == "school_lock") TideTownAchievementSystem.Unlock("classic_ball");
+            }
         }
         if (eggboy != null) eggboy.PlayEmote("hop");
-        if (eggboyUi != null && currentSpec != null)
-            eggboyUi.ShowToast(currentSpec.successToast, 3.8f);
+        RefreshPuzzleUI();
+    }
+
+    int RingUnderMouse(out string latchOrSpindle)
+    {
+        latchOrSpindle = null;
+        var cam = Camera.main;
+        if (cam == null) return -1;
+        var hits = Physics.RaycastAll(cam.ScreenPointToRay(Input.mousePosition), 6f, ~0, QueryTriggerInteraction.Collide);
+        float best = float.MaxValue; Collider col = null;
+        foreach (var h in hits)
+            if (h.collider != null && h.collider.name.StartsWith("Mech") && h.distance < best) { best = h.distance; col = h.collider; }
+        if (col == null) return -1;
+        string n = col.name;
+        if (n.StartsWith("MechRing_") && int.TryParse(n.Substring(9), out int r))
+        {
+            // 环叠在一起：按鼠标离圆心多远决定是哪一圈（射线对薄薄的环不可靠）
+            return RingByRadius(r);
+        }
+        latchOrSpindle = n;
+        return -1;
+    }
+
+    int RingByRadius(int fallback)
+    {
+        var cam = Camera.main;
+        if (cam == null || ringNodes[0] == null) return fallback;
+        Vector2 c = cam.WorldToScreenPoint(ringNodes[0].position);
+        float d = Vector2.Distance(Input.mousePosition, c);
+        float[] edge = new float[3];
+        for (int i = 0; i < 3; i++)
+        {
+            if (ringNodes[i] == null) return fallback;
+            RingGeometry(ringNodes[i], out float rad, out _);
+            Vector3 rim = ringNodes[i].TransformPoint(new Vector3(rad, 0f, 0f));
+            edge[i] = Vector2.Distance(cam.WorldToScreenPoint(rim), c);
+        }
+        if (d <= edge[2] * 1.05f) return 2;
+        if (d <= edge[1] * 1.03f) return 1;
+        return 0;
+    }
+
+    float MouseAngleAroundRings()
+    {
+        var cam = Camera.main;
+        Vector2 c = cam != null && ringNodes[0] != null ? (Vector2)cam.WorldToScreenPoint(ringNodes[0].position) : new Vector2(Screen.width / 2f, Screen.height / 2f);
+        Vector2 v = (Vector2)Input.mousePosition - c;
+        return Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg;
     }
 
     void Update()
     {
         if (!active) return;
-
         float dt = Time.unscaledDeltaTime;
 
-        // 1. 支持鼠标直接点击右侧 3D 机关上的木栓（MechLatch_0..2）、齿轮环（MechRing_0..2）与主轴（MechSpindle）
-        if ((Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) && Camera.main != null && Input.mousePosition.x > Screen.width * 0.42f)
+        if (!puzzleSolved)
         {
-            int delta = Input.GetMouseButtonDown(1) ? -1 : +1;
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            var hits = Physics.RaycastAll(ray, 12f);
-            float bestDist = float.MaxValue;
-            Collider bestCol = null;
-            for (int h = 0; h < hits.Length; h++)
+            // 鼠标：按下时记住是哪个部件；拖环转、点木栓 / 主轴
+            if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
             {
-                var c = hits[h].collider;
-                if (c != null && c.name.StartsWith("Mech") && hits[h].distance < bestDist)
+                int r = RingUnderMouse(out string other);
+                dragStartMouse = Input.mousePosition;
+                dragMoved = false;
+                if (r >= 0)
                 {
-                    bestDist = hits[h].distance;
-                    bestCol = c;
+                    dragRing = r; selectedRing = r; ActiveRingSelection = r;
+                    dragLastAngle = MouseAngleAroundRings();
+                    dragAccum = 0f;
                 }
+                else if (other != null && other.StartsWith("MechLatch_") && int.TryParse(other.Substring(10), out int li)) ToggleLatch(li);
+                else if (other == "MechSpindle") AttemptUnlockSpindle();
+            }
+            if (dragRing >= 0 && (Input.GetMouseButton(0) || Input.GetMouseButton(1)))
+            {
+                float a = MouseAngleAroundRings();
+                float d = Mathf.DeltaAngle(dragLastAngle, a);
+                dragLastAngle = a;
+                if (Vector2.Distance(Input.mousePosition, dragStartMouse) > 6f) dragMoved = true;
+                // 镜头从环的正面看：刻度变大时环在屏幕上逆时针转，和鼠标角度增大的方向一致
+                if (dragMoved) ApplyRingDrag(dragRing, d);
+            }
+            if (dragRing >= 0 && (Input.GetMouseButtonUp(0) || Input.GetMouseButtonUp(1)))
+            {
+                // 没拖动只点了一下：左键 +1、右键 -1
+                if (!dragMoved) RotateRing(dragRing, Input.GetMouseButtonUp(1) ? -1 : +1);
+                dragRing = -1;
+            }
+            // 滚轮转鼠标下面那一圈
+            float wheel = Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(wheel) > 0.01f)
+            {
+                int r = RingUnderMouse(out _);
+                if (r >= 0) { selectedRing = r; RotateRing(r, wheel > 0 ? -1 : +1); }
             }
 
-            if (bestCol != null)
-            {
-                string n = bestCol.name;
-                if (n.StartsWith("MechLatch_") && int.TryParse(n.Substring("MechLatch_".Length), out int lIdx))
-                {
-                    ToggleLatch(lIdx);
-                }
-                else if (n.StartsWith("MechRing_") && int.TryParse(n.Substring("MechRing_".Length), out int rIdx))
-                {
-                    RotateRing(rIdx, delta);
-                }
-                else if (n == "MechSpindle")
-                {
-                    AttemptUnlockSpindle();
-                }
-            }
+            // 键盘
+            if (Input.GetKeyDown(KeyCode.UpArrow)) selectedRing = Mathf.Max(0, selectedRing - 1);
+            if (Input.GetKeyDown(KeyCode.DownArrow)) selectedRing = Mathf.Min(2, selectedRing + 1);
+            ActiveRingSelection = selectedRing;
+            if (Input.GetKeyDown(KeyCode.LeftArrow)) RotateRing(selectedRing, -1);
+            if (Input.GetKeyDown(KeyCode.RightArrow)) RotateRing(selectedRing, +1);
+            if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleLatch(0);
+            if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleLatch(1);
+            if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleLatch(2);
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) AttemptUnlockSpindle();
+            // 卡了两分钟：笔记上多一行"H 鲁班巧思"，按 H 一步步替你拨好（不给成就）
+            if (AssistReady != assistShown) { assistShown = AssistReady; RefreshPuzzleUI(); }
+            if (AssistReady && Input.GetKeyDown(KeyCode.H)) ExternalStartAICalibration();
         }
 
-        // 2. 实时驱动 3D 机关各部件的物理位移与啮合旋转
-        for (int i = 0; i < 3; i++)
-        {
-            if (latchNodes[i] != null)
-            {
-                Vector3 targetPos = latchBasePos[i] + new Vector3(0f, latches[i] ? 0.13f : 0f, 0f);
-                Quaternion targetRot = Quaternion.Euler(0f, latches[i] ? 45f : 0f, 0f);
-                latchNodes[i].localPosition = Vector3.Lerp(latchNodes[i].localPosition, targetPos, dt * 11f);
-                latchNodes[i].localRotation = Quaternion.Slerp(latchNodes[i].localRotation, targetRot, dt * 11f);
-            }
-
-            if (ringNodes[i] != null)
-            {
-                float zAng = -rings[i] * 60f;
-                ringNodes[i].localRotation = Quaternion.Slerp(
-                    ringNodes[i].localRotation,
-                    Quaternion.Euler(0f, 0f, zAng),
-                    dt * 9f);
-            }
-
-            if (gearNodes[i] != null)
-            {
-                float gAng = (rings[0] * 45f - rings[1] * 45f) * (i % 2 == 0 ? 1f : -1f);
-                gearNodes[i].localRotation = Quaternion.Slerp(
-                    gearNodes[i].localRotation,
-                    Quaternion.Euler(0f, 0f, gAng),
-                    dt * 9f);
-            }
-        }
-
-        if (coreSpindleNode != null)
-        {
-            Vector3 targetSpindlePos = spindleBasePos + new Vector3(0f, 0f, puzzleSolved ? -0.09f : 0f);
-            Quaternion targetSpindleRot = Quaternion.Euler(0f, 0f, puzzleSolved ? 180f : (stage1Unlocked ? 30f : 0f));
-            coreSpindleNode.localPosition = Vector3.Lerp(coreSpindleNode.localPosition, targetSpindlePos, dt * 10f);
-            coreSpindleNode.localRotation = Quaternion.Slerp(coreSpindleNode.localRotation, targetSpindleRot, dt * 10f);
-        }
-
-        if (modelPivot != null)
-        {
-            float gentleSway = Mathf.Sin(Time.unscaledTime * 1.4f) * 8f;
-            modelPivot.localRotation = Quaternion.Slerp(
-                modelPivot.localRotation,
-                Quaternion.Euler(8f, -12f + gentleSway, 0f),
-                dt * 5f);
-        }
+        AnimateParts(dt);
 
         if (puzzleSolved)
         {
@@ -712,40 +807,70 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
                 return;
             }
         }
+        else if (Input.GetKeyDown(KeyCode.Escape)) CleanupModal(false);
+    }
 
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+    void AnimateParts(float dt)
+    {
+        // 卡住一分钟还没拨开木栓：中间那根轻轻一跳一跳（不写字）
+        bool nudge = !stage1Unlocked && !puzzleSolved && Time.unscaledTime - openedAt > 60f;
+        for (int i = 0; i < 3; i++)
         {
-            AttemptUnlockSpindle();
+            if (latchNodes[i] != null)
+            {
+                float lift = latches[i] ? 0.12f : 0f;
+                if (nudge && i == 1) lift += Mathf.Max(0f, Mathf.Sin(Time.unscaledTime * 6f)) * 0.025f;
+                latchNodes[i].localPosition = Vector3.Lerp(latchNodes[i].localPosition, latchBasePos[i] + new Vector3(0f, lift, 0f), dt * 12f);
+                latchNodes[i].localRotation = Quaternion.Slerp(latchNodes[i].localRotation, Quaternion.Euler(0f, latches[i] ? 45f : 0f, 0f), dt * 12f);
+            }
+            if (ringNodes[i] != null)
+            {
+                // 走最短的那条路转过去，别绕一大圈
+                float target = -rings[i] * 60f;
+                float diff = Mathf.DeltaAngle(ringVisualAngle[i], target);
+                ringVisualAngle[i] += diff * Mathf.Min(1f, dt * 12f);
+                ringNodes[i].localRotation = Quaternion.Euler(0f, 0f, ringVisualAngle[i]);
+            }
+            if (gearNodes[i] != null)
+            {
+                float gAng = (ringVisualAngle[0] - ringVisualAngle[1]) * 0.75f * (i % 2 == 0 ? 1f : -1f);
+                gearNodes[i].localRotation = Quaternion.Euler(0f, 0f, gAng);
+            }
         }
-        else if (Input.GetKeyDown(KeyCode.Escape))
+        if (coreSpindleNode != null)
         {
-            CleanupModal(false);
+            spindlePush = Mathf.MoveTowards(spindlePush, 0f, dt * 3f);
+            float push = puzzleSolved ? 0.09f : spindlePush * 0.035f;
+            coreSpindleNode.localPosition = Vector3.Lerp(coreSpindleNode.localPosition, spindleBasePos + new Vector3(0f, 0f, -push), dt * 14f);
+            coreSpindleNode.localRotation = Quaternion.Slerp(coreSpindleNode.localRotation,
+                Quaternion.Euler(0f, 0f, puzzleSolved ? 180f : (stage1Unlocked ? 30f : 0f)), dt * 10f);
+        }
+        if (modelPivot != null)
+        {
+            shakeTimer = Mathf.Max(0f, shakeTimer - dt);
+            float shake = shakeTimer > 0f ? Mathf.Sin(Time.unscaledTime * 70f) * 3.5f * Mathf.Clamp01(shakeTimer / 0.3f) : 0f;
+            float open = puzzleSolved ? Mathf.Clamp01(1f - solveAnimTimer / 1.1f) : 0f;
+            modelPivot.localRotation = Quaternion.Euler(6f - open * 10f, 180f + shake, shake * 0.4f);
+            modelPivot.localPosition = new Vector3(0f, open * 0.05f, 0f);
         }
     }
 
     void CleanupModal(bool solved)
     {
         active = false;
+        dragRing = -1;
+        StopAllCoroutines();
+        TeardownOverlayCamera();
         if (puzzleRig != null) Destroy(puzzleRig);
         puzzleRig = null;
         modelPivot = null;
-        for (int i = 0; i < 3; i++)
-        {
-            latchNodes[i] = null;
-            ringNodes[i] = null;
-            gearNodes[i] = null;
-        }
+        pointerNode = null;
+        for (int i = 0; i < 3; i++) { latchNodes[i] = null; ringNodes[i] = null; gearNodes[i] = null; ringNumbers[i].Clear(); }
         coreSpindleNode = null;
-        if (puzzleCard != null) puzzleCard.gameObject.SetActive(false);
-
+        if (noteCard != null) noteCard.gameObject.SetActive(false);
         if (restoreChase && chaseCam != null) chaseCam.enabled = true;
         restoreChase = false;
-
-        if (controlGate != null && gateToken != null)
-        {
-            controlGate.Release(gateToken);
-            gateToken = null;
-        }
+        if (controlGate != null && gateToken != null) { controlGate.Release(gateToken); gateToken = null; }
         if (eggboy != null) eggboy.locked = false;
         if (!solved) solvedCallback = null;
     }

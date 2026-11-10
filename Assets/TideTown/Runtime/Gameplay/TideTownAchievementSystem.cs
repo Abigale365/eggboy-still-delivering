@@ -25,7 +25,7 @@ public sealed class TideTownAchievementSystem : MonoBehaviour
         new AchDef { id = "desk_shortcut", category = "旧物破译", title = "密室侦探 · 课桌下的捷径", desc = "发现教室窗边阿萤课桌背面刻着的总密码，免检视直破木匣" },
 
         // 面包房生火与防风（3种解法）
-        new AchDef { id = "luban_oven",    category = "面包房站", title = "鲁班传人 · 三环风门归位", desc = "通过拨动 3D 鲁班三环风门机关（3-5-2）点燃林阿婆的烤炉" },
+        new AchDef { id = "luban_oven",    category = "面包房站", title = "鲁班传人 · 三环风门归位", desc = "自己拨开三根木栓、对准三环刻度，打开烤炉的风门（不用鲁班巧思）" },
         new AchDef { id = "breath_fire",   category = "面包房站", title = "人间烟火 · 吹旺阿婆的炉膛", desc = "对着烤炉火苗吹气鼓风，让面包房烟囱升起滚滚暖烟" },
         new AchDef { id = "word_fire",     category = "面包房站", title = "言灵造物 · 心愿化作火种", desc = "撕下信上的「木柴」是湿的；拼出「干木柴」或许愿造柴，让炉膛里有柴可烧" },
 
@@ -33,19 +33,24 @@ public sealed class TideTownAchievementSystem : MonoBehaviour
 
         // 学校哄开心小黑（3种解法）
         new AchDef { id = "classic_ball",  category = "学校后院", title = "旧日约定 · 秋千下的红球", desc = "寻回秋千下的旧红球并解开爪印木匣放进小黑的食盆" },
-        new AchDef { id = "chef_dog",      category = "学校后院", title = "私厨投喂 · 小黑的定制大餐", desc = "用 Lux3D 心愿造物笺为小黑实时生成香喷喷的 3D 美食（骨头/蛋糕）通关" },
-        new AchDef { id = "toy_dog",       category = "学校后院", title = "玩伴心意 · 造一件新玩具", desc = "用 Lux3D 心愿造物笺为小黑实时生成专属 3D 新玩具（飞盘/小黄鸭）通关" },
+        new AchDef { id = "dog_detective", category = "灯塔与海岛", title = "小黑侦探 · 鼻子比眼睛灵", desc = "让小黑嗅出三样旧物的刻度，或者踩着浅滩的爪印踏板捞起老陈的木匣" },
+        new AchDef { id = "chef_dog",      category = "学校后院", title = "私厨投喂 · 小黑的定制大餐", desc = "按 V 打开心愿造物笺，在狗碗旁给小黑造一样它爱吃的" },
+        new AchDef { id = "toy_dog",       category = "学校后院", title = "玩伴心意 · 造一件新玩具", desc = "按 V 打开心愿造物笺，在狗碗旁给小黑造一件新玩具" },
 
         // 涨潮渡口过海（3种解法）
-        new AchDef { id = "winch_bridge",  category = "涨潮渡口", title = "老船坞工 · 齿轮绞盘升桥", desc = "摇动岸边的 3D 潮汐船坞齿轮绞盘，升起沉没的木码头与小船浮桥过海" },
-        new AchDef { id = "wish_boat",     category = "涨潮渡口", title = "凭空造舟 · 乘心愿渡海", desc = "用 Lux3D 心愿造物笺在海面上实时生成专属 3D 浮船/海龟浮台渡海" },
-        new AchDef { id = "echo_coop",     category = "涨潮渡口", title = "时空旅人 · 与过去的自己接力", desc = "唤出十秒前的潮汐回声残影协力摇住渡口绞盘或拉动风箱" },
+        new AchDef { id = "winch_bridge",  category = "涨潮渡口", title = "老船坞工 · 齿轮绞盘升桥", desc = "一个人摇不动岸边的绞盘——和十秒前的自己一起按住它，升起沉在水下的旧栈桥" },
+        new AchDef { id = "wish_boat",     category = "涨潮渡口", title = "凭空造舟 · 乘心愿渡海", desc = "在涨潮的渡口按 V 许一条船，踩着它过海" },
+        new AchDef { id = "echo_coop",     category = "涨潮渡口", title = "时空旅人 · 与过去的自己接力", desc = "按 R 唤出十秒前的自己，和它一起做成一件一个人做不到的事" },
 
+        new AchDef { id = "tailwind",      category = "涨潮渡口", title = "乘风而行 · 顶住了一阵海风", desc = "在海边迎风的路上蹲低扛过一阵大风，顺风跑起来" },
+        new AchDef { id = "print_bridge",  category = "涨潮渡口", title = "以小见大 · 一把尺子搭成桥", desc = "举起取景框，把手里的小物件按透视拍成一座横跨渡口缺口的桥" },
         new AchDef { id = "wood_boat",     category = "涨潮渡口", title = "纸上行舟 · 拼一条木船过海", desc = "用信上的字拼出「木船」，扔到涨潮的渡口缺口上踩着过海" },
 
         // 灯塔呼应与全岛探索（3种解法）
         new AchDef { id = "cam_wave",      category = "灯塔与海岛", title = "隔空挥别 · 山那边的微光", desc = "在灯塔顶层对着摄像头挥手，唤醒对岸山头的 40 盏手电筒回应" },
-        new AchDef { id = "wish_town",     category = "灯塔与海岛", title = "筑梦邮差 · 焕然一新的潮汐镇", desc = "在小镇心愿展台上用 Lux3D 留下你亲手定制的 3D 纪念雕塑" },
+        new AchDef { id = "wish_town",     category = "灯塔与海岛", title = "筑梦邮差 · 焕然一新的潮汐镇", desc = "在心愿展台上许一件纪念物，它会一直摆到结局" },
+        new AchDef { id = "shadow_key",    category = "灯塔与海岛", title = "影子里的钥匙 · 老陈的影子戏", desc = "转动船棚边的杂物架，让布幕上的影子拼成一把钥匙" },
+        new AchDef { id = "music_box",     category = "灯塔与海岛", title = "小镇八音盒 · 把声音带回广场", desc = "用空瓶装下铃声、秋千声、小黑的叫声和劈柴声，放进广场的八音盒" },
         new AchDef { id = "drift_bottles", category = "灯塔与海岛", title = "拾潮之人 · 听见大海的回信", desc = "在退潮浅滩寻获镇民留下的发光潮汐漂流瓶" }
     };
 

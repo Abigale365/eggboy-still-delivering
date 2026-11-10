@@ -1,335 +1,330 @@
-// 方向 B：潮汐海风浪涌与护送重心平衡挑战（TidalWindChallenge）。
-// 具备真实的【重心偏移进度槽】与【失衡惩罚机制】：
-//   1. 当蛋仔抱着柴火、火柴、红球、油壶或经过涨潮渡口时，每隔一段时间会刮起持续 4.8 秒的强海风；
-//   2. 强海风会持续把蛋仔往路边/水边推，并使顶部「重心偏移度」迅速逼近 100%；
-//   3. 玩家必须【按住 Shift 压低重心】并【连按空格键（或逆风按 A/D）】把偏移度压回安全区；
-//   4. 【真实失败惩罚】：一旦重心偏移达到 100% 失衡，蛋仔会被狂风吹翻退回上一段安全起点，且手里的柴火/火柴/红球/油壶会被吹落打湿，必须重新回去拾取！
+// 方向 B：海风重心（工程书 INNOVATION_BOOK_20261110 的 WP-B）。
+// 2026-11-11 改版：
+//   · 只在两段迎风的海边路上刮（低洼路到船棚、去灯塔的海岸路），风从海那边往陆地吹；别处不刮。
+//   · 风来之前 1.5 秒：海面方向扫过来一道道白色风线、风声变大、EGGBOY 换紧张脸。没有横幅、没有进度条。
+//   · 按住 Shift = 蹲低顶风（顺带也慢下来），扛过这阵风有 3 秒顺风冲刺（身后拖着风线）。
+//   · 没扛住：踉跄退两步，手上的东西掉在脚边（掉进水里就漂回最近的岸边），走过去按 E 捡起来就行。
+//     剧情状态照旧退回"去拿它"那一步，读档后东西回到原处，不会卡关。
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 public sealed class TidalWindChallenge : MonoBehaviour
 {
+    sealed class Zone { public string a, b; public Vector3 p0, p1; public Vector3 wind; public float radius = 3.2f; }
+
     EggboyPlayer player;
     EggboyUI ui;
     IslandWorld world;
     GameState state;
     StoryDirector director;
+    PrototypeGame game;
 
-    float cooldown = 9.0f;
-    float warnTimer;
-    float gustTimer;
-    const float GustDuration = 4.8f;
-    float boostTimer;
+    readonly List<Zone> zones = new List<Zone>();
+    Zone currentZone;
+    float zoneTime, cooldown, warnTimer, gustTimer, boostTimer;
+    const float WarnSeconds = 1.5f, GustSeconds = 3.2f, BoostSeconds = 3f;
+    public float Imbalance { get; private set; }
+    public bool DebugBrace;
+    public static bool Suppress; // 创新审计测别的方向时先关掉风
+    public string Phase => warnTimer > 0f ? "warn" : gustTimer > 0f ? "gust" : boostTimer > 0f ? "boost" : "calm";
+    public bool InWindZone => currentZone != null;
+    public Vector3 WindDir { get; private set; } = Vector3.right;
+    public int Failures { get; private set; }
+    public int Survived { get; private set; }
 
-    Vector3 windDir = new Vector3(1f, 0f, 0f);
-    Vector3 safeAnchorPos;
-    float imbalance; // 0.0 (稳固) -> 1.0 (彻底失衡受罚！)
-
-    RectTransform windBanner;
-    RectTransform barFillRect;
-    Image barFillImg;
-    Text windTitleText;
-    Text windSubText;
+    ParticleSystem streaks, trail;
+    AudioSource windAudio;
+    bool crouchedByWind;
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, GameState s)
     {
-        player = p;
-        ui = u;
-        world = w;
-        state = s;
+        player = p; ui = u; world = w; state = s;
         director = FindObjectOfType<StoryDirector>();
-        if (player != null) safeAnchorPos = player.transform.position;
+        game = FindObjectOfType<PrototypeGame>();
+        BuildZones();
     }
 
-    void EnsureBannerUI()
+    // 风道用路线上的停靠点连成线段；海在哪一边，用两侧地面高度判断（低的那边是海）
+    void BuildZones()
     {
-        if (windBanner != null) return;
-        var root = TideTownStyleUI.FindHudCanvasRoot(ui);
-        if (root == null) return;
-
-        var img = TideTownStyleUI.CreatePanel(root, "TidalWindBanner", 520f, 68f, TideTownStyleUI.BarkPanel, true);
-        img.raycastTarget = false;
-        windBanner = img.rectTransform;
-        windBanner.anchorMin = windBanner.anchorMax = new Vector2(0.5f, 1f);
-        windBanner.pivot = new Vector2(0.5f, 1f);
-        windBanner.anchoredPosition = new Vector2(0f, -16f);
-
-        windTitleText = TideTownStyleUI.CreateText(
-            windBanner,
-            "",
-            15,
-            TideTownStyleUI.CreamText,
-            TextAnchor.MiddleCenter,
-            new Vector2(0f, 18f),
-            new Vector2(490f, 24f),
-            true);
-
-        windSubText = TideTownStyleUI.CreateText(
-            windBanner,
-            "",
-            12,
-            TideTownStyleUI.AmberSoft,
-            TextAnchor.MiddleCenter,
-            new Vector2(0f, -2f),
-            new Vector2(490f, 20f),
-            false);
-
-        // 底部重心偏移进度槽背景
-        var barBg = TideTownStyleUI.CreatePanel(windBanner, "BalanceBarBg", 460f, 10f, new Color32(35, 24, 15, 220), true);
-        barBg.raycastTarget = false;
-        barBg.rectTransform.anchorMin = barBg.rectTransform.anchorMax = barBg.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-        barBg.rectTransform.anchoredPosition = new Vector2(0f, -21f);
-
-        barFillImg = TideTownStyleUI.CreatePanel(barBg.transform, "BalanceBarFill", 460f, 10f, TideTownStyleUI.AmberAccent, true);
-        barFillImg.raycastTarget = false;
-        barFillRect = barFillImg.rectTransform;
-        barFillRect.anchorMin = new Vector2(0f, 0.5f);
-        barFillRect.anchorMax = new Vector2(0f, 0.5f);
-        barFillRect.pivot = new Vector2(0f, 0.5f);
-        barFillRect.anchoredPosition = Vector2.zero;
-
-        windBanner.gameObject.SetActive(false);
+        var pts = new Dictionary<string, Vector3>();
+        var asset = Resources.Load<TextAsset>("World/route");
+        if (asset != null)
+        {
+            var list = JsonUtility.FromJson<RouteList>(asset.text);
+            if (list != null && list.route != null)
+                foreach (var r in list.route) if (r.stop && !pts.ContainsKey(r.id)) pts[r.id] = new Vector3(r.x, 0f, r.z);
+        }
+        void Add(string a, string b)
+        {
+            if (!pts.ContainsKey(a) || !pts.ContainsKey(b) || world == null) return;
+            var z = new Zone { a = a, b = b, p0 = pts[a], p1 = pts[b] };
+            Vector3 mid = (z.p0 + z.p1) * 0.5f;
+            Vector3 along = (z.p1 - z.p0); along.y = 0f; along.Normalize();
+            Vector3 side = new Vector3(-along.z, 0f, along.x);
+            float gl = SideHeight(mid + side * 6f), gr = SideHeight(mid - side * 6f);
+            // 风从低的那一侧（海）吹向高的那一侧（陆地）
+            z.wind = gl < gr ? -side : side;
+            zones.Add(z);
+        }
+        Add("LOW", "24"); Add("24", "25"); Add("22", "30");
     }
 
-    bool IsChallengeContextActive()
+    float SideHeight(Vector3 p) => world.InWalkArea(p.x, p.z) ? world.GroundAt(p.x, p.z) : -1f;
+
+    Zone ZoneAt(Vector3 p)
     {
-        if (player == null || ui == null || world == null || state == null) return false;
-        if (!ui.inputClose) return false;
-        if (ui.TitleShowing || ui.Paused || ui.LetterOpen || player.locked) return false;
-        if (ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || AvantGardeGameplayHub.AnyModalOpen) return false;
-
-        bool carryingItem = !string.IsNullOrEmpty(state.carrying);
-        bool tideStage =
-            state.step == "B2_wood" || state.step == "B3_load" ||
-            state.step == "S2_ball" || state.step == "S3_bowl" ||
-            state.step == "L0_cross" || state.step == "L1_shed" || state.step == "L2_door" || state.step == "E0_back";
-        return carryingItem || tideStage;
+        foreach (var z in zones)
+        {
+            Vector3 ab = z.p1 - z.p0; ab.y = 0f;
+            Vector3 ap = p - z.p0; ap.y = 0f;
+            float t = Mathf.Clamp01(Vector3.Dot(ap, ab) / Mathf.Max(1e-4f, ab.sqrMagnitude));
+            Vector3 c = z.p0 + ab * t;
+            if (new Vector2(p.x - c.x, p.z - c.z).magnitude <= z.radius) return z;
+        }
+        return null;
     }
+
+    bool PlayerFree =>
+        ui != null && !ui.TitleShowing && !ui.Paused && !ui.LetterOpen && player != null && !player.locked
+        && !ObjectInspectModal.IsOpen && !WoodenMechanismPuzzleModal.IsOpen && !AvantGardeGameplayHub.AnyModalOpen
+        && !AIAgentCalibrationDirector.IsOpen;
 
     void Update()
     {
-        float dt = Time.deltaTime;
+        if (player == null || ui == null || world == null) return;
+        // 主线自动审计走经典路线，不刮风；真人游玩和创新审计才刮
+        if (Features.classicAudit || Suppress) return;
+        Tick(Time.deltaTime);
+    }
+
+    public void Tick(float dt)
+    {
         if (dt <= 0f || dt > 0.2f) return;
-
-        EnsureBannerUI();
-        if (director == null) director = FindObjectOfType<StoryDirector>();
-
-        if (!IsChallengeContextActive())
+        var z = PlayerFree ? ZoneAt(player.transform.position) : null;
+        if (z != currentZone)
         {
-            warnTimer = 0f;
-            gustTimer = 0f;
-            imbalance = 0f;
-            if (windBanner != null && windBanner.gameObject.activeSelf)
-                windBanner.gameObject.SetActive(false);
-            return;
+            currentZone = z;
+            zoneTime = 0f;
+            cooldown = 2.0f; // 进风道 2 秒后来第一阵
         }
+        if (boostTimer > 0f) Boost(dt);
+        if (currentZone == null) { EndGust(false); UpdateAudio(dt, 0f); return; }
+        zoneTime += dt;
+        WindDir = currentZone.wind;
 
-        // 顺风奖励阶段
-        if (boostTimer > 0f)
-        {
-            boostTimer -= dt;
-            if (player.Speed > 0.3f)
-            {
-                float yaw = player.yaw;
-                Vector3 fwd = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-                Vector3 next = player.transform.position + fwd * (0.85f * dt);
-                if (world.Walkable(next.x, next.z))
-                {
-                    next.y = world.GroundAt(next.x, next.z, next.y);
-                    player.transform.position = next;
-                }
-            }
-            UpdateBanner(
-                "顺风轻快步伐奖励生效中（剩余 " + boostTimer.ToString("F1") + " 秒）",
-                "你成功顶住了狂风，护住了手里的信物！",
-                0f,
-                false);
-            return;
-        }
-
-        // 狂风预警阶段（1.8 秒）
         if (warnTimer > 0f)
         {
             warnTimer -= dt;
-            bool preBracing = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            imbalance = preBracing ? 0.05f : 0.22f;
-
-            UpdateBanner(
-                "【狂风潮涌预警】强海风即将袭来！（" + warnTimer.ToString("F1") + "s）",
-                "请立即按住 Shift 压低重心，并准备连按【空格键】顶风稳住脚步，否则会被吹飞掉落物品！",
-                imbalance,
-                false);
-
-            if (warnTimer <= 0f)
-            {
-                gustTimer = GustDuration;
-                ShadowAndChimeSystem.PlayProceduralChime(311.13f, 0.25f);
-            }
+            UpdateAudio(dt, 0.35f + 0.4f * (1f - warnTimer / WarnSeconds));
+            if (warnTimer <= 0f) { gustTimer = GustSeconds; Imbalance = 0f; }
             return;
         }
+        if (gustTimer > 0f) { Gust(dt); return; }
 
-        // 狂风吹袭与重心对抗阶段（持续 4.8 秒）
-        if (gustTimer > 0f)
+        UpdateAudio(dt, 0.12f);
+        // 走动时才来风；站着不动看风景不打扰
+        if (player.Speed > 0.2f || !string.IsNullOrEmpty(state.carrying)) cooldown -= dt;
+        if (cooldown <= 0f) StartWarning();
+    }
+
+    public void DebugStartGust() { if (currentZone != null) StartWarning(); }
+
+    void StartWarning()
+    {
+        warnTimer = WarnSeconds;
+        cooldown = Random.Range(7f, 10f);
+        EnsureFx();
+        streaks.Play();
+        if (game != null) game.SetExpression(ExprId.nervous);
+        ShadowAndChimeSystem.PlayProceduralChime(440f, 0.18f);
+    }
+
+    void Gust(float dt)
+    {
+        gustTimer -= dt;
+        bool brace = DebugBrace || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)
+            || (HardwareAndSensorHub.Instance != null && HardwareAndSensorHub.Instance.ExternalWindStabilizeBoost > 0.15f);
+        // 顶风往前走算一半的力
+        Vector3 v = player.vel; v.y = 0f;
+        bool counter = v.sqrMagnitude > 0.04f && Vector3.Dot(v.normalized, WindDir) < -0.2f;
+
+        if (brace) Imbalance = Mathf.Max(0f, Imbalance - 0.6f * dt);
+        else Imbalance = Mathf.Clamp01(Imbalance + (counter ? 0.28f : 0.55f) * dt);
+        SetWindCrouch(brace);
+        if (brace) player.vel *= 0.35f; // 蹲着只能挪
+
+        float push = brace ? 0.25f : 1.6f;
+        Vector3 next = player.transform.position + WindDir * (push * dt);
+        if (world.Walkable(next.x, next.z))
         {
-            gustTimer -= dt;
+            next.y = world.GroundAt(next.x, next.z, next.y + 0.3f);
+            player.transform.position = next;
+        }
+        UpdateAudio(dt, 1f);
+        if (game != null && !brace && Imbalance > 0.55f) game.SetExpression(ExprId.scared);
 
-            bool holdingShift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            bool tappedSpace = Input.GetKeyDown(KeyCode.Space);
-            bool sensorStabilizing = HardwareAndSensorHub.Instance != null && HardwareAndSensorHub.Instance.ExternalWindStabilizeBoost > 0.15f;
-            if (sensorStabilizing) holdingShift = true;
+        if (Imbalance >= 1f) { Fail(); return; }
+        if (gustTimer <= 0f)
+        {
+            Survived++;
+            EndGust(true);
+            boostTimer = BoostSeconds;
+            if (game != null) game.SetExpression(ExprId.happy);
+            player.PlayEmote("hop");
+            ShadowAndChimeSystem.PlayProceduralChime(783.99f, 0.3f);
+            TideTownAchievementSystem.Unlock("tailwind");
+            EnsureFx();
+            trail.Play();
+        }
+    }
 
-            // 检查玩家是否在逆风方向按键对抗
-            Vector3 inputMove = Vector3.zero;
-            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) inputMove.x -= 1f;
-            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) inputMove.x += 1f;
-            if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) inputMove.z += 1f;
-            if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) inputMove.z -= 1f;
-            bool counterSteering = sensorStabilizing || (inputMove.sqrMagnitude > 0.1f && Vector3.Dot(inputMove.normalized, windDir) < -0.15f);
-
-            // 计算重心偏移度变化：不按键时 2.2 秒即失衡满格触发惩罚！
-            if (tappedSpace)
-            {
-                imbalance = Mathf.Max(0f, imbalance - 0.22f);
-            }
-
-            if (holdingShift && counterSteering)
-            {
-                imbalance = Mathf.Max(0f, imbalance - 0.36f * dt);
-            }
-            else if (holdingShift || counterSteering)
-            {
-                imbalance = Mathf.Clamp01(imbalance + 0.06f * dt);
-            }
-            else
-            {
-                // 完全不防备：重心迅速失控，且被强风以 2.15 m/s 猛烈推离路线！
-                imbalance = Mathf.Clamp01(imbalance + 0.44f * dt);
-            }
-
-            float pushSpeed = holdingShift ? 0.45f : 2.15f;
-            Vector3 push = windDir * (pushSpeed * dt);
-            Vector3 next = player.transform.position + push;
+    void Boost(float dt)
+    {
+        boostTimer -= dt;
+        if (player.Speed > 0.3f && PlayerFree)
+        {
+            Vector3 v = player.vel; v.y = 0f;
+            Vector3 next = player.transform.position + v.normalized * (0.6f * player.Speed * dt);
             if (world.Walkable(next.x, next.z))
             {
-                next.y = world.GroundAt(next.x, next.z, next.y);
+                next.y = world.GroundAt(next.x, next.z, next.y + 0.3f);
                 player.transform.position = next;
             }
-            else if (!holdingShift)
-            {
-                // 被吹到路沿边缘撞墙/悬崖边时，失衡加速
-                imbalance = Mathf.Clamp01(imbalance + 0.25f * dt);
-            }
-
-            int imbPct = Mathf.RoundToInt(imbalance * 100f);
-            string statusLine = holdingShift
-                ? "重心对抗中（剩余 " + gustTimer.ToString("F1") + "s） · 失衡度：" + imbPct + "%（连按空格可快速稳住！）"
-                : "【危险！正在被狂风吹跑】失衡度：" + imbPct + "%（快按住 Shift + 连按空格稳住！）";
-
-            string subLine = !string.IsNullOrEmpty(state.carrying)
-                ? "警告：失衡度达 100% 将被吹退回起点，且手上的物品会被吹落打湿！"
-                : "警告：失衡度达 100% 将被狂风巨浪吹翻退回上一段安全处！";
-
-            UpdateBanner(statusLine, subLine, imbalance, imbalance >= 0.65f);
-
-            // 触发真实失败惩罚！
-            if (imbalance >= 1.0f)
-            {
-                TriggerGaleFailurePenalty();
-                return;
-            }
-
-            // 顺利撑过 4.8 秒强风！
-            if (gustTimer <= 0f)
-            {
-                if (windBanner != null) windBanner.gameObject.SetActive(false);
-                cooldown = 12.5f;
-                imbalance = 0f;
-                boostTimer = 3.5f;
-                player.PlayEmote("hop");
-                ShadowAndChimeSystem.PlayProceduralChime(783.99f, 0.3f);
-                ui.ShowToast("成功顶住狂风稳住重心！手上的物品完好无损，获得 3.5 秒顺风疾行！", 3.5f);
-            }
-            return;
         }
-
-        if (windBanner != null && windBanner.gameObject.activeSelf)
-            windBanner.gameObject.SetActive(false);
-
-        // 平常行走时记录安全锚点，并倒计时下一次海风袭击
-        if (player.Speed > 0.22f)
-        {
-            if (player.grounded && world.Walkable(player.transform.position.x, player.transform.position.z))
-            {
-                // 每隔一段距离刷新狂风前的退回锚点
-                if (Vector3.Distance(player.transform.position, safeAnchorPos) > 4.8f)
-                    safeAnchorPos = player.transform.position;
-            }
-
-            cooldown -= dt;
-            if (cooldown <= 0f)
-            {
-                warnTimer = 1.8f;
-                imbalance = 0.15f;
-                float angle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-                windDir = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)).normalized;
-                ShadowAndChimeSystem.PlayProceduralChime(440f, 0.2f);
-            }
-        }
+        if (trail != null) trail.transform.position = player.transform.position + Vector3.up * 0.4f;
+        if (boostTimer <= 0f && trail != null) trail.Stop();
     }
 
-    void TriggerGaleFailurePenalty()
+    void Fail()
     {
-        gustTimer = 0f;
-        warnTimer = 0f;
-        imbalance = 0f;
-        cooldown = 11.0f;
-        if (windBanner != null) windBanner.gameObject.SetActive(false);
-
+        Failures++;
+        EndGust(false);
+        cooldown = 9f;
         ShadowAndChimeSystem.PlayProceduralChime(185f, 0.45f);
-
-        // 1. 将玩家吹退回安全锚点（或顺着风向往回退 4 米）
-        if (player != null && world != null)
+        if (game != null) game.SetExpression(ExprId.scared);
+        // 踉跄：顺着风退两步（退不动就少退一点）
+        Vector3 p = player.transform.position;
+        for (float d = 2.2f; d > 0.3f; d -= 0.4f)
         {
-            Vector3 targetPos = safeAnchorPos;
-            if (Vector3.Distance(player.transform.position, targetPos) < 1.5f)
-            {
-                float yaw = player.yaw;
-                Vector3 back = player.transform.position - new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw)) * 3.8f;
-                if (world.Walkable(back.x, back.z))
-                {
-                    back.y = world.GroundAt(back.x, back.z, back.y);
-                    targetPos = back;
-                }
-            }
-            if (world.Walkable(targetPos.x, targetPos.z))
-            {
-                targetPos.y = world.GroundAt(targetPos.x, targetPos.z, targetPos.y) + 0.02f;
-                player.transform.position = targetPos;
-                player.vel = Vector3.zero;
-            }
+            Vector3 q = p + WindDir * d;
+            if (!world.Walkable(q.x, q.z)) continue;
+            q.y = world.GroundAt(q.x, q.z, p.y + 0.5f);
+            player.transform.position = q;
+            break;
         }
+        player.vel = Vector3.zero;
+        player.PlayEmote("shake");
+        // 东西掉在原来站的地方附近，被风往下风处推半米
+        if (director != null && !string.IsNullOrEmpty(state.carrying) && state.carrying != "matches")
+            director.DropCarriedNear(p + WindDir * 0.6f);
+    }
 
-        // 2. 如果手里拿着柴火/火柴/红球/油壶，直接触发掉落/打湿惩罚，必须重新回去拿！
-        string msg = "【失衡惩罚】你没能稳住重心，被强海风吹翻退回了安全起点！";
-        if (director != null)
+    void EndGust(bool keepBoostFx)
+    {
+        warnTimer = 0f; gustTimer = 0f; Imbalance = 0f;
+        SetWindCrouch(false);
+        if (streaks != null) streaks.Stop();
+        if (!keepBoostFx && trail != null && boostTimer <= 0f) trail.Stop();
+    }
+
+    void SetWindCrouch(bool on)
+    {
+        if (on == crouchedByWind) return;
+        crouchedByWind = on;
+        player.SetStoryCrouch(on);
+    }
+
+    // ---- 风线和风声 ----
+
+    void EnsureFx()
+    {
+        if (streaks != null) return;
+        var fx = FindObjectOfType<BakeryEffects>();
+        Material mat = fx != null ? fx.ParticleMaterial : null;
+
+        var go = new GameObject("WindStreaks");
+        streaks = go.AddComponent<ParticleSystem>();
+        var main = streaks.main;
+        main.loop = true; main.playOnAwake = false;
+        main.startLifetime = 0.9f;
+        main.startSpeed = 0f;
+        main.startSize = new ParticleSystem.MinMaxCurve(0.018f, 0.035f);
+        main.startColor = new Color(1f, 1f, 1f, 0.38f);
+        main.maxParticles = 220;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        var em = streaks.emission; em.rateOverTime = 90f;
+        var shape = streaks.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(9f, 2.2f, 1f);
+        var vel = streaks.velocityOverLifetime; vel.enabled = true; vel.space = ParticleSystemSimulationSpace.World;
+        var r = go.GetComponent<ParticleSystemRenderer>();
+        r.renderMode = ParticleSystemRenderMode.Stretch;
+        r.velocityScale = 0.12f; r.lengthScale = 2f;
+        if (mat != null) r.sharedMaterial = mat;
+
+        var go2 = new GameObject("TailwindTrail");
+        trail = go2.AddComponent<ParticleSystem>();
+        var m2 = trail.main;
+        m2.loop = true; m2.playOnAwake = false;
+        m2.startLifetime = 0.6f; m2.startSpeed = 0.2f; m2.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.08f);
+        m2.startColor = new Color(1f, 0.95f, 0.8f, 0.6f);
+        m2.simulationSpace = ParticleSystemSimulationSpace.World;
+        var e2 = trail.emission; e2.rateOverTime = 40f;
+        var s2 = trail.shape; s2.shapeType = ParticleSystemShapeType.Sphere; s2.radius = 0.25f;
+        var r2 = go2.GetComponent<ParticleSystemRenderer>();
+        if (mat != null) r2.sharedMaterial = mat;
+    }
+
+    void LateUpdate()
+    {
+        if (streaks == null || player == null) return;
+        if (streaks.isPlaying)
         {
-            director.OnGalePenaltyDropItem(out msg);
-        }
-        if (ui != null)
-        {
-            ui.ShowToast(msg, 4.8f);
+            // 风线从上风处（海那边）扫过来
+            Vector3 up = -WindDir;
+            streaks.transform.position = player.transform.position + up * 6f + Vector3.up * 1.0f;
+            streaks.transform.rotation = Quaternion.LookRotation(WindDir, Vector3.up);
+            var vel = streaks.velocityOverLifetime;
+            vel.x = new ParticleSystem.MinMaxCurve(WindDir.x * 13f);
+            vel.y = new ParticleSystem.MinMaxCurve(0f);
+            vel.z = new ParticleSystem.MinMaxCurve(WindDir.z * 13f);
         }
     }
 
-    void UpdateBanner(string title, string sub, float fill01, bool dangerRed)
+    static AudioClip windClip;
+    void UpdateAudio(float dt, float target)
     {
-        if (windBanner == null) return;
-        if (!windBanner.gameObject.activeSelf) windBanner.gameObject.SetActive(true);
-        if (windTitleText != null) windTitleText.text = title;
-        if (windSubText != null) windSubText.text = sub;
-        if (barFillRect != null)
-            barFillRect.sizeDelta = new Vector2(Mathf.Clamp(460f * Mathf.Clamp01(fill01), 6f, 460f), 10f);
-        if (barFillImg != null)
-            barFillImg.color = dangerRed ? new Color32(235, 85, 65, 255) : TideTownStyleUI.AmberAccent;
+        if (windAudio == null)
+        {
+            if (target <= 0.01f) return;
+            if (windClip == null) windClip = MakeWindClip();
+            windAudio = gameObject.AddComponent<AudioSource>();
+            windAudio.clip = windClip; windAudio.loop = true; windAudio.volume = 0f; windAudio.spatialBlend = 0f;
+            windAudio.Play();
+        }
+        windAudio.volume = Mathf.MoveTowards(windAudio.volume, target * 0.5f, dt * 0.8f);
+        windAudio.pitch = 0.85f + windAudio.volume * 0.5f;
+    }
+
+    // 风声：低通过滤的白噪声，音量慢慢起伏
+    static AudioClip MakeWindClip()
+    {
+        const int rate = 22050, len = rate * 4;
+        var data = new float[len];
+        var rng = new System.Random(7);
+        float lp = 0f, lp2 = 0f;
+        for (int i = 0; i < len; i++)
+        {
+            float n = (float)(rng.NextDouble() * 2.0 - 1.0);
+            lp += (n - lp) * 0.05f;
+            lp2 += (lp - lp2) * 0.08f;
+            float t = (float)i / len;
+            float swell = 0.65f + 0.35f * Mathf.Sin(t * Mathf.PI * 2f * 2f) * Mathf.Sin(t * Mathf.PI);
+            // 首尾淡入淡出，循环时不爆音
+            float edge = Mathf.Clamp01(Mathf.Min(t, 1f - t) * 40f);
+            data[i] = lp2 * 6f * swell * edge;
+        }
+        var clip = AudioClip.Create("WindNoise", len, 1, rate, false);
+        clip.SetData(data, 0);
+        return clip;
     }
 }

@@ -98,59 +98,97 @@ public class DogFollower : MonoBehaviour
         Snap(TargetPoint());
     }
 
-    // 让小黑跑到某处蹦两下再回来（卡住提示、嗅探都用它）
+    // 让小黑跑到某处，到了蹦两下（或者在那儿蹲一会儿）再回来。卡住提示、嗅探、踩踏板都用它
     Vector3 guidePos;
-    float guideTimer;
+    float guideTimer, guideArriveRadius = 1.3f, guideStaySeconds = 2.5f;
     bool guideArrived;
+    string sniffTarget;
     public bool Guiding => guideTimer > 0f;
     public bool GuideArrived => guideArrived;
-    public void GuideTo(Vector3 worldPos, float seconds)
+    public string LastCommand { get; private set; } = "";
+    public void GuideTo(Vector3 worldPos, float seconds, float arriveRadius = 1.3f, float staySeconds = 2.5f)
     {
         guidePos = worldPos;
         guideTimer = seconds;
         guideArrived = false;
+        guideArriveRadius = arriveRadius;
+        guideStaySeconds = staySeconds;
     }
 
+    // F：指挥小黑。附近有爪印踏板就去踩；附近有没认出来的线索旧物就跑过去嗅；都没有就是摸摸它
     public void CommandOrPet()
     {
         if (!Following || !Visible || player == null) return;
+        Vector3 p = player.transform.position;
+        var plate = DogPawPlate.Instance;
+        if (plate != null && !plate.Done && plate.Available && Vector3.Distance(p, plate.Center) < 8f)
+        {
+            LastCommand = "plate";
+            sniffTarget = null;
+            GuideTo(plate.Center, 20f, 0.25f, 3.5f);
+            ShadowAndChimeSystem.PlayProceduralChime(880f, 0.12f);
+            return;
+        }
+        if (FindSniffTarget(p, 10f, out string id, out Vector3 pos))
+        {
+            LastCommand = "sniff:" + id;
+            sniffTarget = id;
+            GuideTo(pos, 10f, 1.1f, 2.2f);
+            ShadowAndChimeSystem.PlayProceduralChime(880f, 0.12f);
+            return;
+        }
+        LastCommand = "pet";
         petTimer = 2.6f;
+        petCount++;
         player.PlayEmote("hop");
         ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.25f);
-
-        if (state != null)
-        {
-            foreach (var itemId in SniffClueOrder)
-            {
-                string flag = "dog_sniff_" + itemId;
-                bool alreadyKnown = state.seenMemories.Contains(itemId) ||
-                                    state.seenMemories.Contains(itemId + "_detail") ||
-                                    state.flags.Contains(flag);
-                if (!alreadyKnown)
-                {
-                    state.flags.Add(flag);
-                    if (ui != null && SniffClueToast.TryGetValue(itemId, out string clueMsg))
-                    {
-                        ui.ShowToast(clueMsg, 3.8f);
-                    }
-                    return;
-                }
-            }
-        }
-
-        if (ui != null)
-        {
-            string[] msgs =
-            {
-                "小黑摇着尾巴蹭了蹭你的外壳，所有旧物刻度线索都已帮你找齐了。",
-                "小黑开心地原地蹦了一下，耳朵一抖一抖地跟紧了你。",
-                "小黑用湿漉漉的鼻子碰了碰你的手，干劲十足！"
-            };
-            ui.ShowToast(msgs[petCount % msgs.Length], 3.0f);
-            petCount++;
-        }
     }
 
+    // 附近还没被认出刻度的线索旧物（翻过背面暗格、或者小黑嗅过的都算认出了）
+    bool FindSniffTarget(Vector3 from, float range, out string id, out Vector3 pos)
+    {
+        id = null; pos = Vector3.zero;
+        if (state == null) return false;
+        float best = range;
+        foreach (var kv in ClueItemPositions())
+        {
+            string itemId = kv.Key;
+            if (state.seenMemories.Contains(itemId + "_detail") || state.flags.Contains("dog_sniff_" + itemId)) continue;
+            if (Mathf.Abs(kv.Value.y - from.y) > 3f) continue; // 塔顶那几样在楼下嗅不到
+            float d = Vector3.Distance(new Vector3(from.x, 0f, from.z), new Vector3(kv.Value.x, 0f, kv.Value.z));
+            if (d < best) { best = d; id = itemId; pos = kv.Value; }
+        }
+        return id != null;
+    }
+
+    static Dictionary<string, Vector3> cluePositions;
+    static Dictionary<string, Vector3> ClueItemPositions()
+    {
+        if (cluePositions != null) return cluePositions;
+        cluePositions = new Dictionary<string, Vector3>();
+        foreach (var itemId in SniffClueOrder)
+        {
+            foreach (var it in BakeryData.Load()) if (it.id == itemId) cluePositions[itemId] = new Vector3(it.x, it.y, it.z);
+            foreach (var it in SchoolData.Load().items) if (it.id == itemId) cluePositions[itemId] = new Vector3(it.x, it.y, it.z);
+            foreach (var it in LighthouseData.Load().items) if (it.id == itemId) cluePositions[itemId] = new Vector3(it.x, it.y, it.z);
+        }
+        return cluePositions;
+    }
+
+    // 嗅到了：记下刻度，地上留一个粉笔爪印，旁边写着是哪一环的几
+    void MarkSniffedClue(string itemId)
+    {
+        if (state == null || string.IsNullOrEmpty(itemId)) return;
+        if (!state.flags.Contains("dog_sniff_" + itemId)) state.flags.Add("dog_sniff_" + itemId);
+        ShadowAndChimeSystem.PlayProceduralChime(987.77f, 0.18f);
+        if (!WoodenMechanismPuzzleModal.ClueInfo(itemId, out int ring, out int number)) return;
+        int sniffed = 0;
+        foreach (var id in SniffClueOrder) if (state.flags.Contains("dog_sniff_" + id)) sniffed++;
+        if (sniffed >= 3) TideTownAchievementSystem.Unlock("dog_detective");
+        Vector3 at = transform.position;
+        at.y = world != null ? world.GroundAt(at.x, at.z, at.y + 0.5f) : at.y;
+        ChalkMark.Spawn(at + transform.forward * 0.25f, new[] { "外环", "中环", "内环" }[ring] + " " + number, itemId);
+    }
     void LateUpdate()
     {
         if (!bound || !Following || player == null || world == null) return;
@@ -193,11 +231,12 @@ public class DogFollower : MonoBehaviour
             target = toward;
             float dGuide = new Vector2(transform.position.x - guidePos.x, transform.position.z - guidePos.z).magnitude;
             float dToward = new Vector2(transform.position.x - toward.x, transform.position.z - toward.z).magnitude;
-            if (!guideArrived && (dGuide < 1.3f || dToward < 0.35f))
+            if (!guideArrived && (dGuide < guideArriveRadius || dToward < 0.25f))
             {
                 guideArrived = true;
                 petTimer = 1.8f; // 到了：蹦两下
-                guideTimer = Mathf.Min(guideTimer, 2.5f);
+                guideTimer = Mathf.Min(guideTimer, guideStaySeconds);
+                if (sniffTarget != null) { MarkSniffedClue(sniffTarget); sniffTarget = null; }
             }
         }
 
@@ -249,55 +288,26 @@ public class DogFollower : MonoBehaviour
         if (visual != null) visual.ApplyMotion(dt, speed, trot, WagHz, Happy);
     }
 
+    // 到了某一步的关键地点附近，小黑自己先跑过去蹦两下（不弹字）
     void CheckCompanionBarkHint()
     {
-        if (state == null || ui == null || ui.ToastVisible) return;
+        if (state == null || Guiding) return;
         string step = state.step;
         if (string.IsNullOrEmpty(step) || barkedSteps.Contains(step)) return;
-
         Vector3 p = player.transform.position;
-        if (step == "L0_cross")
+        Vector3 target = Vector3.zero; float near = 0f;
+        if (step == "L1_shed")
         {
-            var cratePos = new Vector3(17.4f, 1.0f, -1.4f);
-            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(cratePos.x, cratePos.z)) < 5.5f)
-            {
-                barkedSteps.Add(step);
-                petTimer = 1.6f;
-                ui.ShowToast("汪！小黑跑到浅滩边回头看你，示意可以踩着漂浮的木箱去船棚（按 F 可指挥小黑嗅探线索）", 4.0f);
-            }
+            foreach (var it in LighthouseData.Load().items) if (it.id == "oil") target = new Vector3(it.x, it.y, it.z);
+            near = 5f;
         }
-        else if (step == "L1_shed")
-        {
-            var shedPos = new Vector3(19.7f, 1.4f, -5.7f);
-            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(shedPos.x, shedPos.z)) < 4.5f)
-            {
-                barkedSteps.Add(step);
-                petTimer = 1.6f;
-                ui.ShowToast("汪汪！小黑停在船棚屋檐下，用鼻子嗅了嗅那只旧油壶。", 4.0f);
-            }
-        }
-        else if (step == "L2_door")
-        {
-            var doorPos = new Vector3(21.7f, 5.0f, 2.4f);
-            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(doorPos.x, doorPos.z)) < 5.0f)
-            {
-                barkedSteps.Add(step);
-                petTimer = 1.6f;
-                ui.ShowToast("小黑在灯塔台阶下摇着尾巴为你守门（按 F 可让小黑帮你找齐塔顶罗经刻度）", 4.0f);
-            }
-        }
-        else if (step == "E1_read")
-        {
-            var deskPos = EndingData.Point(EndingData.Load().desk);
-            if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(deskPos.x, deskPos.z)) < 4.5f)
-            {
-                barkedSteps.Add(step);
-                petTimer = 1.6f;
-                ui.ShowToast("汪！小黑围着邮局门前的课桌转了一圈，上面放着写给你的信。", 4.0f);
-            }
-        }
+        else if (step == "E1_read") { target = EndingData.Point(EndingData.Load().desk); near = 5f; }
+        if (near <= 0f || target == Vector3.zero) return;
+        if (Vector2.Distance(new Vector2(p.x, p.z), new Vector2(target.x, target.z)) > near) return;
+        barkedSteps.Add(step);
+        GuideTo(target, 6f);
+        ShadowAndChimeSystem.PlayProceduralChime(880f, 0.12f);
     }
-
     Vector3 TargetPoint()
     {
         float pYaw = player.yaw;

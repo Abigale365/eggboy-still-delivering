@@ -327,6 +327,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
     }
 
     public Vector3 GetCrossingChannelCenter() => crossingChannelCenter;
+    public Vector3 WinchPosition => winchWorldPos;
 
     public Transform GetNearestWishPedestal(Vector3 pos, out float dist)
     {
@@ -354,6 +355,24 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    // 审计用：把渡口恢复成"还没解决"，好接着测另一种过海办法
+    public void DebugResetCrossing()
+    {
+        winchRaised = false;
+        boatBridge = false;
+        if (state != null) state.flags.Remove("dock_winch_raised");
+    }
+
+    // 用一条船补上渡口缺口（揭字拼出的木船等）：不升栈桥，记成过海已解决，解锁指定成就
+    public void BridgeGapWithBoat(string achievementId)
+    {
+        winchRaised = true;
+        boatBridge = true;
+        if (state != null && !state.flags.Contains("dock_winch_raised")) state.flags.Add("dock_winch_raised");
+        ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
+        if (!string.IsNullOrEmpty(achievementId)) TideTownAchievementSystem.Unlock(achievementId);
     }
 
     public void RaiseDockWinch(bool byEcho, bool byWishBoat = false)

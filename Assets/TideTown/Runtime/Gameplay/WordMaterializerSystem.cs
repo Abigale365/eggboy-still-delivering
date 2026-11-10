@@ -1,9 +1,11 @@
-// 创新方向 D：【信纸揭字 · 抛空成物】（Peel Word-Slip from Parchment Letter & Throw into 3D Air）。
-// 直接附着在 EggboyUI 原版高质感羊皮纸信件上：
-//   1. 每封信的正文下方都有几张带有邮票齿孔与阴影的「可揭下信纸字签」（如〖柴火捆〗〖最喜欢的球〗〖操场滑梯〗〖浮水木箱〗〖煤油壶〗〖长椅木桥〗）；
-//   2. 玩家用鼠标按住字签即可将其从信纸上“揭/撕”下来；
-//   3. 将字签往信纸外的 3D 空中一拖，信纸自动半透明退后，空中出现从蛋仔手中抛出的 3D 抛物线与真实 Lux3D 落点预览；
-//   4. 松开鼠标，信纸字签在 3D 空气中翻飞划出抛物线，落地瞬间直接生长为场景内 100% 真实的 Lux3D 模型（无任何粗糙白盒或异形图标）！
+// 创新方向 D：信纸揭字 · 抛空成物 + 拼字（工程书 INNOVATION_BOOK_20261110 的 WP-D）。
+//   · 信上真的有这个字，才能撕下来（数据在 Resources/Story/word_slips.json，正文里那个字会变成邮戳橘色）。
+//   · 撕下来的字放在信纸下方的"邮包"里：拖出信纸 = 扔进世界变成实物；拖到另一张字上 = 拼成新的字。
+//   · 字变出来的东西只"给你一样物品"，不直接把这一站设成完成：
+//       「木柴」是湿的（塞进炉膛点不着）→ 和阿萤信里的「干」拼成「干木柴」才烧得起来；
+//       「火」= 火种（等于拿到火柴）；「球」= 那颗红球；「煤油」= 一壶油；
+//       「木柴」+「船」=「木船」，涨潮后扔到渡口缺口上能踩着过海。
+//   · 外观走 Lux3DService：先放保底模型（玩法立即生效），后台生成好了原位替换。
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,49 +13,19 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+[Serializable] public class WordSlipDef
+{
+    public string id, letter, word, near, kind, entry, action, prompt;
+    [NonSerialized] public bool combo;
+}
+[Serializable] public class WordComboDef { public string a, b, id, word, entry, action, prompt; }
+[Serializable] class WordSlipFile { public WordSlipDef[] slips; public WordComboDef[] combos; }
+
 public sealed class WordMaterializerSystem : MonoBehaviour
 {
-    public sealed class LetterWordSlipDef
-    {
-        public string word;
-        public string subLabel;
-        public string lux3DSceneName;
-        public float targetSize;
-        public bool walkable;
-        public string storyAction; // wood, fire, ball, oil, lamp, none
-    }
-
-    static readonly LetterWordSlipDef[] LinOvenSlips =
-    {
-        new LetterWordSlipDef { word = "柴火捆", subLabel = "揭下抛向地面化为柴火", lux3DSceneName = "Bakery_wood", targetSize = 0.65f, walkable = false, storyAction = "wood" },
-        new LetterWordSlipDef { word = "最后一炉暖火", subLabel = "抛向烤炉直接生火", lux3DSceneName = "Bakery_basket", targetSize = 0.58f, walkable = false, storyAction = "fire" },
-        new LetterWordSlipDef { word = "老台秤", subLabel = "化为铁制台秤并显露刻度", lux3DSceneName = "Bakery_scale", targetSize = 0.46f, walkable = false, storyAction = "clue_bakery" },
-        new LetterWordSlipDef { word = "长椅木桥", subLabel = "化为可踩踏的实木长椅桥", lux3DSceneName = "Street_S6", targetSize = 1.65f, walkable = true, storyAction = "none" }
-    };
-
-    static readonly LetterWordSlipDef[] YingDogSlips =
-    {
-        new LetterWordSlipDef { word = "最喜欢的球", subLabel = "抛向狗碗直接滚入唤出小黑", lux3DSceneName = "S_ball", targetSize = 0.24f, walkable = false, storyAction = "ball" },
-        new LetterWordSlipDef { word = "操场滑梯", subLabel = "化为可攀爬的木滑梯", lux3DSceneName = "S_slide", targetSize = 2.20f, walkable = true, storyAction = "none" },
-        new LetterWordSlipDef { word = "旧课桌", subLabel = "化为可垫脚攀登的旧课桌", lux3DSceneName = "S_desk", targetSize = 0.92f, walkable = true, storyAction = "clue_school" },
-        new LetterWordSlipDef { word = "狗窝木箱", subLabel = "化为学校后院木狗窝", lux3DSceneName = "S_doghouse", targetSize = 0.88f, walkable = true, storyAction = "clue_school" }
-    };
-
-    static readonly LetterWordSlipDef[] ChenLighthouseSlips =
-    {
-        new LetterWordSlipDef { word = "浮水木箱", subLabel = "抛向浅滩化为可踩踏浮箱", lux3DSceneName = "crate_0", targetSize = 1.05f, walkable = true, storyAction = "none" },
-        new LetterWordSlipDef { word = "煤油壶", subLabel = "化为守塔人的黄铜油壶", lux3DSceneName = "LH_oil", targetSize = 0.46f, walkable = false, storyAction = "oil" },
-        new LetterWordSlipDef { word = "单筒望远镜", subLabel = "化为锁定山顶方位的望远镜", lux3DSceneName = "LH_scope", targetSize = 0.65f, walkable = false, storyAction = "clue_lighthouse" },
-        new LetterWordSlipDef { word = "街角暖灯", subLabel = "化为散发暖光的街道路灯", lux3DSceneName = "Street_S4", targetSize = 2.65f, walkable = false, storyAction = "lamp" }
-    };
-
-    static readonly LetterWordSlipDef[] ZhouEggboySlips =
-    {
-        new LetterWordSlipDef { word = "街角暖灯", subLabel = "化为照亮归途的暖光路灯", lux3DSceneName = "Street_S4", targetSize = 2.65f, walkable = false, storyAction = "lamp" },
-        new LetterWordSlipDef { word = "窗台花盆", subLabel = "化为盛开的潮汐镇花盆", lux3DSceneName = "Street_E1", targetSize = 0.48f, walkable = false, storyAction = "none" },
-        new LetterWordSlipDef { word = "长椅木桥", subLabel = "化为可踩踏的实木长椅桥", lux3DSceneName = "Street_S6", targetSize = 1.65f, walkable = true, storyAction = "none" },
-        new LetterWordSlipDef { word = "浮水木箱", subLabel = "化为可垫脚攀爬的木箱", lux3DSceneName = "crate_0", targetSize = 1.05f, walkable = true, storyAction = "none" }
-    };
+    static readonly string[] LetterIds = { "lin_oven", "ying_dog", "chen_lighthouse", "zhou_eggboy" };
+    static readonly string[] LetterTabs = { "林阿婆的信", "阿萤的信", "老陈的信", "老周的信" };
+    const string HighlightHex = "#C2621D";
 
     EggboyPlayer player;
     EggboyUI ui;
@@ -61,93 +33,148 @@ public sealed class WordMaterializerSystem : MonoBehaviour
     StoryDirector director;
     GameState state;
 
-    RectTransform hudCanvasRoot;
-    RectTransform letterOverlay;
-    RectTransform letterPaper;
+    WordSlipDef[] baseSlips = new WordSlipDef[0];
+    WordComboDef[] combos = new WordComboDef[0];
+    readonly List<WordSlipDef> sessionCombos = new List<WordSlipDef>(); // 表里没有的自由组合，只在这一局里有
+
+    RectTransform hudCanvasRoot, letterOverlay, letterPaper;
     CanvasGroup paperCanvasGroup;
     Image overlayBackdropImage;
-
     GameObject slipTrayRoot;
-    readonly List<GameObject> slipCards = new List<GameObject>();
+    readonly List<GameObject> trayObjects = new List<GameObject>();
+    readonly Dictionary<string, RectTransform> slipCards = new Dictionary<string, RectTransform>();
+    readonly List<GameObject> tabButtons = new List<GameObject>();
+    int currentLetter;
 
-    // 当前正在被鼠标拖拽的信纸字签
-    LetterWordSlipDef draggingSlip;
-    RectTransform draggedSlipUI;
+    WordSlipDef draggingSlip;
+    RectTransform draggedSlipUI, draggedOriginal;
     Vector2 dragStartScreenPos;
     bool aimedInAir;
     Vector3 currentAimWorldPos;
-
-    // 3D 空中抛物线轨迹点与真实 Lux3D 落点预览
     GameObject aimPreviewRoot;
     readonly Transform[] arcDots = new Transform[14];
-    GameObject ghostLux3DModel;
 
-    readonly List<GameObject> materializedObjects = new List<GameObject>();
+    // 同一个字在世界里只留一份：再扔一次，旧的收回
+    readonly Dictionary<string, Lux3DSpawn> materialized = new Dictionary<string, Lux3DSpawn>();
 
+    public Lux3DSpawn LastSpawn { get; private set; }
+    public string LastAction { get; private set; } = "";
+    public bool LastActionApplied { get; private set; }
     public bool IsPanelOpen => ui != null && ui.LetterOpen;
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
     {
-        player = p;
-        ui = u;
-        world = w;
-        director = d;
-        state = s;
+        player = p; ui = u; world = w; director = d; state = s;
+        var ta = Resources.Load<TextAsset>("Story/word_slips");
+        if (ta != null)
+        {
+            var f = JsonUtility.FromJson<WordSlipFile>(ta.text);
+            if (f != null)
+            {
+                if (f.slips != null) baseSlips = f.slips;
+                if (f.combos != null) combos = f.combos;
+            }
+        }
     }
+
+    // ---- 现在手里有哪些字 ----
+
+    bool HasLetter(string letterId)
+    {
+        if (state == null || !state.flags.Contains("letters_taken")) return false;
+        // 前三封一开始就装在邮包里；老周那封要等回到邮局才有
+        if (letterId == "zhou_eggboy") return state.flags.Contains("dawn_shown");
+        return true;
+    }
+
+    public List<WordSlipDef> PocketSlips()
+    {
+        var list = new List<WordSlipDef>();
+        foreach (var s in baseSlips) if (HasLetter(s.letter)) list.Add(s);
+        foreach (var c in combos)
+            if (state != null && state.flags.Contains("combo_" + c.id)) list.Add(ComboSlip(c));
+        list.AddRange(sessionCombos);
+        return list;
+    }
+
+    static WordSlipDef ComboSlip(WordComboDef c) => new WordSlipDef
+    { id = c.id, word = c.word, kind = "item", entry = c.entry, action = c.action, prompt = c.prompt, combo = true };
+
+    WordSlipDef FindSlip(string id)
+    {
+        foreach (var s in PocketSlips()) if (s.id == id) return s;
+        return null;
+    }
+
+    // 两张字叠在一起。表里有就得到固定的新字（存档记住）；没有就得到一张"纪念物"字签，只在这一局里有。
+    public WordSlipDef Combine(string aId, string bId)
+    {
+        var a = FindSlip(aId); var b = FindSlip(bId);
+        if (a == null || b == null || aId == bId || a.combo || b.combo) return null;
+        foreach (var c in combos)
+        {
+            if (!((c.a == aId && c.b == bId) || (c.a == bId && c.b == aId))) continue;
+            if (state != null && !state.flags.Contains("combo_" + c.id)) state.flags.Add("combo_" + c.id);
+            TideTownAchievementSystem.Unlock("word_combo");
+            return ComboSlip(c);
+        }
+        string id = "free_" + aId + "_" + bId, idRev = "free_" + bId + "_" + aId;
+        foreach (var s in sessionCombos) if (s.id == id || s.id == idRev) return s;
+        var free = new WordSlipDef { id = id, word = a.word + b.word, kind = "item", entry = "", action = "keepsake", prompt = a.word + b.word, combo = true };
+        sessionCombos.Add(free);
+        return free;
+    }
+
+    // ---- 打开信 ----
 
     public void OpenLetterWithSlips()
     {
         if (ui == null) return;
-        if (ui.LetterOpen)
-        {
-            ui.CloseLetter();
-            return;
-        }
-
-        // 根据当前剧情阶段打开对应的原版高质感羊皮纸信件
-        string step = state != null ? state.step : "";
-        if (step.StartsWith("S"))
-            OpenSpecificLetter(1);
-        else if (step.StartsWith("L"))
-            OpenSpecificLetter(2);
-        else if (step.StartsWith("E"))
-            OpenSpecificLetter(3);
-        else
-            OpenSpecificLetter(0);
+        if (ui.LetterOpen) { ui.CloseLetter(); return; }
+        if (state == null || !state.flags.Contains("letters_taken")) return; // 还没取到信
+        string step = state.step ?? "";
+        int idx = step.StartsWith("S") ? 1 : step.StartsWith("L") ? 2 : step.StartsWith("E") && HasLetter("zhou_eggboy") ? 3 : 0;
+        OpenSpecificLetter(idx);
     }
 
     public void OpenSpecificLetter(int index)
     {
-        if (ui == null) return;
-        if (index == 0)
+        if (ui == null || director == null) return;
+        index = Mathf.Clamp(index, 0, LetterIds.Length - 1);
+        if (!HasLetter(LetterIds[index])) return;
+        var letter = director.GetLetter(LetterIds[index]);
+        if (letter == null) return;
+        currentLetter = index;
+        ui.ShowLetterDetail(letter.title, HighlightBody(letter.body, LetterIds[index]), letter.signature);
+        RebuildTray();
+    }
+
+    // 正文里能撕的那个字涂成邮戳橘色
+    string HighlightBody(string body, string letterId)
+    {
+        if (ui.LetterBodyText != null) ui.LetterBodyText.supportRichText = true;
+        // 卡住提示第 3 层：信里和眼下这一步有关的那句话先标成青绿色
+        var hint = HintDirector.Instance;
+        if (hint != null && hint.LetterHintId == letterId && !string.IsNullOrEmpty(hint.LetterHintPhrase))
         {
-            ui.ShowLetterDetail(
-                "致 面包店的烤炉",
-                "老伙计：\n\n四十二年，你每天早上五点就热起来，比我还早。\n搬家的卡车装不下你，我只带走了你烤的最后一炉面包，路上就吃完了。\n\n邮差，如果你读到这里，请帮我再生一次火。",
-                "——林阿婆");
+            int h = body.IndexOf(hint.LetterHintPhrase, StringComparison.Ordinal);
+            if (h >= 0)
+                body = body.Substring(0, h) + "<color=#2F7D6B>" + hint.LetterHintPhrase + "</color>" + body.Substring(h + hint.LetterHintPhrase.Length);
         }
-        else if (index == 1)
+        foreach (var s in baseSlips)
         {
-            ui.ShowLetterDetail(
-                "致 小黑",
-                "小黑：\n\n搬家那天你追着卡车跑，后来就不见了。\n我把你的碗放回了学校后门，你以前每天在那里等我放学。我还放了你最喜欢的球。",
-                "——阿萤，8 岁");
+            if (s.letter != letterId || string.IsNullOrEmpty(s.word)) continue;
+            int at = -1;
+            if (!string.IsNullOrEmpty(s.near))
+            {
+                int n = body.IndexOf(s.near, StringComparison.Ordinal);
+                if (n >= 0) { int w = s.near.IndexOf(s.word, StringComparison.Ordinal); if (w >= 0) at = n + w; }
+            }
+            if (at < 0) at = body.IndexOf(s.word, StringComparison.Ordinal);
+            if (at < 0) continue;
+            body = body.Substring(0, at) + "<color=" + HighlightHex + "><b>" + s.word + "</b></color>" + body.Substring(at + s.word.Length);
         }
-        else if (index == 2)
-        {
-            ui.ShowLetterDetail(
-                "致 灯塔",
-                "灯塔：\n\n我在你身上点了三十一年的灯，一晚都没灭过。\n听说海水下个月就会淹到你脚下。在那之前，能不能再亮一次？",
-                "——老陈，守塔人");
-        }
-        else
-        {
-            ui.ShowLetterDetail(
-                "致 EGGBOY",
-                "EGGBOY：\n\n后来我发现，寄回镇上的信都被送到了：面包店的烟囱冒了烟，小黑不见了，灯塔亮了。\n我就知道是你。\n\n回家吧。山这边的新邮局，一直给你留着位置。",
-                "——老周");
-        }
-        RebuildSlipTrayForCategory(index);
+        return body;
     }
 
     void EnsureBoundToLetterUI()
@@ -157,23 +184,11 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         letterOverlay = TideTownStyleUI.FindLetterOverlay(ui);
         letterPaper = TideTownStyleUI.FindLetterPaper(ui);
         if (letterPaper == null) return;
-
-        // 让信纸本体拦截点击，避免点击信纸内部字签时误触背景关闭信件
         var paperImg = letterPaper.GetComponent<Image>();
-        if (paperImg != null) paperImg.raycastTarget = true;
-
+        if (paperImg != null) paperImg.raycastTarget = true; // 点信纸内部不算"点背景关信"
         paperCanvasGroup = letterPaper.GetComponent<CanvasGroup>();
         if (paperCanvasGroup == null) paperCanvasGroup = letterPaper.gameObject.AddComponent<CanvasGroup>();
-
-        if (letterOverlay != null)
-            overlayBackdropImage = letterOverlay.GetComponent<Image>();
-
-        BuildSlipTrayOnPaper();
-    }
-
-    void BuildSlipTrayOnPaper()
-    {
-        if (letterPaper == null || slipTrayRoot != null) return;
+        if (letterOverlay != null) overlayBackdropImage = letterOverlay.GetComponent<Image>();
 
         slipTrayRoot = new GameObject("WordSlipTray", typeof(RectTransform));
         slipTrayRoot.transform.SetParent(letterPaper, false);
@@ -181,205 +196,95 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
         rt.sizeDelta = new Vector2(560f, 620f);
-
-        // 顶部四枚信笺切换书签（保持与信纸完全一致的暖褐与米白质感）
-        string[] tabNames = { "林阿婆的信", "阿萤的信", "老陈的信", "老周的信" };
-        for (int i = 0; i < 4; i++)
-        {
-            int idx = i;
-            float x = -186f + i * 124f;
-            TideTownStyleUI.CreateWarmButton(
-                slipTrayRoot.transform,
-                tabNames[i],
-                new Vector2(x, 294f),
-                new Vector2(116f, 28f),
-                false,
-                () => OpenSpecificLetter(idx));
-        }
-
-        // 信纸下半部的引导小字
-        TideTownStyleUI.CreateText(
-            slipTrayRoot.transform,
-            "· 信纸拆字成物：按住下方字签拖出信纸，往空气中一扔即可化为实物 ·",
-            13,
-            TideTownStyleUI.InkMuted,
-            TextAnchor.MiddleCenter,
-            new Vector2(0f, -158f),
-            new Vector2(500f, 24f),
-            true);
-
-        RebuildSlipTrayForCurrentStep();
     }
 
-    void RebuildSlipTrayForCurrentStep()
-    {
-        string step = state != null ? state.step : "";
-        int cat = step.StartsWith("S") ? 1 : step.StartsWith("L") ? 2 : step.StartsWith("E") ? 3 : 0;
-        RebuildSlipTrayForCategory(cat);
-    }
-
-    void RebuildSlipTrayForCategory(int category)
+    void RebuildTray()
     {
         EnsureBoundToLetterUI();
         if (slipTrayRoot == null) return;
-
-        foreach (var go in slipCards)
-            if (go != null) Destroy(go);
+        foreach (var go in trayObjects) if (go != null) Destroy(go);
+        trayObjects.Clear();
         slipCards.Clear();
+        foreach (var go in tabButtons) if (go != null) Destroy(go);
+        tabButtons.Clear();
 
-        LetterWordSlipDef[] defs = category == 1 ? YingDogSlips
-                                 : category == 2 ? ChenLighthouseSlips
-                                 : category == 3 ? ZhouEggboySlips
-                                                 : LinOvenSlips;
-
-        // 在信纸下半部排布 2x2 共 4 张高质感可撕信纸字签
-        for (int i = 0; i < defs.Length; i++)
+        // 顶部：邮包里有的信
+        int shown = 0;
+        for (int i = 0; i < LetterIds.Length; i++)
         {
-            var def = defs[i];
-            int row = i / 2;
-            int col = i % 2;
-            Vector2 pos = new Vector2(col == 0 ? -126f : 126f, -198f - row * 48f);
+            if (!HasLetter(LetterIds[i])) continue;
+            int idx = i;
+            var btn = TideTownStyleUI.CreateWarmButton(slipTrayRoot.transform, LetterTabs[i],
+                new Vector2(-186f + shown * 124f, 294f), new Vector2(116f, 28f), i == currentLetter, () => OpenSpecificLetter(idx));
+            tabButtons.Add(btn.gameObject);
+            shown++;
+        }
 
-            // 底层虚线凹槽（字签被揭起后露出的信纸底槽）
-            var slotBg = TideTownStyleUI.CreatePanel(
-                slipTrayRoot.transform,
-                "SlipSlot_" + def.word,
-                232f,
-                40f,
-                new Color32(0xec, 0xdf, 0xc6, 255),
-                true);
-            slotBg.rectTransform.anchorMin = slotBg.rectTransform.anchorMax = slotBg.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            slotBg.rectTransform.anchoredPosition = pos;
-            TideTownStyleUI.CreateText(
-                slotBg.transform,
-                "已揭下「" + def.word + "」",
-                12,
-                TideTownStyleUI.InkMuted,
-                TextAnchor.MiddleCenter,
-                Vector2.zero,
-                new Vector2(210f, 30f),
-                false);
-            slotCardsAdd(slotBg.gameObject);
+        var pocket = PocketSlips();
+        if (pocket.Count == 0) return;
 
-            // 表层可揭下的信纸字签本体
-            var slipCard = TideTownStyleUI.CreatePanel(
-                slipTrayRoot.transform,
-                "WordSlip_" + def.word,
-                232f,
-                40f,
-                TideTownStyleUI.SlipColor,
-                true);
-            var srt = slipCard.rectTransform;
+        var hint = TideTownStyleUI.CreateText(slipTrayRoot.transform, "· 信上橘色的字可以撕下来 ·",
+            12, TideTownStyleUI.InkMuted, TextAnchor.MiddleCenter, new Vector2(0f, -220f), new Vector2(500f, 18f), false);
+        trayObjects.Add(hint.gameObject);
+
+        // 流式排版：单字是小方块，词和拼出来的字长一些
+        float x = -250f, y = -246f;
+        const float gap = 8f, rowH = 42f;
+        foreach (var def in pocket)
+        {
+            float w = def.kind == "char" ? 48f : 30f + def.word.Length * 20f;
+            if (x + w > 250f) { x = -250f; y -= rowH; }
+            Vector2 pos = new Vector2(x + w * 0.5f, y);
+            x += w + gap;
+
+            var card = TideTownStyleUI.CreatePanel(slipTrayRoot.transform, "WordSlip_" + def.id, w, 34f,
+                def.combo ? TideTownStyleUI.AmberSoft : TideTownStyleUI.SlipColor, true);
+            var srt = card.rectTransform;
             srt.anchorMin = srt.anchorMax = srt.pivot = new Vector2(0.5f, 0.5f);
             srt.anchoredPosition = pos;
-
-            var sh = slipCard.gameObject.AddComponent<Shadow>();
+            var sh = card.gameObject.AddComponent<Shadow>();
             sh.effectColor = new Color32(0x3b, 0x2a, 0x1a, 70);
             sh.effectDistance = new Vector2(2f, -3f);
-
-            // 左侧暖橘色邮戳细条装饰
-            var stampBar = TideTownStyleUI.CreatePanel(
-                slipCard.transform,
-                "StampAccent",
-                6f,
-                28f,
-                TideTownStyleUI.AmberAccent,
-                true);
-            stampBar.raycastTarget = false;
-            stampBar.rectTransform.anchorMin = stampBar.rectTransform.anchorMax = stampBar.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            stampBar.rectTransform.anchoredPosition = new Vector2(-104f, 0f);
-
-            TideTownStyleUI.CreateText(
-                slipCard.transform,
-                "「" + def.word + "」",
-                15,
-                TideTownStyleUI.InkDark,
-                TextAnchor.MiddleLeft,
-                new Vector2(-10f, 6f),
-                new Vector2(180f, 22f),
-                true);
-
-            TideTownStyleUI.CreateText(
-                slipCard.transform,
-                def.subLabel,
-                11,
-                TideTownStyleUI.InkMuted,
-                TextAnchor.MiddleLeft,
-                new Vector2(-4f, -10f),
-                new Vector2(192f, 18f),
-                false);
-
-            var handler = slipCard.gameObject.AddComponent<WordSlipDragRelay>();
-            handler.system = this;
-            handler.slipDef = def;
-            handler.cardRect = srt;
-
-            slipCards.Add(slipCard.gameObject);
+            TideTownStyleUI.CreateText(card.transform, def.word, 16,
+                def.kind == "char" ? (Color32)new Color32(0xC2, 0x62, 0x1D, 255) : TideTownStyleUI.InkDark,
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(w - 6f, 28f), true);
+            var relay = card.gameObject.AddComponent<WordSlipDragRelay>();
+            relay.system = this; relay.slipDef = def; relay.cardRect = srt;
+            trayObjects.Add(card.gameObject);
+            slipCards[def.id] = srt;
         }
     }
-
-    void slotCardsAdd(GameObject go) => slipCards.Add(go);
 
     bool lastLetterOpen;
 
     void Update()
     {
         if (ui == null || !ui.inputClose) return;
-
-        EnsureBoundToLetterUI();
-
-        // 当信件刚刚打开时，自动刷新对应信件的可揭字签，并确保信纸透明度恢复为 1
-        if (ui.LetterOpen && !lastLetterOpen)
-        {
-            RestorePaperOpacity();
-            RebuildSlipTrayForCurrentStep();
-        }
-        else if (!ui.LetterOpen && lastLetterOpen)
-        {
-            CancelActiveDrag();
-            RestorePaperOpacity();
-        }
+        if (ui.LetterOpen && !lastLetterOpen) { RestorePaperOpacity(); RebuildTray(); }
+        else if (!ui.LetterOpen && lastLetterOpen) { CancelActiveDrag(); RestorePaperOpacity(); }
         lastLetterOpen = ui.LetterOpen;
-
-        if (draggingSlip != null)
-        {
-            UpdateDraggingInAir();
-        }
+        if (draggingSlip != null) UpdateDraggingInAir();
     }
 
-    internal void OnSlipBeginDrag(LetterWordSlipDef def, RectTransform originalCard, PointerEventData ev)
+    // ---- 拖拽 ----
+
+    internal void OnSlipBeginDrag(WordSlipDef def, RectTransform originalCard, PointerEventData ev)
     {
         if (def == null || hudCanvasRoot == null) return;
         draggingSlip = def;
+        draggedOriginal = originalCard;
         dragStartScreenPos = ev.position;
         aimedInAir = false;
-
-        // 原字签隐藏，露出底下的“已揭下”虚线槽
         if (originalCard != null) originalCard.gameObject.SetActive(false);
 
-        // 在顶层 Canvas 创建跟随鼠标的“揭下的信纸字签”
-        var dragImg = TideTownStyleUI.CreatePanel(
-            hudCanvasRoot,
-            "DraggedWordSlip",
-            220f,
-            44f,
-            TideTownStyleUI.PaperColor,
-            true);
+        float w = def.kind == "char" ? 56f : 36f + def.word.Length * 22f;
+        var dragImg = TideTownStyleUI.CreatePanel(hudCanvasRoot, "DraggedWordSlip", w, 40f, TideTownStyleUI.PaperColor, true);
         dragImg.raycastTarget = false;
         var sh = dragImg.gameObject.AddComponent<Shadow>();
         sh.effectColor = new Color32(0, 0, 0, 120);
         sh.effectDistance = new Vector2(5f, -8f);
-
-        TideTownStyleUI.CreateText(
-            dragImg.transform,
-            "「" + def.word + "」 · 松手抛向空中",
-            15,
-            TideTownStyleUI.InkDark,
-            TextAnchor.MiddleCenter,
-            Vector2.zero,
-            new Vector2(204f, 36f),
-            true);
-
+        TideTownStyleUI.CreateText(dragImg.transform, def.word, 18, TideTownStyleUI.InkDark, TextAnchor.MiddleCenter,
+            Vector2.zero, new Vector2(w - 8f, 34f), true);
         draggedSlipUI = dragImg.rectTransform;
         UpdateDraggedSlipScreenPos(ev.position, Vector2.zero);
         ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.18f);
@@ -396,30 +301,60 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         if (draggingSlip == null) return;
         var def = draggingSlip;
         Vector3 landPos = currentAimWorldPos;
-        bool shouldThrow = aimedInAir || Vector2.Distance(ev.position, dragStartScreenPos) > 48f;
 
+        // 1) 松手时压在另一张字上：拼字
+        string over = SlipUnder(ev.position, def.id);
+        if (over != null)
+        {
+            CleanupDragVisuals();
+            RestorePaperOpacity();
+            var made = Combine(def.id, over);
+            RebuildTray();
+            if (made != null && slipCards.TryGetValue(made.id, out var card)) StartCoroutine(PopCard(card));
+            ShadowAndChimeSystem.PlayProceduralChime(made != null ? 880f : 220f, 0.3f);
+            return;
+        }
+
+        // 2) 拖出了信纸：扔出去
+        bool outsidePaper = letterPaper == null || !RectTransformUtility.RectangleContainsScreenPoint(letterPaper, ev.position, null);
+        bool shouldThrow = outsidePaper && (aimedInAir || Vector2.Distance(ev.position, dragStartScreenPos) > 48f);
         CleanupDragVisuals();
-
+        RestorePaperOpacity();
         if (shouldThrow && player != null)
         {
-            // 关闭信纸界面，让玩家完整观看信纸签在 3D 空中划出抛物线化为真物的全过程！
-            RestorePaperOpacity();
             if (ui != null && ui.LetterOpen) ui.CloseLetter();
-            StartCoroutine(ThrowPaperSlipIn3DAirRoutine(def, landPos));
+            StartCoroutine(ThrowRoutine(def, landPos));
         }
-        else
+        else if (originalCard != null) originalCard.gameObject.SetActive(true);
+    }
+
+    string SlipUnder(Vector2 screenPos, string exceptId)
+    {
+        foreach (var kv in slipCards)
         {
-            // 如果只是原地轻点没拖出，把字签放回原槽位
-            RestorePaperOpacity();
-            if (originalCard != null) originalCard.gameObject.SetActive(true);
+            if (kv.Key == exceptId || kv.Value == null || !kv.Value.gameObject.activeInHierarchy) continue;
+            if (RectTransformUtility.RectangleContainsScreenPoint(kv.Value, screenPos, null)) return kv.Key;
         }
+        return null;
+    }
+
+    IEnumerator PopCard(RectTransform card)
+    {
+        float t = 0f;
+        while (t < 0.35f && card != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(t / 0.35f);
+            card.localScale = Vector3.one * (1f + 0.35f * Mathf.Sin(k * Mathf.PI));
+            yield return null;
+        }
+        if (card != null) card.localScale = Vector3.one;
     }
 
     void UpdateDraggedSlipScreenPos(Vector2 screenPos, Vector2 delta)
     {
         if (draggedSlipUI == null || hudCanvasRoot == null) return;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            hudCanvasRoot, screenPos, null, out Vector2 localPt);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(hudCanvasRoot, screenPos, null, out Vector2 localPt);
         draggedSlipUI.anchoredPosition = localPt;
         float tilt = Mathf.Clamp(-delta.x * 0.65f, -18f, 18f);
         draggedSlipUI.localRotation = Quaternion.Euler(0f, 0f, -3f + tilt);
@@ -429,21 +364,14 @@ public sealed class WordMaterializerSystem : MonoBehaviour
     void UpdateDraggingInAir()
     {
         Vector2 mousePos = Input.mousePosition;
-        float dragDist = Vector2.Distance(mousePos, dragStartScreenPos);
-
-        // 一旦字签被拖离原位超过 45 像素，信件自动退为极淡半透明（12%），露出完整的 3D 小岛视野！
-        if (dragDist > 45f)
-        {
-            aimedInAir = true;
-            if (paperCanvasGroup != null)
-                paperCanvasGroup.alpha = Mathf.Lerp(paperCanvasGroup.alpha, 0.12f, Time.unscaledDeltaTime * 12f);
-            if (overlayBackdropImage != null)
-                overlayBackdropImage.color = new Color32(0, 0, 0, 10);
-        }
-
-        // 计算鼠标在 3D 世界中的抛投落点
+        bool outside = letterPaper == null || !RectTransformUtility.RectangleContainsScreenPoint(letterPaper, mousePos, null);
+        // 字签拖出信纸，信纸退成半透明，露出小岛
+        aimedInAir = outside;
+        if (paperCanvasGroup != null)
+            paperCanvasGroup.alpha = Mathf.Lerp(paperCanvasGroup.alpha, outside ? 0.12f : 1f, Time.unscaledDeltaTime * 12f);
+        if (overlayBackdropImage != null && outside) overlayBackdropImage.color = new Color32(0, 0, 0, 10);
         currentAimWorldPos = ComputeAimWorldPoint(mousePos);
-        Update3DArcAndGhostPreview(currentAimWorldPos);
+        UpdateArcPreview(currentAimWorldPos, outside);
     }
 
     Vector3 ComputeAimWorldPoint(Vector2 screenPos)
@@ -451,43 +379,35 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         if (player == null) return Vector3.zero;
         Vector3 pPos = player.transform.position;
         var cam = Camera.main;
-
         if (cam != null)
         {
             Ray ray = cam.ScreenPointToRay(screenPos);
-            // 与玩家所在高度附近的水平面或地面求交
             Plane groundPlane = new Plane(Vector3.up, new Vector3(0f, pPos.y, 0f));
             if (groundPlane.Raycast(ray, out float enter) && enter > 0.5f && enter < 35f)
             {
                 Vector3 hit = ray.GetPoint(enter);
-                Vector3 flatDelta = new Vector3(hit.x - pPos.x, 0f, hit.z - pPos.z);
-                float dist = flatDelta.magnitude;
-                if (dist < 1.4f)
-                    flatDelta = flatDelta.normalized * 1.4f;
-                else if (dist > 8.5f)
-                    flatDelta = flatDelta.normalized * 8.5f;
-
-                Vector3 target = pPos + flatDelta;
+                Vector3 flat = new Vector3(hit.x - pPos.x, 0f, hit.z - pPos.z);
+                float dist = flat.magnitude;
+                if (dist < 1.4f) flat = flat.normalized * 1.4f;
+                else if (dist > 8.5f) flat = flat.normalized * 8.5f;
+                Vector3 target = pPos + flat;
                 if (world != null)
                 {
                     float gy = world.GroundAt(target.x, target.z, pPos.y + 2.5f);
-                    target.y = gy > -0.4f ? gy : world.WaterY;
+                    target.y = Mathf.Max(gy, world.WaterY);
                 }
                 return target;
             }
         }
-
         float yaw = player.yaw;
-        Vector3 fwd = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-        Vector3 fallback = pPos + fwd * 2.6f;
+        Vector3 fallback = pPos + new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw)) * 2.6f;
         if (world != null) fallback.y = world.GroundAt(fallback.x, fallback.z, pPos.y + 1.5f);
         return fallback;
     }
 
-    void Update3DArcAndGhostPreview(Vector3 targetPos)
+    void UpdateArcPreview(Vector3 targetPos, bool visible)
     {
-        if (player == null || draggingSlip == null) return;
-
+        if (player == null) return;
         if (aimPreviewRoot == null)
         {
             aimPreviewRoot = new GameObject("WordThrowAimPreview");
@@ -498,23 +418,17 @@ public sealed class WordMaterializerSystem : MonoBehaviour
                 dotMat.EnableKeyword("_EMISSION");
                 dotMat.SetColor("_EmissionColor", new Color(1f, 0.82f, 0.42f) * 1.5f);
             }
-
             for (int i = 0; i < arcDots.Length; i++)
             {
                 var d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 Destroy(d.GetComponent<Collider>());
                 d.transform.SetParent(aimPreviewRoot.transform, false);
-                float s = Mathf.Lerp(0.05f, 0.09f, (float)i / arcDots.Length);
-                d.transform.localScale = Vector3.one * s;
+                d.transform.localScale = Vector3.one * Mathf.Lerp(0.05f, 0.09f, (float)i / arcDots.Length);
                 d.GetComponent<Renderer>().sharedMaterial = dotMat;
                 arcDots[i] = d.transform;
             }
-
-            ghostLux3DModel = TideTownStyleUI.CloneSceneLux3D(draggingSlip.lux3DSceneName, draggingSlip.targetSize, false);
-            if (ghostLux3DModel != null)
-                ghostLux3DModel.transform.SetParent(aimPreviewRoot.transform, false);
         }
-
+        aimPreviewRoot.SetActive(visible);
         Vector3 startPos = player.transform.position + Vector3.up * 0.68f;
         for (int i = 0; i < arcDots.Length; i++)
         {
@@ -523,18 +437,23 @@ public sealed class WordMaterializerSystem : MonoBehaviour
             p.y += Mathf.Sin(t * Mathf.PI) * 1.85f;
             arcDots[i].position = p;
         }
-
-        if (ghostLux3DModel != null)
-        {
-            ghostLux3DModel.transform.position = targetPos;
-            float lookYaw = Mathf.Atan2(targetPos.x - startPos.x, targetPos.z - startPos.z) * Mathf.Rad2Deg;
-            ghostLux3DModel.transform.rotation = Quaternion.Euler(0f, lookYaw, 0f);
-        }
     }
 
-    IEnumerator ThrowPaperSlipIn3DAirRoutine(LetterWordSlipDef def, Vector3 landPos)
+    // ---- 扔出去 ----
+
+    // 审计和手柄用：不经过拖拽，直接把某个字扔到某处
+    public Coroutine ThrowSlip(string slipId, Vector3 landPos)
+    {
+        var def = FindSlip(slipId);
+        return def != null ? StartCoroutine(ThrowRoutine(def, landPos)) : null;
+    }
+
+    IEnumerator ThrowRoutine(WordSlipDef def, Vector3 landPos)
     {
         if (player == null) yield break;
+        LastAction = def.action ?? "";
+        LastActionApplied = false;
+        LastSpawn = null;
 
         Vector3 startPos = player.transform.position + Vector3.up * 0.72f;
         float lookYaw = Mathf.Atan2(landPos.x - startPos.x, landPos.z - startPos.z);
@@ -542,7 +461,10 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         player.transform.rotation = Quaternion.Euler(0f, lookYaw * Mathf.Rad2Deg, 0f);
         player.PlayEmote("give");
 
-        // 创建一张在 3D 空气中翻飞的实体信纸字签薄片
+        // 单个字太轻，变不出东西：飘起来又落回邮差手里
+        bool loose = def.kind == "char";
+        Vector3 endPos = loose ? startPos : landPos + Vector3.up * 0.05f;
+
         var flyingSlip = GameObject.CreatePrimitive(PrimitiveType.Cube);
         Destroy(flyingSlip.GetComponent<Collider>());
         flyingSlip.name = "FlyingParchmentSlip";
@@ -555,145 +477,233 @@ public sealed class WordMaterializerSystem : MonoBehaviour
             paperMat.SetColor("_EmissionColor", new Color(1f, 0.86f, 0.55f) * 1.2f);
         }
         flyingSlip.GetComponent<Renderer>().sharedMaterial = paperMat;
-
         ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.28f);
 
-        float duration = 0.52f;
-        float elapsed = 0f;
+        float duration = loose ? 0.9f : 0.52f, elapsed = 0f;
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
-            Vector3 pos = Vector3.Lerp(startPos, landPos + Vector3.up * 0.05f, t);
-            pos.y += Mathf.Sin(t * Mathf.PI) * 2.1f;
-            flyingSlip.transform.position = pos;
+            Vector3 mid = loose ? startPos + new Vector3(Mathf.Sin(lookYaw), 0f, Mathf.Cos(lookYaw)) * (1.2f * Mathf.Sin(t * Mathf.PI)) : Vector3.Lerp(startPos, endPos, t);
+            mid.y += Mathf.Sin(t * Mathf.PI) * (loose ? 1.1f : 2.1f);
+            flyingSlip.transform.position = mid;
             flyingSlip.transform.rotation = Quaternion.Euler(t * 520f, lookYaw * Mathf.Rad2Deg + t * 180f, Mathf.Sin(t * 14f) * 28f);
             yield return null;
         }
-
         Destroy(flyingSlip);
+        if (loose) { ShadowAndChimeSystem.PlayProceduralChime(294f, 0.25f); yield break; }
 
-        // 落地瞬间：克隆真实的 Lux3D 模型并从信纸中舒展生长出来！
-        var realObj = TideTownStyleUI.CloneSceneLux3D(def.lux3DSceneName, def.targetSize, def.walkable);
-        if (realObj != null)
-        {
-            realObj.transform.position = landPos;
-            realObj.transform.rotation = Quaternion.Euler(0f, lookYaw * Mathf.Rad2Deg, 0f);
-            materializedObjects.Add(realObj);
-
-            // 如果是路灯或暖火，附上柔和暖光源
-            if (def.storyAction == "lamp" || def.storyAction == "fire")
-            {
-                var lgo = new GameObject("WarmLight");
-                lgo.transform.SetParent(realObj.transform, false);
-                lgo.transform.localPosition = new Vector3(0f, def.storyAction == "lamp" ? 2.1f : 0.65f, 0f);
-                var light = lgo.AddComponent<Light>();
-                light.type = LightType.Point;
-                light.color = new Color(1f, 0.78f, 0.38f);
-                light.range = 7.5f;
-                light.intensity = 2.2f;
-            }
-
-            // 弹簧生长动画
-            float growT = 0f;
-            while (growT < 0.38f && realObj != null)
-            {
-                growT += Time.deltaTime;
-                float u = Mathf.Clamp01(growT / 0.38f);
-                float ease = 1f - Mathf.Pow(1f - u, 3f) + Mathf.Sin(u * Mathf.PI) * 0.14f;
-                realObj.transform.localScale = Vector3.one * ease;
-                yield return null;
-            }
-            if (realObj != null) realObj.transform.localScale = Vector3.one;
-        }
-
+        Materialize(def, landPos, lookYaw * Mathf.Rad2Deg);
         ShadowAndChimeSystem.PlayProceduralChime(880f, 0.42f);
-        player.PlayEmote("hop");
-        ApplyThrownWordStoryEffect(def, landPos);
+        if (LastSpawn != null && LastSpawn.root != null) yield return Grow(LastSpawn.root.transform);
     }
 
-    void ApplyThrownWordStoryEffect(LetterWordSlipDef def, Vector3 landPos)
+    IEnumerator Grow(Transform root)
     {
-        if (state == null || ui == null || director == null) return;
-        TideTownAchievementSystem.Unlock("word_fire");
-
-        if (def.storyAction == "wood")
+        float t = 0f;
+        while (t < 0.38f && root != null)
         {
-            float dStove = Vector3.Distance(landPos, new Vector3(-9.73f, 1.3f, -5.85f));
-            if (dStove < 6.5f && !state.flags.Contains("wood_loaded"))
-            {
-                director.TakeWood();
-                director.LoadWood();
-                ui.ShowToast("信纸上的「柴火捆」落入烤炉旁，已直接塞入炉膛！", 3.8f);
-                return;
-            }
+            t += Time.deltaTime;
+            float u = Mathf.Clamp01(t / 0.38f);
+            root.localScale = Vector3.one * (1f - Mathf.Pow(1f - u, 3f) + Mathf.Sin(u * Mathf.PI) * 0.14f);
+            yield return null;
         }
-        else if (def.storyAction == "fire")
-        {
-            float dStove = Vector3.Distance(landPos, new Vector3(-9.73f, 1.3f, -5.85f));
-            if (dStove < 7.5f && !state.flags.Contains("oven_lit"))
-            {
-                if (!state.flags.Contains("matches_taken")) state.flags.Add("matches_taken");
-                if (!state.flags.Contains("wood_loaded")) state.flags.Add("wood_loaded");
-                if (!state.flags.Contains("puzzle_bakery_lock")) state.flags.Add("puzzle_bakery_lock");
-                director.LightOven(FindObjectOfType<BakeryEffects>());
-                ui.ShowToast("信纸上的「最后一炉暖火」落入炉膛，直接点燃了面包店烤炉！", 4.0f);
-                return;
-            }
-        }
-        else if (def.storyAction == "ball")
-        {
-            float dBowl = Vector3.Distance(landPos, new Vector3(22.5f, 3.07f, 3.8f));
-            if (dBowl < 8.5f && !state.flags.Contains("ball_in_bowl"))
-            {
-                if (!state.flags.Contains("puzzle_school_lock")) state.flags.Add("puzzle_school_lock");
-                director.TakeBall();
-                director.PutBallInBowl();
-                ui.ShowToast("信纸上的「最喜欢的球」蹦跳着滚进了狗碗，把小黑唤了出来！", 4.0f);
-                return;
-            }
-        }
-        else if (def.storyAction == "oil")
-        {
-            if (state.step == "L1_shed" && !state.flags.Contains("oil_taken"))
-            {
-                director.TakeOil();
-                ui.ShowToast("信纸上的「煤油壶」化作沉甸甸的真油壶落入怀中！", 3.8f);
-                return;
-            }
-        }
-        else if (def.storyAction == "clue_bakery")
-        {
-            foreach (var k in new[] { "recipe", "scale", "basket" })
-                if (!state.flags.Contains("dog_sniff_" + k)) state.flags.Add("dog_sniff_" + k);
-        }
-        else if (def.storyAction == "clue_school")
-        {
-            foreach (var k in new[] { "slipper", "doghouse", "blackboard" })
-                if (!state.flags.Contains("dog_sniff_" + k)) state.flags.Add("dog_sniff_" + k);
-        }
-        else if (def.storyAction == "clue_lighthouse")
-        {
-            foreach (var k in new[] { "hat", "scope", "log" })
-                if (!state.flags.Contains("dog_sniff_" + k)) state.flags.Add("dog_sniff_" + k);
-        }
-
-        ui.ShowToast("已从信纸揭下「" + def.word + "」抛入空中，化为真实的 " + def.word + "！", 3.6f);
+        if (root != null) root.localScale = Vector3.one;
     }
+
+    Vector3 StovePos()
+    {
+        foreach (var it in BakeryData.Load()) if (it.id == "stove") return new Vector3(it.x, it.y, it.z);
+        return new Vector3(-9.73f, 1.3f, -5.85f);
+    }
+
+    void Materialize(WordSlipDef def, Vector3 landPos, float yawDeg)
+    {
+        if (state == null || director == null) return;
+        var lux = Lux3DService.Ensure();
+        var mech = FindObjectOfType<WorldMechanismDirector>();
+        string action = def.action ?? "";
+
+        // 这几样直接到邮差手里，不在地上留东西
+        if (action == "fire")
+        {
+            bool bakery = state.step.StartsWith("B");
+            if (bakery && !state.flags.Contains("matches_taken")) { director.TakeMatches(); LastActionApplied = true; }
+            SpawnEmber(landPos);
+            return;
+        }
+        if (action == "ball")
+        {
+            bool school = state.step == "S1_slipper" || state.step == "S2_ball";
+            if (school && !state.flags.Contains("ball_taken") && !state.flags.Contains("ball_in_bowl")) { director.TakeBall(); LastActionApplied = true; }
+            return;
+        }
+        if (action == "oil")
+        {
+            if (state.step == "L1_shed" && !state.flags.Contains("oil_taken")) { director.TakeOil(); LastActionApplied = true; }
+            return;
+        }
+
+        // 其余的落在地上，走 Lux3D：先保底，生成好了原位替换
+        if (materialized.TryGetValue(def.id, out var old) && old != null && old.root != null) Destroy(old.root);
+        var entry = !string.IsNullOrEmpty(def.entry) ? lux.Find(def.entry) : lux.Match(def.word, "keepsake");
+        string prompt = string.IsNullOrEmpty(def.prompt) ? def.word : def.prompt;
+        Vector3 pos = landPos;
+        Quaternion rot = Quaternion.Euler(0f, yawDeg, 0f);
+
+        bool gapBoat = false;
+        if (action == "boat" && mech != null)
+        {
+            Vector3 ch = mech.GetCrossingChannelCenter();
+            bool flooded = WaterLevel.StaticY >= WaterLevel.LevelYs[2] - 0.05f;
+            if (flooded && mech.GapActive && !mech.CrossingSolved && Vector3.Distance(landPos, ch) < 6f)
+            {
+                gapBoat = true;
+                pos = new Vector3(ch.x, WaterLevel.StaticY - 0.05f, ch.z);
+                rot = Quaternion.LookRotation(mech.CrossingDirection, Vector3.up);
+            }
+        }
+
+        var spawn = lux.Spawn(prompt, entry, pos, rot, transform, true, gapBoat ? 2.2f : (action == "boat" ? 1.2f : 0f));
+        spawn.root.name = "Word_" + def.id;
+        materialized[def.id] = spawn;
+        LastSpawn = spawn;
+
+        if (gapBoat)
+        {
+            // 能踩的范围固定成一块顺着过海方向的甲板，换成真模型后照样过得去
+            var deck = spawn.root.GetComponent<BoxCollider>();
+            if (deck == null) deck = spawn.root.AddComponent<BoxCollider>();
+            int ground = LayerMask.NameToLayer("Ground");
+            spawn.root.layer = ground >= 0 ? ground : 6;
+            deck.center = new Vector3(0f, 0.1f, 0f);
+            deck.size = new Vector3(1.1f, 0.4f, 2.4f);
+            spawn.root.AddComponent<WishBob>();
+            mech.BridgeGapWithBoat("wood_boat");
+            LastActionApplied = true;
+        }
+        else if (action == "boat")
+        {
+            // 没放在缺口上：只是一条小船摆在那儿，不能当桥
+            var box = spawn.root.GetComponent<BoxCollider>();
+            if (box != null) Destroy(box);
+        }
+        else if (action == "wet_wood")
+        {
+            ApplyWetLook(spawn.root);
+            spawn.onSwapped = s => { if (s.root != null) ApplyWetLook(s.root); };
+            if (Vector3.Distance(landPos, StovePos()) < 6.5f) LastActionApplied = director.LoadWetWood();
+        }
+        else if (action == "dry_wood")
+        {
+            if (Vector3.Distance(landPos, StovePos()) < 6.5f && director.LoadDryWoodFromWord())
+            {
+                LastActionApplied = true;
+                TideTownAchievementSystem.Unlock("word_fire");
+                // 换下来的湿柴收走
+                if (materialized.TryGetValue("wood", out var wet) && wet != null && wet.root != null) Destroy(wet.root);
+            }
+        }
+        else if (action == "lamp")
+        {
+            var lgo = new GameObject("WarmLight");
+            lgo.transform.SetParent(spawn.root.transform, false);
+            lgo.transform.localPosition = new Vector3(0f, 2.0f, 0f);
+            var light = lgo.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.78f, 0.38f);
+            light.range = 7.5f;
+            light.intensity = 2.2f;
+            LastActionApplied = true;
+        }
+        else LastActionApplied = true; // 纪念物：摆在那儿就是全部作用
+    }
+
+    // 「火」：一团小火苗飘向邮差的包
+    void SpawnEmber(Vector3 at)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Destroy(go.GetComponent<Collider>());
+        go.name = "WordEmber";
+        go.transform.position = at + Vector3.up * 0.4f;
+        go.transform.localScale = Vector3.one * 0.14f;
+        var sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+        var mat = new Material(sh);
+        var c = new Color(1f, 0.62f, 0.2f);
+        mat.color = c;
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+        var l = go.AddComponent<Light>();
+        l.type = LightType.Point; l.color = c; l.range = 3.5f; l.intensity = 2.4f;
+        StartCoroutine(EmberFly(go.transform));
+    }
+
+    IEnumerator EmberFly(Transform ember)
+    {
+        float t = 0f;
+        Vector3 from = ember.position;
+        while (t < 1.1f && ember != null && player != null)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, t / 1.1f);
+            Vector3 to = player.transform.position + Vector3.up * 0.55f;
+            ember.position = Vector3.Lerp(from, to, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.5f;
+            ember.localScale = Vector3.one * Mathf.Lerp(0.14f, 0.05f, k);
+            yield return null;
+        }
+        if (ember != null) Destroy(ember.gameObject);
+    }
+
+    // 湿柴：颜色发暗发青，往下滴水
+    static void ApplyWetLook(GameObject root)
+    {
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+        {
+            if (r is ParticleSystemRenderer) continue;
+            foreach (var m in r.materials)
+            {
+                foreach (var prop in new[] { "_BaseColor", "baseColorFactor", "_Color" })
+                    if (m.HasProperty(prop)) m.SetColor(prop, new Color(0.5f, 0.58f, 0.66f, 1f));
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.85f);
+                if (m.HasProperty("roughnessFactor")) m.SetFloat("roughnessFactor", 0.2f);
+            }
+        }
+        if (root.transform.Find("WetDrips") != null) return;
+        var go = new GameObject("WetDrips");
+        go.transform.SetParent(root.transform, false);
+        go.transform.localPosition = new Vector3(0f, 0.3f, 0f);
+        var ps = go.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = 0.7f; main.startSpeed = 0f; main.startSize = 0.035f;
+        main.startColor = new Color(0.7f, 0.86f, 0.95f, 0.9f);
+        main.gravityModifier = 1.2f; main.maxParticles = 40;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        var em = ps.emission; em.rateOverTime = 9f;
+        var shape = ps.shape; shape.shapeType = ParticleSystemShapeType.Box; shape.scale = new Vector3(0.5f, 0.05f, 0.3f);
+        var fx = FindObjectOfType<BakeryEffects>();
+        var pr = go.GetComponent<ParticleSystemRenderer>();
+        if (fx != null && fx.ParticleMaterial != null) pr.sharedMaterial = fx.ParticleMaterial;
+        else
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Particles/Unlit") ?? Shader.Find("Sprites/Default");
+            if (sh != null) pr.sharedMaterial = new Material(sh);
+        }
+    }
+
+    // ---- 收尾 ----
 
     void CleanupDragVisuals()
     {
-        draggingSlip = null;
-        aimedInAir = false;
         if (draggedSlipUI != null) Destroy(draggedSlipUI.gameObject);
         draggedSlipUI = null;
-        if (aimPreviewRoot != null) Destroy(aimPreviewRoot);
-        aimPreviewRoot = null;
-        ghostLux3DModel = null;
+        draggingSlip = null;
+        if (aimPreviewRoot != null) aimPreviewRoot.SetActive(false);
     }
 
     void CancelActiveDrag()
     {
+        if (draggingSlip == null) return;
+        if (draggedOriginal != null) draggedOriginal.gameObject.SetActive(true);
         CleanupDragVisuals();
     }
 
@@ -707,26 +717,11 @@ public sealed class WordMaterializerSystem : MonoBehaviour
 public sealed class WordSlipDragRelay : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public WordMaterializerSystem system;
-    public WordMaterializerSystem.LetterWordSlipDef slipDef;
+    public WordSlipDef slipDef;
     public RectTransform cardRect;
 
-    public void OnPointerDown(PointerEventData eventData)
-    {
-        // 支持直接按住拖出
-    }
-
-    public void OnBeginDrag(PointerEventData eventData)
-    {
-        if (system != null) system.OnSlipBeginDrag(slipDef, cardRect, eventData);
-    }
-
-    public void OnDrag(PointerEventData eventData)
-    {
-        if (system != null) system.OnSlipDrag(eventData);
-    }
-
-    public void OnEndDrag(PointerEventData eventData)
-    {
-        if (system != null) system.OnSlipEndDrag(cardRect, eventData);
-    }
+    public void OnPointerDown(PointerEventData eventData) { }
+    public void OnBeginDrag(PointerEventData eventData) { if (system != null) system.OnSlipBeginDrag(slipDef, cardRect, eventData); }
+    public void OnDrag(PointerEventData eventData) { if (system != null) system.OnSlipDrag(eventData); }
+    public void OnEndDrag(PointerEventData eventData) { if (system != null) system.OnSlipEndDrag(cardRect, eventData); }
 }

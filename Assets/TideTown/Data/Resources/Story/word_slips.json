@@ -1,0 +1,17 @@
+{
+  "slips": [
+    { "id": "wood",  "letter": "lin_oven",        "word": "木柴", "near": "后院的木柴", "kind": "item", "entry": "firewood",    "action": "wet_wood", "prompt": "一捆被雨淋湿的木柴，用麻绳捆着" },
+    { "id": "fire",  "letter": "lin_oven",        "word": "火",   "near": "再生一次火", "kind": "item", "entry": "",            "action": "fire" },
+    { "id": "warm",  "letter": "lin_oven",        "word": "暖",   "near": "暖一暖",     "kind": "char", "entry": "",            "action": "" },
+    { "id": "ball",  "letter": "ying_dog",        "word": "球",   "near": "最喜欢的球", "kind": "item", "entry": "",            "action": "ball" },
+    { "id": "dry",   "letter": "ying_dog",        "word": "干",   "near": "晒干了",     "kind": "char", "entry": "",            "action": "" },
+    { "id": "oil",   "letter": "chen_lighthouse", "word": "煤油", "near": "半壶煤油",   "kind": "item", "entry": "",            "action": "oil" },
+    { "id": "boat",  "letter": "chen_lighthouse", "word": "船",   "near": "船棚里",     "kind": "char", "entry": "",            "action": "" },
+    { "id": "lamp",  "letter": "chen_lighthouse", "word": "灯",   "near": "年的灯",     "kind": "item", "entry": "street_lamp", "action": "lamp", "prompt": "一盏老式的铸铁街灯，亮着暖黄色的光" }
+  ],
+  "combos": [
+    { "a": "dry",  "b": "wood", "id": "dry_wood",  "word": "干木柴", "entry": "firewood",    "action": "dry_wood", "prompt": "一捆晒得干透的木柴，用麻绳捆着" },
+    { "a": "wood", "b": "boat", "id": "wood_boat", "word": "木船",   "entry": "wood_boat",   "action": "boat",     "prompt": "一条能站人的平底小木船" },
+    { "a": "warm", "b": "lamp", "id": "warm_lamp", "word": "暖灯",   "entry": "street_lamp", "action": "lamp",     "prompt": "一盏挂着暖黄色灯笼的街灯" }
+  ]
+}

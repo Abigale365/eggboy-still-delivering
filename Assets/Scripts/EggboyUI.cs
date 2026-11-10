@@ -10,6 +10,7 @@ public class EggboyUI : MonoBehaviour
     public Action<ExprId> OnExpressionPicked;
     public Action OnLetterClosed;
     public bool LetterOpen { get; private set; }
+    public Text LetterBodyText => letterBody; // 揭字系统要给正文里能撕的字上色
     public bool legacyPrompt = true;   // 旧 Prototype 场景自己管邮筒提示；新框架交给 InteractionService
     // 自动测试时关掉键盘/点击收信，避免系统误触把逐行读信打断
     public bool inputClose = true;

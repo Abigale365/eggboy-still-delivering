@@ -11,6 +11,7 @@
     { "id": "wish_orange_cat", "source": "resource", "category": "keepsake", "keywords": ["猫", "橘", "招财", "雕", "偶", "狗", "动物"], "size": 0.55, "up": "long" },
     { "id": "flower_pot", "source": "scene", "sceneName": "Street_E1", "category": "keepsake", "keywords": ["花", "盆", "草", "树"], "size": 0.48 },
     { "id": "firewood", "source": "scene", "sceneName": "Bakery_wood", "category": "fire", "keywords": ["柴", "木头", "火", "炉"], "size": 0.65 },
+    { "id": "street_lamp", "source": "scene", "sceneName": "Street_S4", "category": "decor", "keywords": ["灯", "路灯"], "size": 2.4 },
     { "id": "print_ruler", "source": "resource", "category": "tool", "keywords": ["尺", "木尺"], "size": 0.5, "up": "thin" },
     { "id": "sound_bottle", "source": "resource", "category": "tool", "keywords": ["瓶", "玻璃"], "size": 0.3, "up": "long" }
   ]

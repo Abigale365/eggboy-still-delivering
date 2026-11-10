@@ -93,6 +93,29 @@ try {
         if (-not $OnlyWindows -and $text -notmatch 'TIDEBUILD WEBGL Succeeded') { throw 'Log does not report a successful WebGL build.' }
         if (Compare-Object $before (Get-SceneHashes)) { throw 'A scene file changed during a pure build.' }
     }
+    if ($isPlayerBuild) {
+        # Lux3D 密钥绝不能进发布包：拿本机 .env 里密钥的前 12 个字符去搜构建产物，搜到就算失败
+        $envFile = if ($env:AHOLO_ENV) { $env:AHOLO_ENV } else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'say-and-slay\lux3d-test\.env' }
+        $secret = $env:AHOLO_API_KEY
+        if (-not $secret -and (Test-Path -LiteralPath $envFile)) {
+            $line = Get-Content -LiteralPath $envFile | Where-Object { $_ -match '^\s*AHOLO_API_KEY\s*=' } | Select-Object -First 1
+            if ($line) { $secret = ($line -split '=', 2)[1].Trim().Trim('"', "'") }
+        }
+        if ($secret -and $secret.Length -ge 12) {
+            $needle = [Text.Encoding]::UTF8.GetBytes($secret.Substring(0, 12))
+            $needle16 = [Text.Encoding]::Unicode.GetBytes($secret.Substring(0, 12))
+            $roots = @('Build\Main', 'Build\MainWebGL') | ForEach-Object { Join-Path $ProjectPath $_ } | Where-Object { Test-Path -LiteralPath $_ }
+            $leaks = @()
+            foreach ($r in $roots) {
+                foreach ($file in Get-ChildItem -LiteralPath $r -Recurse -File | Where-Object { $_.Length -lt 400MB -and $_.FullName -notlike '*BurstDebugInformation*' }) {
+                    $text8 = [Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($file.FullName))
+                    if ($text8.Contains([Text.Encoding]::GetEncoding(28591).GetString($needle)) -or $text8.Contains([Text.Encoding]::GetEncoding(28591).GetString($needle16))) { $leaks += $file.FullName }
+                }
+            }
+            if ($leaks) { $leaks | ForEach-Object { Write-Host "KEY_LEAK $_" }; throw 'Lux3D key found in build output.' }
+            Write-Host "KEY_CHECK_OK files_scanned_under=$($roots.Count)"
+        } else { Write-Host 'KEY_CHECK_SKIPPED no local key to compare against' }
+    }
     Write-Host "BUILD_OK $Method"
 }
 finally {

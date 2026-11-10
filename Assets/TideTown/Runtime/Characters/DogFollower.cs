@@ -98,6 +98,19 @@ public class DogFollower : MonoBehaviour
         Snap(TargetPoint());
     }
 
+    // 让小黑跑到某处蹦两下再回来（卡住提示、嗅探都用它）
+    Vector3 guidePos;
+    float guideTimer;
+    bool guideArrived;
+    public bool Guiding => guideTimer > 0f;
+    public bool GuideArrived => guideArrived;
+    public void GuideTo(Vector3 worldPos, float seconds)
+    {
+        guidePos = worldPos;
+        guideTimer = seconds;
+        guideArrived = false;
+    }
+
     public void CommandOrPet()
     {
         if (!Following || !Visible || player == null) return;
@@ -163,13 +176,37 @@ public class DogFollower : MonoBehaviour
         hasLastPlayer = true;
 
         var target = TargetPoint();
+        if (guideTimer > 0f)
+        {
+            guideTimer -= dt;
+            // 线索多半贴着模型，站不上去：停在离它最近、能站的地方
+            Vector3 toward = guidePos;
+            if (!world.Walkable(toward.x, toward.z))
+            {
+                Vector3 from = transform.position;
+                for (float k = 0.9f; k > 0.05f; k -= 0.1f)
+                {
+                    Vector3 q = Vector3.Lerp(from, guidePos, k);
+                    if (world.Walkable(q.x, q.z)) { toward = q; break; }
+                }
+            }
+            target = toward;
+            float dGuide = new Vector2(transform.position.x - guidePos.x, transform.position.z - guidePos.z).magnitude;
+            float dToward = new Vector2(transform.position.x - toward.x, transform.position.z - toward.z).magnitude;
+            if (!guideArrived && (dGuide < 1.3f || dToward < 0.35f))
+            {
+                guideArrived = true;
+                petTimer = 1.8f; // 到了：蹦两下
+                guideTimer = Mathf.Min(guideTimer, 2.5f);
+            }
+        }
 
         Vector3 pos = transform.position;
         Vector3 delta = new Vector3(target.x - pos.x, 0f, target.z - pos.z);
         float gap = delta.magnitude;
 
         if (!world.Walkable(pos.x, pos.z)) Snap(target);
-        else if (gap > snapDistance)
+        else if (gap > snapDistance && guideTimer <= 0f)
         {
             Snap(target);
             pos = transform.position;

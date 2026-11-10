@@ -49,6 +49,9 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
 
         var aiDir = gameObject.AddComponent<AIAgentCalibrationDirector>();
         aiDir.Init(p, u, w, d, s);
+
+        // 卡住才给提示（要放在最后：它要找到上面这些系统）
+        gameObject.AddComponent<HintDirector>().Init(p, u, w, d, s);
     }
 
     void TriggerMode(int mode)
@@ -92,20 +95,23 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
             return;
 
         // 按 Tab 或 L 键可随时翻阅邮包里的当前信件（在信纸上直接揭下字签抛向空中化为实物）
-        if (Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.L) || Input.GetKeyDown(KeyCode.Alpha1))
+        // 按键表见 docs/controls.md：Tab 读信揭字，R 潮汐怀表。数字键切"模式"的做法已去掉。
+        if (Input.GetKeyDown(KeyCode.Tab))
         {
             TriggerMode(1);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            TriggerMode(2);
-        }
-        else if (Input.GetKeyDown(KeyCode.R) || Input.GetKeyDown(KeyCode.Alpha3))
+        else if (Input.GetKeyDown(KeyCode.R))
         {
             if (!ui.LetterOpen && !AnyModalOpen)
                 TriggerMode(3);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha4))
+        // 透视拓印（WP-E）和光影声音（WP-G）的 v3 旧版是弹窗假玩法，重做完成前不给玩家入口；
+        // 开发时加 -oldmodes 命令行还能用 2 / 4 键打开看
+        else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            TriggerMode(2);
+        }
+        else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha4))
         {
             TriggerMode(4);
         }

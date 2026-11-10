@@ -9,6 +9,8 @@ public static class Features
         || HasArg("-wateraudit") || HasArg("-mapaudit") || HasArg("-scanaudit") || HasArg("-shot");
     // 渡口缺口（创新方向的多解过海）：-nogap 可以关掉，退回"木箱自动铺满"
     public static bool crossingGap = !HasArg("-nogap");
+    // v3 的透视拓印 / 光影声音旧版入口（重做前默认关）
+    public static bool oldModes = HasArg("-oldmodes");
 
     static bool HasArg(string key)
     {

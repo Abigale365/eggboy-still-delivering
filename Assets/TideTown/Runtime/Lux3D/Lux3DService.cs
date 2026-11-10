@@ -84,6 +84,9 @@ public sealed class Lux3DService : MonoBehaviour
         SetMode(cfg.mode);
     }
 
+    // 审计用：一局里要生成很多次，放开每局上限
+    public void OverrideSessionCap(int n) { cfg.maxPerSession = n; }
+
     public void SetMode(string mode)
     {
         Mode = mode;

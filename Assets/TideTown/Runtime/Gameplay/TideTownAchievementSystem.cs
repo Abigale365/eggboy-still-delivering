@@ -27,7 +27,9 @@ public sealed class TideTownAchievementSystem : MonoBehaviour
         // 面包房生火与防风（3种解法）
         new AchDef { id = "luban_oven",    category = "面包房站", title = "鲁班传人 · 三环风门归位", desc = "通过拨动 3D 鲁班三环风门机关（3-5-2）点燃林阿婆的烤炉" },
         new AchDef { id = "breath_fire",   category = "面包房站", title = "人间烟火 · 吹旺阿婆的炉膛", desc = "对着烤炉火苗吹气鼓风，让面包房烟囱升起滚滚暖烟" },
-        new AchDef { id = "word_fire",     category = "面包房站", title = "言灵造物 · 心愿化作火种", desc = "通过拆字成物或心愿 3D 造物笺生成防风助燃器物点旺烤炉" },
+        new AchDef { id = "word_fire",     category = "面包房站", title = "言灵造物 · 心愿化作火种", desc = "撕下信上的「木柴」是湿的；拼出「干木柴」或许愿造柴，让炉膛里有柴可烧" },
+
+        new AchDef { id = "word_combo",    category = "面包房站", title = "咬文嚼字 · 两个字拼出新的字", desc = "把信上撕下来的两个字叠在一起，拼出一个新的字" },
 
         // 学校哄开心小黑（3种解法）
         new AchDef { id = "classic_ball",  category = "学校后院", title = "旧日约定 · 秋千下的红球", desc = "寻回秋千下的旧红球并解开爪印木匣放进小黑的食盆" },
@@ -38,6 +40,8 @@ public sealed class TideTownAchievementSystem : MonoBehaviour
         new AchDef { id = "winch_bridge",  category = "涨潮渡口", title = "老船坞工 · 齿轮绞盘升桥", desc = "摇动岸边的 3D 潮汐船坞齿轮绞盘，升起沉没的木码头与小船浮桥过海" },
         new AchDef { id = "wish_boat",     category = "涨潮渡口", title = "凭空造舟 · 乘心愿渡海", desc = "用 Lux3D 心愿造物笺在海面上实时生成专属 3D 浮船/海龟浮台渡海" },
         new AchDef { id = "echo_coop",     category = "涨潮渡口", title = "时空旅人 · 与过去的自己接力", desc = "唤出十秒前的潮汐回声残影协力摇住渡口绞盘或拉动风箱" },
+
+        new AchDef { id = "wood_boat",     category = "涨潮渡口", title = "纸上行舟 · 拼一条木船过海", desc = "用信上的字拼出「木船」，扔到涨潮的渡口缺口上踩着过海" },
 
         // 灯塔呼应与全岛探索（3种解法）
         new AchDef { id = "cam_wave",      category = "灯塔与海岛", title = "隔空挥别 · 山那边的微光", desc = "在灯塔顶层对着摄像头挥手，唤醒对岸山头的 40 盏手电筒回应" },

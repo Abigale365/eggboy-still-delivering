@@ -23,10 +23,9 @@ public sealed class WoodInteractable : IInteractable
     public WoodInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
     public string EntityId => "wood";
     static bool CanPickWood(GameState s) =>
-        s != null
-        && (s.step == "B0_arrive" || s.step == "B1_matches" || s.step == "B2_wood")
-        && !s.flags.Contains("wood_loaded")
-        && s.carrying != "wood";
+        s != null && !s.flags.Contains("oven_lit") && s.carrying != "wood"
+        && (s.flags.Contains("wood_wet")   // 炉膛里是湿柴：随时可以来抱一捆干的换掉
+            || ((s.step == "B0_arrive" || s.step == "B1_matches" || s.step == "B2_wood") && !s.flags.Contains("wood_loaded")));
 
     public string Prompt(GameState s) => CanPickWood(s) ? "E　抱起柴火捆" : "";
     public bool CanInteract(GameState s) => CanPickWood(s);
@@ -45,9 +44,10 @@ public sealed class StoveInteractable : IInteractable, IHoldInteraction
     public string Prompt(GameState s)
     {
         if (s == null) return "";
-        if (s.carrying == "wood" && !s.flags.Contains("wood_loaded")) return "E　把柴火放进炉膛";
+        if (s.carrying == "wood" && (!s.flags.Contains("wood_loaded") || s.flags.Contains("wood_wet")))
+            return s.flags.Contains("wood_wet") ? "E　换上干柴" : "E　把柴火放进炉膛";
         if (s.flags.Contains("wood_loaded") && s.flags.Contains("matches_taken") && !s.flags.Contains("oven_lit"))
-            return "按住 E　擦亮火柴";
+            return s.flags.Contains("wood_wet") && s.flags.Contains("wet_fizzled") ? "柴是湿的，点不着" : "按住 E　擦亮火柴";
         if (s.flags.Contains("oven_lit") && effects != null && effects.BellowsStage < 3 && director != null && !director.IsAuditMode)
             return "E　拉动风箱助燃（" + (effects.BellowsStage + 1) + "/3）";
         if (director != null && !director.IsAuditMode && !s.flags.Contains("oven_lit"))
@@ -60,7 +60,7 @@ public sealed class StoveInteractable : IInteractable, IHoldInteraction
     public bool CanInteract(GameState s)
     {
         if (s == null) return false;
-        if (s.carrying == "wood" && !s.flags.Contains("wood_loaded")) return true;
+        if (s.carrying == "wood" && (!s.flags.Contains("wood_loaded") || s.flags.Contains("wood_wet"))) return true;
         if (s.flags.Contains("wood_loaded") && s.flags.Contains("matches_taken") && !s.flags.Contains("oven_lit")) return true;
         if (s.flags.Contains("oven_lit") && effects != null && effects.BellowsStage < 3 && director != null && !director.IsAuditMode)
             return true;
@@ -68,7 +68,7 @@ public sealed class StoveInteractable : IInteractable, IHoldInteraction
     }
     public void Interact(GameState s, InteractionService svc)
     {
-        if (s.carrying == "wood" && !s.flags.Contains("wood_loaded")) director.LoadWood();
+        if (s.carrying == "wood" && (!s.flags.Contains("wood_loaded") || s.flags.Contains("wood_wet"))) director.LoadWood();
         else if (s.flags.Contains("wood_loaded") && s.flags.Contains("matches_taken") && !s.flags.Contains("oven_lit")) director.LightOven(effects);
         else if (s.flags.Contains("oven_lit") && effects != null && effects.BellowsStage < 3) director.BoostOvenBellows(effects);
     }

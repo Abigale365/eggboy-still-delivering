@@ -143,6 +143,13 @@ public sealed partial class StoryDirector : MonoBehaviour
         }
     }
 
+    // 揭字系统读真正的信件正文用；找不到返回 null（不像 FindLetter 那样退回第一封）
+    public LetterData GetLetter(string id)
+    {
+        foreach (var l in letters) if (l.id == id) return l;
+        return null;
+    }
+
     LetterData FindLetter(string id)
     {
         LetterData letter = null;
@@ -223,8 +230,12 @@ public sealed partial class StoryDirector : MonoBehaviour
 
     void OnLetterClosed()
     {
+        // 只有剧情自己打开的信（拿了 letterLock）合上时才推进剧情。
+        // 玩家按 Tab 重读、揭字、看回忆时合上信纸，不能把步骤往前推（v3 里会因此跳关）。
+        bool openedByStory = letterLock != null || readingSchool;
         if (gate != null && letterLock != null) gate.Release(letterLock);
         letterLock = null;
+        if (!openedByStory) { ApplyStepGoal(); return; }
         if (player != null) player.locked = false;
 
         if (readingSchool) { readingSchool = false; ApplyStepGoal(); return; }

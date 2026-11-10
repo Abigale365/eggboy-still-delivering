@@ -24,7 +24,8 @@ public sealed partial class StoryDirector : MonoBehaviour
 
     public void TakeWood()
     {
-        if (!ready || State.flags.Contains("wood_loaded")) return;
+        // 炉膛里是湿柴时，还可以再去抱一捆干的来换
+        if (!ready || (State.flags.Contains("wood_loaded") && !State.flags.Contains("wood_wet"))) return;
         if (State.flags.Contains("matches_taken") && !State.flags.Contains("matches_packed")) State.flags.Add("matches_packed");
         State.carrying = "wood";
         store.Save(State);
@@ -37,7 +38,8 @@ public sealed partial class StoryDirector : MonoBehaviour
     public void LoadWood()
     {
         if (!ready || State.carrying != "wood") return;
-        State.flags.Add("wood_loaded");
+        State.flags.Remove("wood_wet");
+        if (!State.flags.Contains("wood_loaded")) State.flags.Add("wood_loaded");
         State.carrying = State.flags.Contains("matches_taken") ? "matches" : "";
         store.Save(State);
         if (player != null) player.PlayEmote("give");
@@ -50,6 +52,7 @@ public sealed partial class StoryDirector : MonoBehaviour
     public void LightOven(BakeryEffects fx)
     {
         if (!ready || !State.flags.Contains("wood_loaded") || !State.flags.Contains("matches_taken") || State.flags.Contains("oven_lit")) return;
+        if (State.flags.Contains("wood_wet")) { WetWoodFizzle(fx); return; }
         WoodenMechanismPuzzleModal.OpenOrRun("bakery_lock", State, store, player, ui, gate, () => CompleteLightOven(fx));
     }
 
@@ -66,6 +69,47 @@ public sealed partial class StoryDirector : MonoBehaviour
         ui.SetCarried(CarryLabel());
         ui.ShowToast("邮戳 1/3 · 面包店 · 炉膛里的火苗刚刚燃起");
         AdvanceTo("S0_arrive");
+    }
+
+    // ---- 揭字成物（WP-D）：信上撕下来的「木柴」是湿的 ----
+
+    public int WetFizzleCount { get; private set; }
+
+    // 把一捆湿柴塞进炉膛：占住炉膛，但点不着。返回 false 表示炉膛里已经有柴了
+    public bool LoadWetWood()
+    {
+        if (!ready || State.flags.Contains("oven_lit") || State.flags.Contains("wood_loaded")) return false;
+        State.flags.Add("wood_loaded");
+        State.flags.Add("wood_wet");
+        store.Save(State);
+        if (player != null) player.PlayEmote("give");
+        if (State.flags.Contains("matches_taken")) AdvanceTo("B4_light");
+        else AdvanceTo("B1_matches");
+        return true;
+    }
+
+    // 干柴：炉膛里有湿柴就换掉，空着就直接塞进去。返回 true 表示这次起了作用
+    public bool LoadDryWoodFromWord()
+    {
+        if (!ready || State.flags.Contains("oven_lit")) return false;
+        if (State.flags.Contains("wood_wet")) { State.flags.Remove("wood_wet"); store.Save(State); ApplyStepGoal(); return true; }
+        if (State.flags.Contains("wood_loaded")) return false;
+        State.flags.Add("wood_loaded");
+        store.Save(State);
+        if (player != null) player.PlayEmote("give");
+        if (State.flags.Contains("matches_taken")) AdvanceTo("B4_light");
+        else AdvanceTo("B1_matches");
+        return true;
+    }
+
+    // 湿柴点不着：一股白烟，EGGBOY 垮脸。不弹说明文字，炉子上的提示会变成"柴是湿的"
+    void WetWoodFizzle(BakeryEffects fx)
+    {
+        WetFizzleCount++;
+        if (!State.flags.Contains("wet_fizzled")) { State.flags.Add("wet_fizzled"); store.Save(State); }
+        if (fx != null) fx.WetPuff();
+        if (game != null) game.SetExpression(ExprId.sad);
+        ShadowAndChimeSystem.PlayProceduralChime(185f, 0.35f);
     }
 
     public void BoostOvenBellows(BakeryEffects fx)

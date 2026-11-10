@@ -55,6 +55,48 @@ public sealed class BakeryEffects : MonoBehaviour
         return BellowsStage;
     }
 
+    // 湿柴点不着：炉口冒一股白烟就散了
+    ParticleSystem wetPuff;
+    public int WetPuffCount { get; private set; }
+    public void WetPuff()
+    {
+        WetPuffCount++;
+        if (wetPuff == null)
+        {
+            var go = new GameObject("OvenWetPuff");
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = fireLocalPosition + new Vector3(0f, 0.05f, -0.1f);
+            wetPuff = go.AddComponent<ParticleSystem>();
+            var main = wetPuff.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 2.0f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.25f, 0.6f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
+            main.startColor = new Color(0.93f, 0.94f, 0.95f, 0.8f);
+            main.maxParticles = 60;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            var em = wetPuff.emission;
+            em.rateOverTime = 0f;
+            var shape = wetPuff.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.radius = 0.14f;
+            shape.angle = 28f;
+            var size = wetPuff.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(new Keyframe(0f, 0.5f), new Keyframe(1f, 2.2f)));
+            var col = wetPuff.colorOverLifetime;
+            col.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(new Color(0.8f, 0.82f, 0.84f), 1f) },
+                new[] { new GradientAlphaKey(0.8f, 0f), new GradientAlphaKey(0.5f, 0.5f), new GradientAlphaKey(0f, 1f) });
+            col.color = grad;
+            go.GetComponent<ParticleSystemRenderer>().sharedMaterial = SoftMat(ParticleMaterial);
+        }
+        wetPuff.Emit(26);
+    }
+
     void BuildFire()
     {
         var go = new GameObject("OvenFire");

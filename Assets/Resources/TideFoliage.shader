@@ -41,6 +41,42 @@ Shader "TideTown/Foliage"
 
         float _TideWind;   // 全局风力，TownLighting 设；没设时是 0，叶子不动
 
+        // 2026-11-13 主角穿过花丛：身边的枝叶被身体顶开；走过去以后，被带着往前拽的枝叶弹回来、晃几下才停。
+        // TownLighting 每帧给：主角现在的位置，和最近几次"蹭过"的记录（位置 + 时刻、方向 + 力度）。
+        float4 _TidePlayerPos;        // xyz 脚下位置，w = 1 有效
+        float4 _TidePushPos[6];       // xyz 蹭过的位置，w = 发生的时刻
+        float4 _TidePushDir[6];       // xy = 当时前进的方向（世界 xz），z = 力度
+        float _TideTime;
+
+        float3 PushOffset(float3 wp, half4 color)
+        {
+            // 根扎在地里不动，越往上越软（B = 在这一团里的高度）
+            float weight = 0.15 + 0.85 * color.b;
+            float3 off = 0;
+
+            // 1. 身体正顶着的地方：往外、往下压
+            float3 d = wp - (_TidePlayerPos.xyz + float3(0, 0.4, 0));
+            float flat = length(d.xz);
+            float near = saturate(1.0 - flat / 0.78) * saturate(1.0 - abs(d.y) / 0.95) * _TidePlayerPos.w;
+            near = near * near * (3.0 - 2.0 * near);
+            off.xz += normalize(d.xz + 0.0001) * near * 0.36;
+            off.y -= near * 0.10;
+
+            // 2. 刚被蹭过的地方：先被带着往前拽，再弹回来晃几下
+            for (int k = 0; k < 6; k++)
+            {
+                float age = _TideTime - _TidePushPos[k].w;
+                if (age < 0.0 || age > 2.6) continue;
+                float3 e = wp - (_TidePushPos[k].xyz + float3(0, 0.4, 0));
+                float f = saturate(1.0 - length(e.xz) / 0.95) * saturate(1.0 - abs(e.y) / 1.0);
+                if (f <= 0.0) continue;
+                float swing = exp(-age * 2.3) * cos(age * 8.5 + color.g * 1.2);
+                off.xz += _TidePushDir[k].xy * (f * swing * 0.30 * _TidePushDir[k].z);
+                off.y += f * exp(-age * 3.0) * sin(age * 11.0) * 0.03 * _TidePushDir[k].z;
+            }
+            return off * weight;
+        }
+
         // 世界坐标上的风：一阵一阵地从西南往东北刮
         float3 WindOffset(float3 wp, float3 normalWS, half4 color)
         {
@@ -48,7 +84,7 @@ Shader "TideTown/Foliage"
             float gust = sin(t * 0.9 + wp.x * 0.21 + wp.z * 0.17) * 0.6 + sin(t * 1.7 + wp.x * 0.43 - wp.z * 0.31) * 0.4;
             float3 sway = float3(0.8, 0.0, 0.6) * gust * _Sway * color.r;
             float flut = sin(t * 5.3 + color.g * 40.0 + wp.x * 3.1 + wp.z * 2.7) * _Flutter * color.a;
-            return (sway + normalWS * flut) * _TideWind;
+            return (sway + normalWS * flut) * _TideWind + PushOffset(wp, color);
         }
 
         half AlphaOf(float2 uv, half4 color)

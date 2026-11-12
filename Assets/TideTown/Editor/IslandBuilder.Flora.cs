@@ -215,14 +215,15 @@ public static partial class IslandBuilder
 
     // 一朵花：朝外的一张小面片
     static void AddFlowerCard(List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs, List<Color32> colors, List<int> tris,
-                              Vector3 c, Vector3 facing, float size, Lcg rnd, float sway)
+                              Vector3 c, Vector3 facing, float size, Lcg rnd, float sway, float height = 1f)
     {
         facing.Normalize();
         var side = Vector3.Cross(facing, Mathf.Abs(facing.y) > 0.9f ? Vector3.right : Vector3.up).normalized;
         side = Quaternion.AngleAxis(rnd.Next01() * 360f, facing) * side;
         var up2 = Vector3.Cross(facing, side);
         var n = (facing + Vector3.up * 0.5f).normalized;
-        var col = new Color32((byte)(Mathf.Clamp01(sway) * 255f), (byte)(rnd.Next01() * 255f), 255, 255);
+        // B = 在花丛里的高度：被主角蹭到时，花和它旁边的叶子要动得一样多
+        var col = new Color32((byte)(Mathf.Clamp01(sway) * 255f), (byte)(rnd.Next01() * 255f), (byte)(Mathf.Clamp01(height) * 255f), 255);
         int o = verts.Count;
         verts.Add(c - side * size - up2 * size); verts.Add(c + side * size - up2 * size); verts.Add(c + side * size + up2 * size); verts.Add(c - side * size + up2 * size);
         for (int k = 0; k < 4; k++) { normals.Add(n); colors.Add(col); }

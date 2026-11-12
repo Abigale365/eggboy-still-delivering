@@ -332,6 +332,23 @@ public sealed class TownLighting : MonoBehaviour
         Shader.SetGlobalFloat("_ToonNormal", set.toonNormal);
         if (TownToon.Enabled) gameObject.AddComponent<TownToon>();
 
+        for (int k = 0; k < pushPos.Length; k++) pushPos[k] = new Vector4(0f, -999f, 0f, -999f);
+        Shader.SetGlobalVectorArray("_TidePushPos", pushPos);
+        Shader.SetGlobalVectorArray("_TidePushDir", pushDir);
+        {
+            var a = Environment.GetCommandLineArgs();
+            int di = Array.IndexOf(a, "-pushdemo");
+            if (di >= 0 && di + 1 < a.Length)
+            {
+                var parts = a[di + 1].Split(',');
+                if (parts.Length == 3
+                    && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dx)
+                    && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dy)
+                    && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dz))
+                { demoPush = true; demoCenter = new Vector3(dx, dy, dz); }
+            }
+        }
+
         lamps = gameObject.AddComponent<LampGlowDirector>();
         lamps.maxLights = set.lampLights;
 
@@ -462,6 +479,13 @@ public sealed class TownLighting : MonoBehaviour
 
     Transform hero;
     float heroLookAt;
+    readonly Vector4[] pushPos = new Vector4[6];
+    readonly Vector4[] pushDir = new Vector4[6];
+    int pushNext;
+    bool pushStarted;
+    Vector3 lastPushPos, lastHeroPos;
+    bool demoPush;
+    Vector3 demoCenter;
 
     void LateUpdate()
     {
@@ -474,8 +498,35 @@ public sealed class TownLighting : MonoBehaviour
             var h = GameObject.Find("EGGBOY");
             if (h != null) hero = h.transform;
         }
-        Shader.SetGlobalVector("_TidePlayerPos", hero != null
-            ? new Vector4(hero.position.x, hero.position.y, hero.position.z, 1f) : Vector4.zero);
+        Vector3 heroPos = hero != null ? hero.position : Vector3.zero;
+        bool heroOn = hero != null;
+        if (demoPush)
+        {
+            // 命令行 -pushdemo x,y,z：没有人操作时，用一个来回走的"假人"验证花丛的反应
+            heroOn = true;
+            heroPos = demoCenter + new Vector3(Mathf.PingPong(Time.time * 1.6f, 2.4f) - 1.2f, 0f, 0f);
+        }
+        Shader.SetGlobalVector("_TidePlayerPos", heroOn ? new Vector4(heroPos.x, heroPos.y, heroPos.z, 1f) : Vector4.zero);
+        Shader.SetGlobalFloat("_TideTime", Time.time);
+        // 每走出一小段记一次"蹭过"：位置、时刻、前进方向、力度（跑比走更猛）。着色器拿它算枝叶的回弹。
+        if (heroOn)
+        {
+            if (!pushStarted) { pushStarted = true; lastPushPos = heroPos; lastHeroPos = heroPos; }
+            Vector3 v = (heroPos - lastHeroPos) / Mathf.Max(Time.deltaTime, 0.0001f);
+            lastHeroPos = heroPos;
+            Vector3 moved = heroPos - lastPushPos; moved.y = 0f;
+            if (moved.magnitude > 0.32f)
+            {
+                var dir = moved.normalized;
+                float speed = new Vector2(v.x, v.z).magnitude;
+                pushPos[pushNext] = new Vector4(lastPushPos.x + moved.x * 0.5f, heroPos.y, lastPushPos.z + moved.z * 0.5f, Time.time);
+                pushDir[pushNext] = new Vector4(dir.x, dir.z, Mathf.Clamp(speed / 1.4f, 0.5f, 1.5f), 0f);
+                pushNext = (pushNext + 1) % pushPos.Length;
+                lastPushPos = heroPos;
+                Shader.SetGlobalVectorArray("_TidePushPos", pushPos);
+                Shader.SetGlobalVectorArray("_TidePushDir", pushDir);
+            }
+        }
 
         RefreshAmbient(false);
         if (!heroDone) ExcludeHeroFromReflections();

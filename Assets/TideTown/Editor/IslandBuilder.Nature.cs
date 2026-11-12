@@ -398,7 +398,7 @@ public static partial class IslandBuilder
             var c = new Vector3(0, 0.28f, 0) + new Vector3(dir.x * 0.60f, dir.y * 0.43f, dir.z * 0.60f);
             float fr = blossom ? 0.085f + rnd.Next01() * 0.05f : 0.05f + rnd.Next01() * 0.03f;
             // 2026-11-13：小方块花换成五瓣花面片，朝外开
-            AddFlowerCard(verts, normals, uvs, colors, flower, c, dir + new Vector3(0f, 0.35f, 0f), fr, rnd, 0.4f);
+            AddFlowerCard(verts, normals, uvs, colors, flower, c, dir + new Vector3(0f, 0.35f, 0f), fr, rnd, 0.4f, Mathf.InverseLerp(0f, 0.66f, c.y));
         }
         string nm = (blossom ? "BlossomBush_" : "Bush_") + variant;
         var mesh = new Mesh { name = nm, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };

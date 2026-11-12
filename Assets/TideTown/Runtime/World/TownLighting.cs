@@ -60,6 +60,9 @@ public sealed class TownLook
     // 路灯：0 不亮，1 全亮
     public float lampOn;
 
+    // 卡通材质（TideTown/Toon）：阴影的颜色、远处空气的颜色
+    public Color toonShadow, toonHaze;
+
     public static TownLook Day()
     {
         return new TownLook
@@ -88,8 +91,8 @@ public sealed class TownLook
             waterSky = new Color32(206, 230, 244, 255),
             waterSkyReflect = 0.28f,
             exposure = 0.05f,
-            contrast = 8f,
-            saturation = 10f,
+            contrast = 13f,
+            saturation = 15f,
             temperature = 3f,
             tint = 0f,
             splitShadows = new Color(0.48f, 0.49f, 0.53f, 1f),
@@ -101,6 +104,8 @@ public sealed class TownLook
             bloomTint = Color.white,
             vignette = 0.15f,
             lampOn = 0f,
+            toonShadow = new Color(0.80f, 0.86f, 1.06f, 1f),
+            toonHaze = new Color32(176, 208, 236, 255),
         };
     }
 
@@ -145,6 +150,8 @@ public sealed class TownLook
             bloomTint = new Color32(255, 226, 196, 255),
             vignette = 0.2f,
             lampOn = 1f,
+            toonShadow = new Color(0.86f, 0.80f, 1.08f, 1f),
+            toonHaze = new Color32(226, 170, 176, 255),
         };
     }
 
@@ -168,7 +175,15 @@ public sealed class TownLookSet
     public TownLook day = TownLook.Day();
     public TownLook dusk = TownLook.Dusk();
     public float shadowDistance = 75f;
-    public int shadowCascades = 2;
+    public int shadowCascades = 4;
+    // 卡通材质的手感：受光面 / 背光面亮度、明暗交界的位置和软硬、边缘光、空气感、法线贴图参与多少
+    public float toonLit = 0.54f;
+    public float toonShade = 1.18f;
+    public float toonEdge = 0.50f;
+    public float toonSoft = 0.035f;
+    public float toonRim = 0.55f;
+    public float toonHazeStrength = 0.10f;
+    public float toonNormal = 0.7f;
     public int lampLights = 6;
     public float lampIntensity = 3.2f;
     public float duskSeconds = 45f;      // 从白天完整走到黄昏要多久
@@ -302,6 +317,20 @@ public sealed class TownLighting : MonoBehaviour
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
         }
 
+        // 贴图斜着看不发虚：全局强制各向异性过滤
+        QualitySettings.anisotropicFiltering = AnisotropicFiltering.ForceEnable;
+        Texture.SetGlobalAnisotropicFilteringLimits(8, 16);
+
+        // 塞尔达式卡通材质（-notoon 关掉，回到写实材质，对比用）
+        Shader.SetGlobalFloat("_ToonLit", set.toonLit);
+        Shader.SetGlobalFloat("_ToonShade", set.toonShade);
+        Shader.SetGlobalFloat("_ToonEdge", set.toonEdge);
+        Shader.SetGlobalFloat("_ToonSoft", set.toonSoft);
+        Shader.SetGlobalFloat("_ToonRim", set.toonRim);
+        Shader.SetGlobalFloat("_ToonHaze", set.toonHazeStrength);
+        Shader.SetGlobalFloat("_ToonNormal", set.toonNormal);
+        if (TownToon.Enabled) gameObject.AddComponent<TownToon>();
+
         lamps = gameObject.AddComponent<LampGlowDirector>();
         lamps.maxLights = set.lampLights;
 
@@ -414,6 +443,8 @@ public sealed class TownLighting : MonoBehaviour
             fxVignette.intensity.Override(look.vignette);
         }
 
+        Shader.SetGlobalColor("_ToonShadowTint", look.toonShadow);
+        Shader.SetGlobalColor("_ToonHazeColor", look.toonHaze);
         Shader.SetGlobalFloat("_TideLampOn", look.lampOn);
         if (lamps != null) lamps.lightIntensity = set.lampIntensity * look.lampOn;
     }

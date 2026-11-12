@@ -291,6 +291,24 @@ public class GlbTexturePostprocessor : AssetPostprocessor
         ti.crunchedCompression = true;
         ti.compressionQuality = 60;
         ti.wrapMode = TextureWrapMode.Repeat;
-        ti.filterMode = FilterMode.Bilinear;
+        ti.filterMode = FilterMode.Trilinear;
+        ti.anisoLevel = 8;
+        // 2026-11-12：上面那套（最大 1024 + crunch）是给网页版瘦身的，原来连 Windows 版一起套了，画面发糊。
+        // Windows 版单独一套：原尺寸、高质量格式。只有颜色和法线这样做；粗糙度这类线性数据卡通材质用不到，保持小的。
+        if (!linear)
+        {
+            ti.SetPlatformTextureSettings(new TextureImporterPlatformSettings
+            {
+                name = "Standalone",
+                overridden = true,
+                maxTextureSize = 4096,
+                format = normal ? TextureImporterFormat.BC5 : TextureImporterFormat.BC7,
+                textureCompression = TextureImporterCompression.CompressedHQ,
+                crunchedCompression = false,
+            });
+        }
     }
+
+    // 规则变了，版本号加一，Unity 才会把已有贴图按新规则重新导入
+    public override uint GetVersion() { return 2; }
 }

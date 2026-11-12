@@ -195,3 +195,5 @@
 - 没做：通行审计（-traversalaudit）、WebGL 重建、核显帧率。和目标图还差的主要是模型：集市铺子、月亮喷泉、木码头和渡船、西山岩壁和塌方、房子亮灯的窗。
 
 - 2026-11-12 晚补：用户定「白天玩，结尾黄昏」。`TownLook` 分 Day / Dusk 两套，`TownLighting` 按邮戳过渡：面包店盖完往黄昏走三成，学校盖完 45 秒内走到黄昏（路灯亮、月亮升起）；灯塔点灯和天亮由 SkyDimmer 接手前先落到黄昏。`-look day|dusk` 可固定一档。look.json 改成 `{"day":{},"dusk":{}}`。Windows 剧情 22/22、创新审计通过。
+
+- 2026-11-12 夜 · 卡通材质样张：`Resources/TideToon.shader`（明暗分块、带色阴影、边缘光、空气感）+ `TownToon.cs` 进游戏时把不透明的 URP Lit / glTFast 材质换成运行时副本，`-notoon` 关掉对比；参数在 `TownLookSet` 的 toon* 字段。Windows 版 GlbTex 贴图改成原尺寸 BC7 / BC5（网页版仍是 1024 crunch），全局各向异性过滤，阴影图 4096、四级级联（URP 资产里也要是 4 级，否则级联变体会被裁掉）。坑：自写 ShadowCaster 通道要先引 CommonMaterial.hlsl，否则编译报 LerpWhiteTo、整个通道失效，构建不会失败，只在日志里有 Shader error。Windows 包 880 → 1143 MB。剧情 22/22；其余审计、WebGL、核显帧率未跑。

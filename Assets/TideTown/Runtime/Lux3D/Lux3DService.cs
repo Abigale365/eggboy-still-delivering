@@ -81,7 +81,7 @@ public sealed class Lux3DService : MonoBehaviour
             if (args[i] == "-lux3d") cfg.mode = args[i + 1];
             if (args[i] == "-lux3ddelay" && float.TryParse(args[i + 1], out var d)) cfg.mockDelaySec = d;
         }
-        SetMode(cfg.mode);
+        SetMode(IsInnovationAudit ? "mock" : cfg.mode);
     }
 
     // 审计用：一局里要生成很多次，放开每局上限
@@ -231,13 +231,24 @@ public sealed class Lux3DService : MonoBehaviour
     public static string BuildPrompt(string text) =>
         (text ?? "").Trim() + "，单个物体，温暖童话海边小镇风格，无底座无背景";
 
+    static readonly bool IsInnovationAudit = Array.Exists(Environment.GetCommandLineArgs(), arg => arg == "-innovaudit");
+    static string CacheDirectory => IsInnovationAudit
+        ? Path.Combine(Application.dataPath, "..", "lux3d-audit-cache")
+        : Path.Combine(Application.persistentDataPath, "lux3d");
+
+    internal static void ClearInnovationAuditCache()
+    {
+        if (!IsInnovationAudit || !Directory.Exists(CacheDirectory)) return;
+        foreach (string file in Directory.EnumerateFiles(CacheDirectory, "*.glb")) File.Delete(file);
+    }
+
     static string CachePath(string prompt)
     {
         unchecked
         {
             ulong h = 1469598103934665603UL;
             foreach (char c in prompt.Trim()) { h ^= c; h *= 1099511628211UL; }
-            return Path.Combine(Application.persistentDataPath, "lux3d", h.ToString("x16") + ".glb");
+            return Path.Combine(CacheDirectory, h.ToString("x16") + ".glb");
         }
     }
 

@@ -22,6 +22,11 @@ public class TownWorld : MonoBehaviour, IEggboyWorld
     float cacheStep = 1f;
 
     public IReadOnlyList<EggboyCollider> Colliders => colliders;
+    public void QueryColliders(float x, float z, List<EggboyCollider> results)
+    {
+        results.Clear();
+        results.AddRange(colliders);
+    }
     public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
     public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
 

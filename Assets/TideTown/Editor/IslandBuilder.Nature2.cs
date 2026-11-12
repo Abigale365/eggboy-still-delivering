@@ -258,7 +258,8 @@ public static partial class IslandBuilder
             FlatMat("FruitYellow", new Color32(0xf2, 0xd0, 0x4a, 255), 0.35f), FlatMat("FruitGreen", new Color32(0x8c, 0xbe, 0x3c, 255), 0.35f) };
         // 图上位置：大道西边线外 (790, 470/530)，东边线外 (946, 470/530)；朝向大道
         // 2026-11-08：原 790/946 正好压在大道边线上，剧情审计卡在摊子东面；各往外挪 18 px（约 0.8 m）
-        var spots = new[] { (772f, 535f, 90f, red), (772f, 455f, 90f, blue), (964f, 535f, -90f, red), (964f, 455f, -90f, blue) };
+        // 北侧两座摊位取 v=472，与 B7_market_r2 南墙留出宽敞草坪通道
+        var spots = new[] { (772f, 535f, 90f, red), (772f, 472f, 90f, blue), (964f, 535f, -90f, red), (964f, 472f, -90f, blue) };
         var rnd = new Lcg(31);
         int n = 0;
         foreach (var (u, v, yaw, awning) in spots)

@@ -28,6 +28,7 @@ public class EggboyPlayer : MonoBehaviour
     public bool locked;         // 读信时不能动
     public float idle;          // 站着不动多久了（秒）
     public bool grounded = true;
+    public bool TryingToMove { get; private set; }
     public Vector3 camFocus;    // 给镜头跟的点
     public JumpState jump = new JumpState();
     public EggboyPose pose;
@@ -55,6 +56,7 @@ public class EggboyPlayer : MonoBehaviour
     Transform modelT;
     bool storyCrouch;
     float storyCrouchWeight;
+    readonly List<EggboyCollider> nearbyColliders = new List<EggboyCollider>(32);
 
     public void SetStoryCrouch(bool crouch) => storyCrouch = crouch;
     public bool IsStoryCrouched => storyCrouchWeight > 0.9f;
@@ -139,6 +141,33 @@ public class EggboyPlayer : MonoBehaviour
         jump.dur = dur;
     }
 
+    bool CanUseCollisionPosition(Vector3 from, float x, float z)
+    {
+        if (!(world is IslandWorld island)) return world.Walkable(x, z);
+        if (!island.CanTraverse(from, x, z, jump.phase == JumpPhase.air)) return false;
+
+        // 轴向滑动和连续挤出以后重新检查落点，避免投影到旁边另一件物体里。
+        world.QueryColliders(x, z, nearbyColliders);
+        foreach (var c in nearbyColliders)
+        {
+            if (c.water || c.minY > 0f && from.y < c.minY - 0.03f) continue;
+            if (c.top.HasValue && (from.y >= c.top.Value - 0.03f || grounded && c.top.Value - from.y <= Step)) continue;
+            float radius = c.top.HasValue ? PlatR : Radius;
+            float depth = CollisionDepth(c, x, z, radius);
+            if (depth > 0.008f && depth > CollisionDepth(c, from.x, from.z, radius) + 0.0005f) return false;
+        }
+        return true;
+    }
+
+    static float CollisionDepth(EggboyCollider collider, float x, float z, float radius)
+    {
+        float dx = x - collider.x, dz = z - collider.z;
+        if (collider.r.HasValue) return collider.r.Value + radius - Mathf.Sqrt(dx * dx + dz * dz);
+        if (collider.hw.HasValue && collider.hd.HasValue)
+            return Mathf.Min(collider.hw.Value + radius - Mathf.Abs(dx), collider.hd.Value + radius - Mathf.Abs(dz));
+        return 0f;
+    }
+
     public void Move(float dt, float inX, float inZ, bool run, bool jumpPressed)
     {
         if (world == null || gait == null) return;
@@ -146,6 +175,7 @@ public class EggboyPlayer : MonoBehaviour
         if (Bones != null) { if (disableAnim) Bones.RestoreBindPose(); else Bones.RestoreClean(); }
         float len = Mathf.Sqrt(inX * inX + inZ * inZ);
         bool moving = len > 0.1f && !locked;
+        TryingToMove = moving;
         float target = moving ? (run ? Run : Walk) : 0f;
         float dirX = moving ? inX / len : 0f, dirZ = moving ? inZ / len : 0f;
         JumpState J = jump;
@@ -174,11 +204,13 @@ public class EggboyPlayer : MonoBehaviour
         // 走动会打断一次性动作（跳一下除外）
         if (moving && emote != null && emote != "hop") EndEmote();
 
-        // 移动 + 碰撞
+        // 移动 + 碰撞（使用空间分桶仅查询玩家周围格子内的碰撞体）
         var p = transform.position;
         float nx = p.x + vel.x * dt, nz = p.z + vel.z * dt;
-        foreach (var c in world.Colliders)
+        world.QueryColliders(nx, nz, nearbyColliders);
+        for (int ci = 0; ci < nearbyColliders.Count; ci++)
         {
+            var c = nearbyColliders[ci];
             if (c.water)
             {
                 if (p.y > 0.05f) continue;
@@ -215,9 +247,9 @@ public class EggboyPlayer : MonoBehaviour
                 }
             }
         }
-        if (world.Walkable(nx, nz)) { p.x = nx; p.z = nz; }
-        else if (world.Walkable(nx, p.z)) { p.x = nx; vel.z = 0f; }
-        else if (world.Walkable(p.x, nz)) { p.z = nz; vel.x = 0f; }
+        if (CanUseCollisionPosition(p, nx, nz)) { p.x = nx; p.z = nz; }
+        else if (CanUseCollisionPosition(p, nx, p.z)) { p.x = nx; vel.z = 0f; }
+        else if (CanUseCollisionPosition(p, p.x, nz)) { p.z = nz; vel.x = 0f; }
         else vel = Vector3.zero;
 
         // 竖直方向

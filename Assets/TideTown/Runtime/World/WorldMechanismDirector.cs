@@ -97,6 +97,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         bakeryMechRoot = mech.transform;
         for (int i = 0; i < 3; i++)
             bakeryRings[i] = TideTownStyleUI.FindDeepChild(bakeryMechRoot, "Ring_" + i);
+        if (world != null)
+            world.AddCollider(new EggboyCollider { x = mech.transform.position.x, z = mech.transform.position.z, r = 0.12f, top = basePos.y + 1.35f });
 
         var rack = TideTownStyleUI.CloneSceneLux3D("S11_晾衣架_分享包版", 1.65f, false);
         if (rack != null)
@@ -106,6 +108,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             rack.transform.SetParent(transform, false);
             rack.transform.position = rp;
             rack.transform.rotation = Quaternion.Euler(0f, 35f, 0f);
+            if (world != null)
+                world.AddCollider(new EggboyCollider { x = rp.x, z = rp.z, r = 0.14f, top = rp.y + 1.45f });
         }
 
         var buoy = TideTownStyleUI.CloneSceneLux3D("D6_救生圈_v2", 0.58f, false);
@@ -134,9 +138,35 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         schoolMechRoot = mech.transform;
         for (int i = 0; i < 3; i++)
             schoolRings[i] = TideTownStyleUI.FindDeepChild(schoolMechRoot, "Ring_" + i);
+        if (world != null)
+            world.AddCollider(new EggboyCollider { x = mech.transform.position.x, z = mech.transform.position.z, r = 0.12f, top = basePos.y + 1.10f });
 
         wishPedestalPositions[1] = basePos + new Vector3(-2.6f, 0f, 2.2f);
         if (world != null) wishPedestalPositions[1].y = world.GroundAt(wishPedestalPositions[1].x, wishPedestalPositions[1].z, basePos.y);
+    }
+
+    [System.Serializable] sealed class RampLayout { public RampRoad[] roads; }
+    [System.Serializable] sealed class RampRoad { public string id; public float[] x, z; }
+
+    static RampRoad FindShedRamp()
+    {
+        var layout = Resources.Load<TextAsset>("World/world_layout");
+        var roads = layout != null ? JsonUtility.FromJson<RampLayout>(layout.text)?.roads : null;
+        return roads == null ? null : System.Array.Find(roads, road => road.id == "to_shed");
+    }
+
+    static float RampDistance(RampRoad road, Vector3 point)
+    {
+        float distanceSquared = float.PositiveInfinity;
+        var p = new Vector2(point.x, point.z);
+        for (int i = 1; i < road.x.Length; i++)
+        {
+            var a = new Vector2(road.x[i - 1], road.z[i - 1]);
+            var edge = new Vector2(road.x[i], road.z[i]) - a;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, edge) / Mathf.Max(0.0001f, edge.sqrMagnitude));
+            distanceSquared = Mathf.Min(distanceSquared, (p - (a + edge * t)).sqrMagnitude);
+        }
+        return Mathf.Sqrt(distanceSquared);
     }
 
     void SpawnFloodedDockWinchAndPontoon()
@@ -172,15 +202,20 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             if (world != null)
             {
                 Vector3 side = new Vector3(-crossingDir.z, 0f, crossingDir.x);
+                var ramp = FindShedRamp();
                 float bestScore = float.MaxValue;
                 for (float back = 1.0f; back <= 3.6f; back += 0.4f)
-                    for (float lat = -1.6f; lat <= 1.6f; lat += 0.4f)
+                    for (float lat = -2.4f; lat <= 2.4f; lat += 0.4f)
                     {
                         Vector3 q = first - crossingDir * back + side * lat;
                         if (!world.InWalkArea(q.x, q.z)) continue;
                         float gy = world.GroundAt(q.x, q.z, first.y + 3f);
                         if (gy < WaterLevel.LevelYs[2] + 0.15f) continue; // L2 也不淹
-                        float score = back + Mathf.Abs(Mathf.Abs(lat) - 0.9f); // 靠近、稍微偏在路边
+                        // The floating crates are diagonal to the ramp. Measure clearance from the
+                        // actual ramp centerline so the solid winch does not block the uphill lane.
+                        float clearance = ramp != null ? RampDistance(ramp, q) : Mathf.Abs(lat);
+                        float score = back + Mathf.Abs(clearance - 1.03f) + (lat > 0f ? 2.4f : 0f);
+                        if (clearance < 0.72f) score += 10f;
                         if (score < bestScore) { bestScore = score; winchWorldPos = new Vector3(q.x, gy, q.z); }
                     }
             }
@@ -197,6 +232,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         winchGo.transform.position = winchWorldPos;
         winchGo.transform.rotation = Quaternion.Euler(0f, 40f, 0f);
         winchRoot = winchGo.transform;
+        if (world != null)
+            world.AddCollider(new EggboyCollider { x = winchWorldPos.x, z = winchWorldPos.z, r = 0.10f, top = winchWorldPos.y + 1.15f });
 
         var mech = TideTownStyleUI.BuildArticulatedMechanism3D("M3_潮汐船坞齿轮绞盘", 0.88f);
         mech.transform.SetParent(winchRoot, false);
@@ -260,6 +297,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         lighthouseMechRoot = mech.transform;
         for (int i = 0; i < 3; i++)
             lighthouseRings[i] = TideTownStyleUI.FindDeepChild(lighthouseMechRoot, "Ring_" + i);
+        if (world != null)
+            world.AddCollider(new EggboyCollider { x = mech.transform.position.x, z = mech.transform.position.z, r = 0.12f, top = basePos.y + 1.20f, minY = basePos.y - 0.5f });
 
         var lampHead = TideTownStyleUI.CloneSceneLux3D("B9_灯塔灯头_v4", 0.85f, false);
         if (lampHead != null)
@@ -287,6 +326,18 @@ public sealed class WorldMechanismDirector : MonoBehaviour
                 baseModel.transform.localScale = new Vector3(1.1f, 0.32f, 1.1f);
             }
             wishPedestals[i] = pGo.transform;
+            if (world != null)
+            {
+                Vector3 wp = wishPedestalPositions[i];
+                world.AddCollider(new EggboyCollider
+                {
+                    x = wp.x,
+                    z = wp.z,
+                    r = 0.12f,
+                    top = wp.y + 0.85f,
+                    minY = i == 2 ? wp.y - 0.5f : 0f
+                });
+            }
         }
     }
 

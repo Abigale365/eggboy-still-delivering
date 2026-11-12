@@ -1,13 +1,16 @@
 // WP-16：地图与 3D 地面引路微光。
-// 1. 按 M 打开地图：显示全镇地标名称（邮局、面包店、学校、操场、狗窝、船棚、灯塔、山顶新邮局）、当前目标高亮与引导虚线；
-// 2. 平时漫游时：移除遮挡视线的 2D 飘动标签，改用贴地的「3D 金色引路光点流 + 目标物暖金光环」，像序章一样自然引导玩家脚下路线与互动目标。
+// 1. 按 M 打开地图：显示全镇地标名称（邮局、面包店、学校、操场、狗窝、船棚、灯塔、山顶新邮局、渡口绞盘、广场八音盒）、地标防重叠排布、当前目标高亮与沿路引导虚线；
+// 2. 平时漫游时：移除遮挡视线的 2D 飘动标签，改用贴地的「沿可走路网折线的 3D 金色引路光点流 + 目标物暖金光环」，自然引导玩家脚下路线与互动目标。
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class TownMap : MonoBehaviour
 {
     [Serializable] class MapCam { public string name; public float[] pos, euler; public float fov; public int width, height; }
     [Serializable] class MapCameraList { public MapCam[] cameras; }
+    [Serializable] class RouteNodeJson { public string id; public bool stop; public float x, z; }
+    [Serializable] class RouteFileJson { public RouteNodeJson[] route; }
 
     struct LandmarkInfo
     {
@@ -28,9 +31,11 @@ public class TownMap : MonoBehaviour
         new LandmarkInfo("山口邮筒", "起点", new Vector3(-31.04f, 3.2f, -6.76f), "", new Color(0.75f, 0.32f, 0.25f, 0.92f)),
         new LandmarkInfo("旧邮局", "老周的值班室", new Vector3(-22.50f, 5.2f, -9.51f), "", new Color(0.32f, 0.45f, 0.58f, 0.92f)),
         new LandmarkInfo("① 林阿婆面包店", "第一站 · 烤炉与柴火", new Vector3(-14.40f, 5.2f, -8.50f), "bakery", new Color(0.76f, 0.45f, 0.20f, 0.94f)),
+        new LandmarkInfo("♪ 广场八音盒", "心愿展台 · 声影机关", new Vector3(-11.90f, 3.3f, -5.80f), "", new Color(0.58f, 0.42f, 0.24f, 0.90f)),
         new LandmarkInfo("② 潮汐镇学校", "第二站 · 阿萤与小黑", new Vector3(13.53f, 5.6f, -2.02f), "school", new Color(0.26f, 0.56f, 0.42f, 0.94f)),
         new LandmarkInfo("学校操场", "秋千 / 红球 / 滑梯", new Vector3(17.50f, 3.8f, -5.60f), "", new Color(0.30f, 0.52f, 0.36f, 0.88f)),
         new LandmarkInfo("学校后院 · 狗窝", "拖鞋 / 狗碗", new Vector3(21.76f, 4.1f, 1.95f), "", new Color(0.48f, 0.38f, 0.28f, 0.88f)),
+        new LandmarkInfo("⚙ 渡口齿轮绞盘", "涨潮过海机关", new Vector3(11.60f, 1.8f, -11.40f), "", new Color(0.62f, 0.48f, 0.20f, 0.90f)),
         new LandmarkInfo("海边船棚 & 码头", "拿煤油壶", new Vector3(18.12f, 3.2f, -15.56f), "", new Color(0.25f, 0.48f, 0.64f, 0.92f)),
         new LandmarkInfo("③ 海角灯塔", "第三站 · 点亮灯头", new Vector3(34.22f, 8.5f, 8.75f), "lighthouse", new Color(0.78f, 0.56f, 0.18f, 0.94f)),
         new LandmarkInfo("山顶新邮局", "终点 · 记忆寄件台", new Vector3(-27.54f, 7.6f, 14.89f), "", new Color(0.55f, 0.36f, 0.62f, 0.92f)),
@@ -60,6 +65,12 @@ public class TownMap : MonoBehaviour
     Light targetLight;
     Material guideBaseMat;
 
+    // 路网寻路折线（用于 3D 地面引路光点与 2D 地图引导虚线，避免穿墙入海）
+    bool navLoaded;
+    readonly List<Vector2> navNodes = new List<Vector2>();
+    readonly List<List<int>> navAdj = new List<List<int>>();
+    readonly List<Vector3> guidePath = new List<Vector3>();
+
     public bool IsOpen { get; private set; }
     public float ClosedAt { get; private set; }
 
@@ -73,6 +84,7 @@ public class TownMap : MonoBehaviour
         preview = Resources.Load<Texture2D>("UI/town_preview");
         if (preview != null) { imgW = preview.width; imgH = preview.height; }
         LoadCamera();
+        EnsureNavGraph();
     }
 
     void LoadCamera()
@@ -96,13 +108,198 @@ public class TownMap : MonoBehaviour
         }
     }
 
+    void EnsureNavGraph()
+    {
+        if (navLoaded) return;
+        navLoaded = true;
+        navNodes.Clear();
+        navAdj.Clear();
+        var asset = Resources.Load<TextAsset>("World/route");
+        if (asset == null) return;
+        var file = JsonUtility.FromJson<RouteFileJson>(asset.text);
+        if (file == null || file.route == null || file.route.Length == 0) return;
+
+        int AddOrFindNode(Vector2 pt)
+        {
+            for (int i = 0; i < navNodes.Count; i++)
+                if ((navNodes[i] - pt).sqrMagnitude < 0.20f * 0.20f) return i;
+            int id = navNodes.Count;
+            navNodes.Add(pt);
+            navAdj.Add(new List<int>());
+            return id;
+        }
+
+        void Link(int a, int b)
+        {
+            if (a == b || a < 0 || b < 0) return;
+            if (!navAdj[a].Contains(b)) navAdj[a].Add(b);
+            if (!navAdj[b].Contains(a)) navAdj[b].Add(a);
+        }
+
+        int prev = -1;
+        for (int i = 0; i < file.route.Length; i++)
+        {
+            var r = file.route[i];
+            int cur = AddOrFindNode(new Vector2(r.x, r.z));
+            if (prev >= 0 && (navNodes[cur] - navNodes[prev]).sqrMagnitude < 16f * 16f)
+                Link(prev, cur);
+            prev = cur;
+        }
+
+        // 相邻路网节点若在 4.2m 内且中点在可走区内，也建立短边以支持岔路就近寻路
+        for (int i = 0; i < navNodes.Count; i++)
+        {
+            for (int j = i + 1; j < navNodes.Count; j++)
+            {
+                float d2 = (navNodes[i] - navNodes[j]).sqrMagnitude;
+                if (d2 > 4.2f * 4.2f) continue;
+                Vector2 mid = (navNodes[i] + navNodes[j]) * 0.5f;
+                if (island == null || island.InWalkArea(mid.x, mid.y))
+                    Link(i, j);
+            }
+        }
+    }
+
+    void BuildGuidePolyline(Vector3 from, Vector3 to, List<Vector3> outPath)
+    {
+        outPath.Clear();
+        outPath.Add(from);
+        EnsureNavGraph();
+
+        Vector2 a2 = new Vector2(from.x, from.z);
+        Vector2 b2 = new Vector2(to.x, to.z);
+        float directDist = Vector2.Distance(a2, b2);
+
+        // 近距离且中间均在可走区，直接连线即可
+        if (directDist <= 7.0f || navNodes.Count < 2)
+        {
+            bool clear = true;
+            if (island != null && directDist > 1.5f)
+            {
+                for (int k = 1; k <= 4; k++)
+                {
+                    Vector2 m = Vector2.Lerp(a2, b2, k / 5f);
+                    if (!island.InWalkArea(m.x, m.y)) { clear = false; break; }
+                }
+            }
+            if (clear || navNodes.Count < 2)
+            {
+                outPath.Add(to);
+                return;
+            }
+        }
+
+        int startIdx = 0, endIdx = 0;
+        float bestStart = float.MaxValue, bestEnd = float.MaxValue;
+        for (int i = 0; i < navNodes.Count; i++)
+        {
+            float ds = (navNodes[i] - a2).sqrMagnitude;
+            if (ds < bestStart) { bestStart = ds; startIdx = i; }
+            float de = (navNodes[i] - b2).sqrMagnitude;
+            if (de < bestEnd) { bestEnd = de; endIdx = i; }
+        }
+
+        if (startIdx == endIdx)
+        {
+            outPath.Add(new Vector3(navNodes[startIdx].x, from.y, navNodes[startIdx].y));
+            outPath.Add(to);
+            return;
+        }
+
+        int n = navNodes.Count;
+        var dist = new float[n];
+        var parent = new int[n];
+        var used = new bool[n];
+        for (int i = 0; i < n; i++) { dist[i] = float.MaxValue; parent[i] = -1; }
+        dist[startIdx] = 0f;
+
+        for (int step = 0; step < n; step++)
+        {
+            int u = -1;
+            float best = float.MaxValue;
+            for (int i = 0; i < n; i++)
+                if (!used[i] && dist[i] < best) { best = dist[i]; u = i; }
+            if (u < 0 || u == endIdx) break;
+            used[u] = true;
+            var adj = navAdj[u];
+            for (int k = 0; k < adj.Count; k++)
+            {
+                int v = adj[k];
+                if (used[v]) continue;
+                float w = Vector2.Distance(navNodes[u], navNodes[v]);
+                if (dist[u] + w < dist[v])
+                {
+                    dist[v] = dist[u] + w;
+                    parent[v] = u;
+                }
+            }
+        }
+
+        if (parent[endIdx] >= 0)
+        {
+            var chain = new List<int>();
+            for (int cur = endIdx; cur >= 0; cur = parent[cur]) chain.Add(cur);
+            chain.Reverse();
+
+            // 若第一个路网点在玩家身后（玩家已走在该路段上），跳过第一个点避免引路光点往回指
+            int firstIdx = 0;
+            if (chain.Count >= 2)
+            {
+                Vector2 seg = navNodes[chain[1]] - navNodes[chain[0]];
+                Vector2 toPlayer = a2 - navNodes[chain[0]];
+                if (seg.sqrMagnitude > 0.01f && Vector2.Dot(toPlayer, seg) > 0f)
+                    firstIdx = 1;
+            }
+            int lastIdx = chain.Count - 1;
+            if (lastIdx - firstIdx >= 1)
+            {
+                Vector2 segEnd = navNodes[chain[lastIdx]] - navNodes[chain[lastIdx - 1]];
+                Vector2 toTgt = b2 - navNodes[chain[lastIdx - 1]];
+                if (segEnd.sqrMagnitude > 0.01f && Vector2.Dot(toTgt, segEnd) < segEnd.sqrMagnitude)
+                    lastIdx--;
+            }
+            for (int i = firstIdx; i <= lastIdx; i++)
+            {
+                Vector2 pt = navNodes[chain[i]];
+                float tLerp = (i + 1f) / (chain.Count + 1f);
+                outPath.Add(new Vector3(pt.x, Mathf.Lerp(from.y, to.y, tLerp), pt.y));
+            }
+        }
+
+        outPath.Add(to);
+    }
+
+    static float PolylineTotalLengthXZ(List<Vector3> path)
+    {
+        float sum = 0f;
+        for (int i = 0; i + 1 < path.Count; i++)
+            sum += Vector2.Distance(new Vector2(path[i].x, path[i].z), new Vector2(path[i + 1].x, path[i + 1].z));
+        return sum;
+    }
+
+    static Vector3 SamplePolylineXZ(List<Vector3> path, float targetDist)
+    {
+        if (path.Count == 0) return Vector3.zero;
+        if (path.Count == 1 || targetDist <= 0f) return path[0];
+        float acc = 0f;
+        for (int i = 0; i + 1 < path.Count; i++)
+        {
+            Vector3 a = path[i], b = path[i + 1];
+            float seg = Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+            if (acc + seg >= targetDist && seg > 1e-4f)
+                return Vector3.Lerp(a, b, (targetDist - acc) / seg);
+            acc += seg;
+        }
+        return path[path.Count - 1];
+    }
+
     // 旧 Prototype 场景没有剧情系统，也给它一个能打开的地图
     public void Init(EggboyPlayer p, EggboyUI u) { Init(p, u, null, null); }
 
     public bool CanOpen()
     {
         if (player == null || ui == null) return false;
-        if (ui.LetterOpen) return false;
+        if (ui.LetterOpen || ui.Paused || ui.TitleShowing || MenuController.OverlayOpen) return false;
         if (director != null && (director.Cutscene || director.Ended || director.Climbing)) return false;
         return true;
     }
@@ -129,6 +326,7 @@ public class TownMap : MonoBehaviour
         if (!IsOpen) return;
         IsOpen = false;
         ClosedAt = Time.unscaledTime;
+        MenuController.NoteScriptUnlock();
         if (gate != null && mapLock != null) gate.Release(mapLock);
         mapLock = null;
         if (player != null) player.locked = false;
@@ -138,7 +336,7 @@ public class TownMap : MonoBehaviour
     {
         if (player == null || ui == null) return;
         UpdateGroundGuide3D();
-        if (ui.LetterOpen)
+        if (ui.LetterOpen || ui.Paused || ui.TitleShowing || MenuController.OverlayOpen)
         {
             if (IsOpen) Close();
             return;
@@ -216,9 +414,9 @@ public class TownMap : MonoBehaviour
 
     void UpdateGroundGuide3D()
     {
-        // 自动审计截图模式或过场/暂停/序章已有 mailboxTrail 时隐藏动态地面引导
+        // 自动审计截图模式或过场/暂停/弹窗/序章已有 mailboxTrail 时隐藏动态地面引导
         bool canShow = ui != null && ui.inputClose
-            && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen
+            && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen && !MenuController.OverlayOpen
             && director != null && !director.IsAuditMode
             && !director.Cutscene && !director.Ended && !director.Climbing
             && director.State != null && director.State.step != "P0_boot"
@@ -257,11 +455,10 @@ public class TownMap : MonoBehaviour
             targetLight.intensity = 1.3f + 0.8f * pulse;
         }
 
-        // 地面金色引路光点流：从角色脚下前方 1.4m 沿着地面指向当前任务目标
+        // 地面金色引路光点流：沿可走路网折线从玩家脚下前方 1.35m 引导至当前任务目标，避免穿墙入海
         var pPos = player.transform.position;
-        Vector3 flatDelta = new Vector3(tgt.x - pPos.x, 0f, tgt.z - pPos.z);
-        float totalDist = flatDelta.magnitude;
-        Vector3 dir = totalDist > 0.01f ? flatDelta / totalDist : player.transform.forward;
+        BuildGuidePolyline(pPos, new Vector3(tgt.x, tgtGroundY, tgt.z), guidePath);
+        float totalDist = PolylineTotalLengthXZ(guidePath);
 
         for (int i = 0; i < GuideDotCount; i++)
         {
@@ -273,8 +470,8 @@ public class TownMap : MonoBehaviour
             }
             if (!guideDots[i].gameObject.activeSelf) guideDots[i].gameObject.SetActive(true);
 
-            Vector3 sample = pPos + dir * d;
-            float gy = island != null ? island.GroundAt(sample.x, sample.z, Mathf.Max(pPos.y, tgt.y) + 3f) : pPos.y;
+            Vector3 sample = SamplePolylineXZ(guidePath, d);
+            float gy = island != null ? island.GroundAt(sample.x, sample.z, sample.y + 2.5f) : sample.y;
             if (gy <= 0.1f) gy = Mathf.Lerp(pPos.y, tgtGroundY, d / Mathf.Max(1f, totalDist));
             if (island != null && gy < island.WaterY) gy = island.WaterY + 0.04f;
 
@@ -431,24 +628,88 @@ public class TownMap : MonoBehaviour
         if (hasCam && preview != null)
         {
             var playerMapPos = WorldToMapScreen(player.transform.position, img);
+            var youRect = new Rect(playerMapPos.x + 10f, playerMapPos.y - 12f, 88f, 24f);
+            bool hasTargetRect = false;
+            Rect targetRect = default;
+            Vector2 targetMapPos = default;
+            string targetBadgeText = "";
 
-            // 1. 若有当前任务目标，画一条从「你在这里」指向「当前目标」的金色引导虚线
+            // 1. 若有当前任务目标，画一条从「你在这里」沿可走路网指向「当前目标」的金色引导虚线
             if (TryGetStepTarget(out var stepTargetWorld, out var stepTargetName))
             {
-                var targetMapPos = WorldToMapScreen(stepTargetWorld, img);
-                DrawDottedLine(playerMapPos, targetMapPos, new Color(1f, 0.86f, 0.28f, 0.92f), 18);
-                DrawMapTargetPin(targetMapPos, "★ 当前目标：" + stepTargetName, font);
+                targetMapPos = WorldToMapScreen(stepTargetWorld, img);
+                targetBadgeText = "★ 当前目标：" + stepTargetName;
+                float tw = Mathf.Max(150f, targetBadgeText.Length * 14f + 20f);
+                targetRect = new Rect(targetMapPos.x - tw * 0.5f, targetMapPos.y + 10f, tw, 24f);
+                hasTargetRect = true;
+
+                BuildGuidePolyline(player.transform.position, stepTargetWorld, guidePath);
+                if (guidePath.Count >= 2)
+                {
+                    for (int k = 0; k + 1 < guidePath.Count; k++)
+                    {
+                        var pa = WorldToMapScreen(guidePath[k], img);
+                        var pb = WorldToMapScreen(guidePath[k + 1], img);
+                        int segs = Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(pa, pb) / 14f), 2, 16);
+                        DrawDottedLine(pa, pb, new Color(1f, 0.86f, 0.28f, 0.92f), segs);
+                    }
+                }
+                else
+                {
+                    DrawDottedLine(playerMapPos, targetMapPos, new Color(1f, 0.86f, 0.28f, 0.92f), 18);
+                }
             }
 
-            // 2. 绘制全镇所有建筑/地标名称标签（仅在打开地图 M 时显示，平时走路绝不遮挡视野）
+            // 2. 绘制全镇所有建筑/地标名称标签（带 2D 防重叠排斥计算，仅在打开地图 M 时显示）
             var tagStyle = MapTagStyle(font);
-            foreach (var lm in Landmarks)
+            int lmCount = Landmarks.Length;
+            var pinPos = new Vector2[lmCount];
+            var tagRects = new Rect[lmCount];
+            var tagTexts = new string[lmCount];
+            var tagStamped = new bool[lmCount];
+
+            for (int i = 0; i < lmCount; i++)
             {
+                var lm = Landmarks[i];
                 var lp = WorldToMapScreen(lm.worldPos, img);
                 bool stamped = !string.IsNullOrEmpty(lm.stampId) && director != null && director.State != null && director.State.stamps.Contains(lm.stampId);
                 string text = stamped ? (lm.name + " ✓") : lm.name;
                 float tw = Mathf.Max(84f, text.Length * 13.5f + 16f);
-                var tagRect = new Rect(lp.x - tw * 0.5f, lp.y - 26f, tw, 22f);
+                pinPos[i] = lp;
+                tagTexts[i] = text;
+                tagStamped[i] = stamped;
+                tagRects[i] = new Rect(lp.x - tw * 0.5f, lp.y - 26f, tw, 22f);
+            }
+
+            // 迭代排斥重叠标签（同时避让「你在这里」和「当前目标」标签）
+            for (int iter = 0; iter < 6; iter++)
+            {
+                for (int i = 0; i < lmCount; i++)
+                {
+                    var ri = tagRects[i];
+                    if (hasTargetRect) SeparateRect(ref ri, targetRect, 4f);
+                    SeparateRect(ref ri, youRect, 4f);
+                    for (int j = i + 1; j < lmCount; j++)
+                    {
+                        var rj = tagRects[j];
+                        SeparatePair(ref ri, ref rj, 4f);
+                        tagRects[j] = ClampRectToMap(rj, img);
+                    }
+                    tagRects[i] = ClampRectToMap(ri, img);
+                }
+            }
+
+            for (int i = 0; i < lmCount; i++)
+            {
+                var lm = Landmarks[i];
+                var lp = pinPos[i];
+                var tagRect = tagRects[i];
+                bool stamped = tagStamped[i];
+
+                // 若标签因防重叠偏移较远，画一条细引线连回地标锚点
+                Vector2 badgeAnchor = new Vector2(Mathf.Clamp(lp.x, tagRect.xMin + 6f, tagRect.xMax - 6f), lp.y < tagRect.center.y ? tagRect.yMin : tagRect.yMax);
+                if (Vector2.Distance(lp, badgeAnchor) > 8f)
+                    DrawDottedLine(lp, badgeAnchor, new Color(0.95f, 0.88f, 0.68f, 0.65f), 4);
 
                 GUI.color = Color.black;
                 GUI.DrawTexture(new Rect(lp.x - 4f, lp.y - 4f, 8f, 8f), Texture2D.whiteTexture);
@@ -460,8 +721,11 @@ public class TownMap : MonoBehaviour
                 GUI.color = stamped ? new Color(0.18f, 0.46f, 0.26f, 0.92f) : lm.badgeColor;
                 GUI.DrawTexture(tagRect, Texture2D.whiteTexture);
                 GUI.color = Color.white;
-                GUI.Label(tagRect, text, tagStyle);
+                GUI.Label(tagRect, tagTexts[i], tagStyle);
             }
+
+            if (hasTargetRect)
+                DrawMapTargetPin(targetMapPos, targetBadgeText, font);
 
             // 3. 玩家位置红点
             GUI.color = new Color(1f, 0.18f, 0.12f, 1f);
@@ -472,7 +736,6 @@ public class TownMap : MonoBehaviour
             GUI.DrawTexture(new Rect(playerMapPos.x - 8f, playerMapPos.y - 8f, 2f, 16f), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(playerMapPos.x + 6f, playerMapPos.y - 8f, 2f, 16f), Texture2D.whiteTexture);
 
-            var youRect = new Rect(playerMapPos.x + 10f, playerMapPos.y - 12f, 88f, 24f);
             GUI.color = new Color(0.85f, 0.16f, 0.12f, 0.94f);
             GUI.DrawTexture(youRect, Texture2D.whiteTexture);
             GUI.color = Color.white;
@@ -482,6 +745,43 @@ public class TownMap : MonoBehaviour
         GUI.Label(new Rect(panel.x + 18, panel.yMax - 34, panel.width - 36, 26),
             GoalText() + "   |   提示：平时走路时可跟随脚下的【金色地面引路微光】前往发光目标点", Label(font));
         GUI.skin.font = old;
+    }
+
+    static void SeparatePair(ref Rect a, ref Rect b, float pad)
+    {
+        float ox = Mathf.Min(a.xMax + pad, b.xMax + pad) - Mathf.Max(a.xMin, b.xMin);
+        float oy = Mathf.Min(a.yMax + pad, b.yMax + pad) - Mathf.Max(a.yMin, b.yMin);
+        if (ox <= 0f || oy <= 0f) return;
+        if (oy <= ox * 1.4f)
+        {
+            float dir = a.center.y <= b.center.y ? -1f : 1f;
+            float shift = oy * 0.52f * dir;
+            a.y += shift;
+            b.y -= shift;
+        }
+        else
+        {
+            float dir = a.center.x <= b.center.x ? -1f : 1f;
+            float shift = ox * 0.52f * dir;
+            a.x += shift;
+            b.x -= shift;
+        }
+    }
+
+    static void SeparateRect(ref Rect movable, Rect fixedRect, float pad)
+    {
+        float ox = Mathf.Min(movable.xMax + pad, fixedRect.xMax + pad) - Mathf.Max(movable.xMin, fixedRect.xMin);
+        float oy = Mathf.Min(movable.yMax + pad, fixedRect.yMax + pad) - Mathf.Max(movable.yMin, fixedRect.yMin);
+        if (ox <= 0f || oy <= 0f) return;
+        float dir = movable.center.y <= fixedRect.center.y ? -1f : 1f;
+        movable.y += oy * dir;
+    }
+
+    static Rect ClampRectToMap(Rect r, Rect bounds)
+    {
+        r.x = Mathf.Clamp(r.x, bounds.xMin + 4f, bounds.xMax - r.width - 4f);
+        r.y = Mathf.Clamp(r.y, bounds.yMin + 4f, bounds.yMax - r.height - 4f);
+        return r;
     }
 
     static void DrawDottedLine(Vector2 a, Vector2 b, Color col, int segments)

@@ -9,6 +9,7 @@ public sealed class CollisionDebugView : MonoBehaviour
     Mesh lineMesh;
     Material lineMat;
     bool dirty = true;
+    int lastCount = -1;
 
     void Awake()
     {
@@ -25,6 +26,7 @@ public sealed class CollisionDebugView : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F3) && (Features.debugUi || Debug.isDebugBuild))
         { Visible = !Visible; dirty = true; Debug.Log("COLLISIONDEBUG " + Visible); }
         if (!Visible || world == null) return;
+        if (world.Colliders.Count != lastCount) dirty = true;
         if (dirty) { Build(); dirty = false; }
         if (lineMesh != null && lineMat != null)
             Graphics.DrawMesh(lineMesh, Matrix4x4.identity, lineMat, 0);
@@ -32,6 +34,7 @@ public sealed class CollisionDebugView : MonoBehaviour
 
     void Build()
     {
+        lastCount = world.Colliders.Count;
         if (lineMat == null)
         {
             var sh = Shader.Find("Hidden/Internal-Colored");
@@ -42,22 +45,37 @@ public sealed class CollisionDebugView : MonoBehaviour
             lineMat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
             lineMat.SetInt("_ZWrite", 0);
         }
-        var verts = new List<Vector3>();
-        var cols = new List<Color32>();
+        var verts = new List<Vector3>(lastCount * 24);
+        var cols = new List<Color32>(lastCount * 24);
         foreach (var c in world.Colliders)
         {
-            float hw = c.hw ?? c.r ?? 0.5f;
-            float hd = c.hd ?? c.r ?? 0.5f;
-            float gy = world.GroundAt(c.x, c.z);
+            float gy = c.minY > 0.1f ? c.minY : world.GroundAt(c.x, c.z, c.top.HasValue ? c.top.Value + 0.5f : 50f);
             if (gy <= 0.2f) gy = 0.15f;
             float top = c.top.HasValue ? c.top.Value : gy + 5f;
             var col = c.water ? new Color32(80, 150, 255, 220)
                 : c.top.HasValue ? new Color32(80, 230, 130, 220)
                 : new Color32(255, 70, 50, 220);
-            AddBox(verts, cols, c.x, c.z, hw, hd, gy, top, col);
+            if (c.r.HasValue && !c.hw.HasValue)
+            {
+                AddCylinder(verts, cols, c.x, c.z, c.r.Value, gy, top, col, 8);
+            }
+            else
+            {
+                float hw = c.hw ?? c.r ?? 0.5f;
+                float hd = c.hd ?? c.r ?? 0.5f;
+                AddBox(verts, cols, c.x, c.z, hw, hd, gy, top, col);
+            }
         }
-        if (lineMesh == null) lineMesh = new Mesh { name = "collision_debug" };
+        if (lineMesh == null)
+        {
+            lineMesh = new Mesh
+            {
+                name = "collision_debug",
+                indexFormat = UnityEngine.Rendering.IndexFormat.UInt32
+            };
+        }
         lineMesh.Clear();
+        lineMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         lineMesh.SetVertices(verts);
         lineMesh.SetColors(cols);
         lineMesh.SetIndices(EnumerableRange(verts.Count), MeshTopology.Lines, 0, true);
@@ -69,6 +87,25 @@ public sealed class CollisionDebugView : MonoBehaviour
         var list = new List<int>(n);
         for (int i = 0; i < n; i++) list.Add(i);
         return list;
+    }
+
+    static void AddCylinder(List<Vector3> v, List<Color32> cols, float cx, float cz, float r, float y0, float y1, Color32 col, int segs)
+    {
+        for (int i = 0; i < segs; i++)
+        {
+            float a0 = i * Mathf.PI * 2f / segs;
+            float a1 = (i + 1) * Mathf.PI * 2f / segs;
+            Vector3 p0 = new Vector3(cx + Mathf.Cos(a0) * r, y0, cz + Mathf.Sin(a0) * r);
+            Vector3 p1 = new Vector3(cx + Mathf.Cos(a1) * r, y0, cz + Mathf.Sin(a1) * r);
+            Line(v, cols, p0, p1, col);
+            if (y1 > y0 + 0.01f)
+            {
+                Vector3 q0 = new Vector3(p0.x, y1, p0.z);
+                Vector3 q1 = new Vector3(p1.x, y1, p1.z);
+                Line(v, cols, q0, q1, col);
+                if (i % 2 == 0) Line(v, cols, p0, q0, col);
+            }
+        }
     }
 
     static void AddBox(List<Vector3> v, List<Color32> cols, float x, float z, float hw, float hd, float y0, float y1, Color32 col)

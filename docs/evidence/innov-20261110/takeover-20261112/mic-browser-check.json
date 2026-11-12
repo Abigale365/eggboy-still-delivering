@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "startRequiredClick": true,
+  "deniedPermissionReleased": true,
+  "grantedSampleRms": 0.0016190514297165898,
+  "releasedAfterStop": true,
+  "device": "Chrome fake audio capture"
+}

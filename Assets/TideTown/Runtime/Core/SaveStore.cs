@@ -14,8 +14,10 @@ public sealed class SaveStore
             case "-storyaudit":
             case "-routeaudit":
             case "-routeaudit2":
+            case "-traversalaudit":
             case "-mapaudit":
             case "-wateraudit":
+            case "-innovaudit":
             case "-scanaudit":
             case "-shot":
                 return true;

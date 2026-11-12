@@ -39,7 +39,7 @@ public static class EggboyEnv
         RenderSettings.ambientEquatorColor = new Color32(228, 204, 170, 255);
         RenderSettings.ambientGroundColor = new Color32(122, 93, 58, 255);
         RenderSettings.ambientIntensity = 0.72f;
-        QualitySettings.shadowDistance = 42f;
+        QualitySettings.shadowDistance = 120f;
 
         var go = new GameObject("Sun");
         go.transform.SetParent(parent, false);

@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const root = path.resolve(__dirname, 'Build/ExpandedWebGL');
+const root = path.resolve(__dirname, 'Build/MainWebGL');
 http.createServer((req, res) => {
   const name = decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname);
   const target = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));

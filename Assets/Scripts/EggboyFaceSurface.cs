@@ -45,7 +45,10 @@ public static class EggboyFaceSurface
             {
                 int a=tris[j],b=tris[j+1],c=tris[j+2];
                 if(!Within(projected[a]) || !Within(projected[b]) || !Within(projected[c]))continue;
-                if(dark[a] && dark[b] && dark[c]) Raster(projected[a],projected[b],projected[c],raster,W,H);
+                if (dark[a] && dark[b] && dark[c])
+                    Raster(projected[a], projected[b], projected[c], raster, W, H);
+                else if (Mathf.Max(projected[a].x, projected[b].x, projected[c].x) >= 0.66f)
+                    Raster(projected[a], projected[b], projected[c], raster, W, H, atlas, uv[a], uv[b], uv[c]);
             }
         }
         // Keep the connected screen region so dark marks on the shell cannot widen its contour.
@@ -69,7 +72,8 @@ public static class EggboyFaceSurface
         {
             var v=new Vector2((x+.5f)/W,(y+.5f)/H); float distance=float.PositiveInfinity;
             for(int k=0;k<hull.Count;k++) { var a=hull[k];var b=hull[(k+1)%hull.Count]; float d=Cross(a,b,v)/(b-a).magnitude;distance=Mathf.Min(distance,d); }
-            byte alpha=(byte)(255f*Mathf.Clamp01(distance*W*.6f+.5f)); pixels[y*W+x]=new Color32(alpha,alpha,alpha,255);
+            float feather=Mathf.SmoothStep(0f,1f,distance*W*.55f+.5f);
+            byte alpha=(byte)Mathf.RoundToInt(255f*feather); pixels[y*W+x]=new Color32(alpha,alpha,alpha,255);
         }
         mask.SetPixels32(pixels);mask.Apply(false,false);
         var mesh=Object.Instantiate(skin.mesh);mesh.name="EGGBOY native face UV";mesh.uv2=projected;
@@ -84,7 +88,8 @@ public static class EggboyFaceSurface
         skin.renderer.sharedMesh=mesh;skin.renderer.sharedMaterials=materials;result=skin.renderer.transform;
         Debug.Log($"NATIVE_FACE originalRenderer=true originalSubmeshes={mesh.subMeshCount} screenPixels={largest.Count} hull={hull.Count} x={x0:F3}..{x1:F3} y={y0:F3}..{y1:F3}");return true;
     }
-    static void Raster(Vector2 a,Vector2 b,Vector2 c,bool[] pixels,int w,int h)
+    static void Raster(Vector2 a,Vector2 b,Vector2 c,bool[] pixels,int w,int h,
+        Texture2D atlas = null, Vector2 uvA = default, Vector2 uvB = default, Vector2 uvC = default)
     {
         a=Vector2.Scale(a,new Vector2(w,h));b=Vector2.Scale(b,new Vector2(w,h));c=Vector2.Scale(c,new Vector2(w,h));
         int x0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,b.x,c.x)),0,w-1),x1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,b.x,c.x)),0,w-1);
@@ -92,8 +97,22 @@ public static class EggboyFaceSurface
         for(int y=y0;y<=y1;y++)for(int x=x0;x<=x1;x++)
         {
             var p=new Vector2(x+.5f,y+.5f);float d0=Cross(a,b,p),d1=Cross(b,c,p),d2=Cross(c,a,p);
-            if((d0>=0&&d1>=0&&d2>=0)||(d0<=0&&d1<=0&&d2<=0))pixels[y*w+x]=true;
+            if (!((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0))) continue;
+            if (atlas != null)
+            {
+                // The model's positive X is the viewer's left. Baked glass highlights at vertices
+                // used to discard whole triangles here, including the darker glass between them.
+                if (p.x / w < 0.66f) continue;
+                float area = d0 + d1 + d2;
+                if (Mathf.Abs(area) < 1e-5f) continue;
+                var uv = (uvA * d1 + uvB * d2 + uvC * d0) / area;
+                Color color = atlas.GetPixelBilinear(uv.x, uv.y);
+                float luminance = 0.299f * color.r + 0.587f * color.g + 0.114f * color.b;
+                if (luminance > 0.52f) continue;
+            }
+            pixels[y*w+x]=true;
         }
     }
     static bool Within(Vector2 uv) => uv.x>-.08f && uv.x<1.08f && uv.y>-.08f && uv.y<1.08f;
+    static bool WithinInner(Vector2 uv) => uv.x>.02f && uv.x<.98f && uv.y>.02f && uv.y<.98f;
 }

@@ -1,0 +1,47 @@
+[
+  {
+    "maxStep": 0.22,
+    "beachSamples": 0,
+    "coastSamples": 0
+  },
+  {
+    "maxStep": 0.38,
+    "beachSamples": 0,
+    "coastSamples": 0
+  },
+  {
+    "maxStep": 0.42,
+    "beachSamples": 0,
+    "coastSamples": 0
+  },
+  {
+    "maxStep": 0.65,
+    "beachSamples": 0,
+    "coastSamples": 0
+  },
+  {
+    "maxStep": 0.8,
+    "beachSamples": 6565,
+    "coastSamples": 130541
+  },
+  {
+    "maxStep": 0.86,
+    "beachSamples": 6565,
+    "coastSamples": 130541
+  },
+  {
+    "maxStep": 1,
+    "beachSamples": 6565,
+    "coastSamples": 130665
+  },
+  {
+    "maxStep": 1.1,
+    "beachSamples": 6565,
+    "coastSamples": 130665
+  },
+  {
+    "maxStep": 1.2,
+    "beachSamples": 6565,
+    "coastSamples": 130665
+  }
+]

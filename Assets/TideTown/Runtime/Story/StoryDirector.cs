@@ -97,6 +97,7 @@ public sealed partial class StoryDirector : MonoBehaviour
             {
                 if (island.mailboxTrail != null) island.mailboxTrail.SetActive(State.step == "P0_boot");
                 if (island.endingDesk != null) island.endingDesk.SetActive(State.flags.Contains("dawn_shown"));
+                island.SyncEndingDeskCollider();
             }
             ui.SetTutorial(State.step == "P0_boot"
                 ? "沿金色路标走到邮筒 · 靠近后按 E 取信"
@@ -111,6 +112,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         {
             if (island.mailboxTrail != null) island.mailboxTrail.SetActive(false);
             if (island.endingDesk != null) island.endingDesk.SetActive(State.flags.Contains("dawn_shown"));
+            island.SyncEndingDeskCollider();
         }
     }
 

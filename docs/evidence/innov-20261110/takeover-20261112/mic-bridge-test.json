@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "results": [
+    "Permission starts only on explicit request, samples RMS, stops capture",
+    "Permission denial returns no sample and closes the audio context",
+    "Grant arriving after the inspector closes immediately releases the stream"
+  ]
+}

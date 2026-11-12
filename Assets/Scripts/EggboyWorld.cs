@@ -16,6 +16,11 @@ public class EggboyCollider
 public class EggboyWorld : MonoBehaviour, IEggboyWorld
 {
     public IReadOnlyList<EggboyCollider> Colliders => colliders;
+    public void QueryColliders(float x, float z, List<EggboyCollider> results)
+    {
+        results.Clear();
+        results.AddRange(colliders);
+    }
     public Vector3 MailboxPos => mailboxPos;
     public Vector3 SpawnPos => new Vector3(-21f, 0f, 0f);
 

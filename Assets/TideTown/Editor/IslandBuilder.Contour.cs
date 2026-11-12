@@ -14,7 +14,10 @@
 //   tools/preview/route_check.py 读 building_footprints.json 里的 circles，和场景同一份数字。
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 public sealed class ContourGrid
@@ -41,7 +44,7 @@ public sealed class ContourGrid
                 || n.Contains("Beam") || n.Contains("Glow") || n.Contains("Foam") || n.StartsWith("COL", StringComparison.OrdinalIgnoreCase)
                 || n.IndexOf("invisible", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
-            if (excludeFoliage && (n == "Trees" || n == "Bushes")) return true;
+            if (excludeFoliage && n == "Bushes") return true;
         }
         return false;
     }
@@ -72,6 +75,9 @@ public sealed class ContourGrid
         return a.Replace("_visual", "").Replace("_collision", "");
     }
 
+    [Serializable] class TierDef { public string id; public float y; public float[] x, z; }
+    [Serializable] class LayoutTierDoc { public TierDef[] tiers; }
+
     static bool Contains(Vector2[] poly, float x, float z)
     {
         bool inside = false;
@@ -83,25 +89,94 @@ public sealed class ContourGrid
         return inside;
     }
 
+    static float DistToEdge(Vector2[] poly, float px, float pz)
+    {
+        if (poly == null || poly.Length < 3) return float.MaxValue;
+        var p = new Vector2(px, pz);
+        float best2 = float.MaxValue;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+        {
+            var a = poly[j];
+            var ab = poly[i] - a;
+            float len2 = ab.sqrMagnitude;
+            float t = len2 > 1e-6f ? Mathf.Clamp01(Vector2.Dot(p - a, ab) / len2) : 0f;
+            float d2 = (a + ab * t - p).sqrMagnitude;
+            if (d2 < best2) best2 = d2;
+        }
+        return Mathf.Sqrt(best2);
+    }
+
+    static bool InPolyInset(Vector2[] poly, float x, float z, float inset)
+    {
+        return poly != null && poly.Length >= 3 && Contains(poly, x, z) && (inset <= 0f || DistToEdge(poly, x, z) >= inset);
+    }
+
     public static ContourGrid Build(List<(Vector2[] pts, float y)> polys, float cell, float margin, bool excludeFoliage)
     {
+        Vector2[] mainPoly = null, housesPoly = null, hillWestPoly = null, hillTopPoly = null, lighthousePoly = null, beachPoly = null;
+        float beachHeight = 0f;
+        var layoutAsset = Resources.Load<TextAsset>("World/world_layout");
+        if (layoutAsset != null)
+        {
+            var doc = JsonUtility.FromJson<LayoutTierDoc>(layoutAsset.text);
+            if (doc != null && doc.tiers != null)
+            {
+                foreach (var t in doc.tiers)
+                {
+                    if (t.x == null || t.z == null || t.x.Length < 3) continue;
+                    var pts = new Vector2[t.x.Length];
+                    for (int i = 0; i < pts.Length; i++) pts[i] = new Vector2(t.x[i], t.z[i]);
+                    if (t.id == "main") mainPoly = pts;
+                    else if (t.id == "houses") housesPoly = pts;
+                    else if (t.id == "hill_west") hillWestPoly = pts;
+                    else if (t.id == "hill_top") hillTopPoly = pts;
+                    else if (t.id == "lighthouse") lighthousePoly = pts;
+                    else if (t.id == "beach") { beachPoly = pts; beachHeight = t.y; }
+                }
+            }
+        }
+
         var g = new ContourGrid { cell = cell };
         float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
         foreach (var p in polys) foreach (var q in p.pts) { x0 = Mathf.Min(x0, q.x); x1 = Mathf.Max(x1, q.x); z0 = Mathf.Min(z0, q.y); z1 = Mathf.Max(z1, q.y); }
+        foreach (var tp in new[] { mainPoly, housesPoly, beachPoly })
+            if (tp != null)
+                foreach (var q in tp) { x0 = Mathf.Min(x0, q.x); x1 = Mathf.Max(x1, q.x); z0 = Mathf.Min(z0, q.y); z1 = Mathf.Max(z1, q.y); }
         x0 -= margin + 0.5f; z0 -= margin + 0.5f; x1 += margin + 0.5f; z1 += margin + 0.5f;
         g.x0 = x0; g.z0 = z0;
         int nx = g.nx = Mathf.CeilToInt((x1 - x0) / cell), nz = g.nz = Mathf.CeilToInt((z1 - z0) / cell);
         int N = nx * nz;
         g.walk = new bool[N]; g.relevant = new bool[N]; g.ground = new float[N]; g.maxTop = new float[N]; g.solidOwner = new int[N];
         var walkY = new float[N];
+        var isRoadPoly = new bool[N];
         for (int iz = 0; iz < nz; iz++)
             for (int ix = 0; ix < nx; ix++)
             {
                 float x = x0 + (ix + 0.5f) * cell, z = z0 + (iz + 0.5f) * cell;
                 float py = float.NaN;
-                foreach (var p in polys) if (Contains(p.pts, x, z)) py = float.IsNaN(py) ? p.y : Mathf.Max(py, p.y);
+                bool fromRoad = false;
+                foreach (var p in polys)
+                    if (Contains(p.pts, x, z))
+                    {
+                        py = float.IsNaN(py) ? p.y : Mathf.Max(py, p.y);
+                        fromRoad = true;
+                    }
+                if (!fromRoad)
+                {
+                    if (InPolyInset(housesPoly, x, z, 0f))
+                    {
+                        if (!InPolyInset(hillWestPoly, x, z, 0.20f) && !InPolyInset(hillTopPoly, x, z, 0.20f))
+                            py = 5.5f;
+                    }
+                    else if (InPolyInset(mainPoly, x, z, 0f))
+                    {
+                        if (!InPolyInset(lighthousePoly, x, z, 0.20f))
+                            py = 3.0f;
+                    }
+                    else if (InPolyInset(beachPoly, x, z, 0f)) py = beachHeight;
+                }
                 int id = iz * nx + ix;
-                g.walk[id] = !float.IsNaN(py); walkY[id] = py;
+                g.walk[id] = !float.IsNaN(py); walkY[id] = py; isRoadPoly[id] = fromRoad;
                 g.solidOwner[id] = -1; g.maxTop[id] = float.NegativeInfinity;
             }
         // 可走区往外 margin 以内才管
@@ -126,7 +201,7 @@ public sealed class ContourGrid
         {
             if (!g.relevant[id]) continue;
             float x = x0 + (id % nx + 0.5f) * cell, z = z0 + (id / nx + 0.5f) * cell;
-            float top = float.IsNaN(walkY[id]) ? 40f : walkY[id] + 1.5f;
+            float top = float.IsNaN(walkY[id]) ? 40f : (isRoadPoly[id] ? walkY[id] + 1.5f : walkY[id] + 0.6f);
             g.ground[id] = Physics.Raycast(new Vector3(x, top, z), Vector3.down, out var hit, 80f, groundMask, QueryTriggerInteraction.Ignore)
                 ? hit.point.y : (float.IsNaN(walkY[id]) ? -1f : walkY[id]);
         }
@@ -143,10 +218,13 @@ public sealed class ContourGrid
             if (!ownerIdx.TryGetValue(on, out int o)) { o = g.owners.Count; g.owners.Add(on); ownerIdx[on] = o; }
             var mtx = mr.transform.localToWorldMatrix;
             var mesh = mf.sharedMesh;
+            bool trunkOnly = excludeFoliage && on.StartsWith("Trees/", StringComparison.Ordinal);
+            var materials = trunkOnly ? mr.sharedMaterials : null;
             var v = mesh.vertices; var w = new Vector3[v.Length];
             for (int i = 0; i < v.Length; i++) w[i] = mtx.MultiplyPoint3x4(v[i]);
             for (int s = 0; s < mesh.subMeshCount; s++)
             {
+                if (trunkOnly && (s >= materials.Length || materials[s] == null || materials[s].name != "NatureTrunk")) continue;
                 if (mesh.GetTopology(s) != MeshTopology.Triangles) continue;
                 var t = mesh.GetTriangles(s);
                 for (int k = 0; k < t.Length; k += 3)
@@ -221,7 +299,7 @@ public static partial class IslandBuilder
         int nx = g.nx, nz = g.nz;
 
         // 3. 外沿：实心格，四邻里有空格（空格离可走区 0.7 m 以内）
-        var buckets = new Dictionary<long, (Vector2 sum, int n, float top, int owner)>();
+        var buckets = new Dictionary<(int x, int z, int owner), (Vector2 sum, int n, float top)>();
         for (int iz = 0; iz < nz; iz++)
             for (int ix = 0; ix < nx; ix++)
             {
@@ -233,21 +311,31 @@ public static partial class IslandBuilder
                 else if (iz > 0 && g.relevant[id - nx] && g.solidOwner[id - nx] < 0) edge = true;
                 else if (iz < nz - 1 && g.relevant[id + nx] && g.solidOwner[id + nx] < 0) edge = true;
                 if (!edge) continue;
-                long key = ((long)(ix / 2) << 32) | (uint)(iz / 2);
                 var pos = new Vector2(g.x0 + (ix + 0.5f) * g.cell, g.z0 + (iz + 0.5f) * g.cell);
-                float top = g.maxTop[id];
-                if (buckets.TryGetValue(key, out var bk)) buckets[key] = (bk.sum + pos, bk.n + 1, Mathf.Max(bk.top, top), bk.owner);
-                else buckets[key] = (pos, 1, top, g.solidOwner[id]);
+                int ow = g.solidOwner[id];
+                var key = (ix / 2, iz / 2, ow);
+                float top = Mathf.Max(g.maxTop[id], g.ground[id] + 0.32f);
+                // 兼顾内侧紧邻同物件实心格的高度，防止斜坡上石头/矮墙最外沿 5cm 格因采样高度偏低被误判为可迈台阶
+                for (int dz = -1; dz <= 1; dz++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int jx = ix + dx, jz = iz + dz;
+                        if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+                        int nid = jz * nx + jx;
+                        if (g.solidOwner[nid] == ow && g.maxTop[nid] > top) top = g.maxTop[nid];
+                    }
+                if (buckets.TryGetValue(key, out var bk)) buckets[key] = (bk.sum + pos, bk.n + 1, Mathf.Max(bk.top, top));
+                else buckets[key] = (pos, 1, top);
             }
 
-        // 4. 小圆
-        float r = BodyRadius - PlatRadius + ContourCell * 0.5f;
+        // 4. 小圆（外扩余量从 2.5cm 收紧至 2.1cm，等效半径 0.148m，在零穿模前提下进一步减少狭窄路段空气墙感）
+        float r = BodyRadius - PlatRadius + ContourCell * 0.42f;
         var xs = new List<float>(); var zs = new List<float>(); var rs = new List<float>(); var tops = new List<float>();
         foreach (var kv in buckets)
         {
             var c = kv.Value.sum / kv.Value.n;
             xs.Add(c.x); zs.Add(c.y); rs.Add(r); tops.Add(kv.Value.top);
-            contourCircles.Add(new CircleFootprint { x = Round3(c.x), z = Round3(c.y), r = Round3(r), top = Round3(kv.Value.top), owner = g.owners[kv.Value.owner] });
+            contourCircles.Add(new CircleFootprint { x = Round3(c.x), z = Round3(c.y), r = Round3(r), top = Round3(kv.Value.top), owner = g.owners[kv.Key.owner] });
         }
         var holderGo = new GameObject("ContourCollision");
         holderGo.transform.SetParent(parent, false);
@@ -259,6 +347,43 @@ public static partial class IslandBuilder
         var top10 = new List<KeyValuePair<string, int>>(owners); top10.Sort((a, b) => b.Value.CompareTo(a.Value));
         string summary = string.Join(" ", top10.GetRange(0, Mathf.Min(12, top10.Count)).ConvertAll(kv => kv.Key + "=" + kv.Value));
         Debug.Log($"CONTOUR removed_rects={removed} circles={contourCircles.Count} r={r:F3} owners={owners.Count} top: {summary}");
+    }
+
+    static void SetBeachPolygon(Layout layout, IslandWorld world)
+    {
+        var beach = Array.Find(layout.tiers, tier => tier.id == "beach");
+        world.beachPoly = beach == null ? null : new WalkPoly
+        {
+            id = beach.id,
+            y = beach.y,
+            points = beach.x.Select((x, i) => new Vector2(x, beach.z[i])).ToArray()
+        };
+    }
+
+    // 只重烘碰撞数据，保留已摆放的可见场景和层级。
+    public static void RebuildTraversalCollision()
+    {
+        var scene = EditorSceneManager.OpenScene(ScenePath);
+        var world = UnityEngine.Object.FindObjectOfType<IslandWorld>();
+        var layout = JsonUtility.FromJson<Layout>(File.ReadAllText(LayoutPath));
+        if (world == null || layout?.tiers == null) throw new InvalidOperationException("缺少主场景或地形布局");
+        var parent = world.transform.parent;
+        var old = parent.Find("ContourCollision");
+        if (old == null || old.GetComponent<TownObstacleSet>() == null) throw new InvalidOperationException("找不到原轮廓碰撞");
+        var visualObjects = UnityEngine.Object.FindObjectsOfType<Renderer>();
+        var transforms = visualObjects.Select(r => r.localToWorldMatrix).ToArray();
+        SetBeachPolygon(layout, world);
+        UnityEngine.Object.DestroyImmediate(old.gameObject);
+        Physics.SyncTransforms();
+        BuildContourCollision(layout, parent);
+        if (UnityEngine.Object.FindObjectsOfType<Renderer>().Length != visualObjects.Length ||
+            visualObjects.Where((r, i) => r == null || r.localToWorldMatrix != transforms[i]).Any())
+            throw new InvalidOperationException("可见场景物体或位置发生变化");
+        EditorSceneManager.MarkSceneDirty(scene);
+        if (!EditorSceneManager.SaveScene(scene)) throw new IOException("主场景碰撞保存失败");
+        File.WriteAllText(FootprintPath, JsonUtility.ToJson(new FootprintList { buildings = footprints, circles = contourCircles }, true));
+        AssetDatabase.ImportAsset(FootprintPath);
+        Debug.Log($"TRAVERSAL_BAKED visualRenderersUnchanged={visualObjects.Length} contours={contourCircles.Count}");
     }
 
     static float Round3(float v) => Mathf.Round(v * 1000f) / 1000f;

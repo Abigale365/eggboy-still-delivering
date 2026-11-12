@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "method": "offline layout and contour geometry",
+  "start": {
+    "x": 1.1,
+    "z": 0.5
+  },
+  "end": {
+    "x": 3.65,
+    "z": 0.5
+  },
+  "sampleCount": 129,
+  "pavedSamples": 66,
+  "lawnSamples": 63,
+  "blockedSamples": 0,
+  "minClearanceMetres": 0.226,
+  "closestObstacle": "Fences/Fence_pad_stone_3_0_0"
+}

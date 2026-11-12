@@ -189,16 +189,17 @@ public class PixelCanvas
         for (int y = minY; y <= maxY; y++)
         {
             float t = (y - y0) / h;
-            Color32 c = new Color32(
-                (byte)Mathf.Lerp(top.r, bottom.r, t),
-                (byte)Mathf.Lerp(top.g, bottom.g, t),
-                (byte)Mathf.Lerp(top.b, bottom.b, t), 255);
+            byte cr = (byte)Mathf.Lerp(top.r, bottom.r, t);
+            byte cg = (byte)Mathf.Lerp(top.g, bottom.g, t);
+            byte cb = (byte)Mathf.Lerp(top.b, bottom.b, t);
             for (int x = minX; x <= maxX; x++)
             {
                 float dx = Mathf.Max(x0 + radius - x - 0.5f, 0f, x + 0.5f - (x1 - radius));
                 float dy = Mathf.Max(y0 + radius - y - 0.5f, 0f, y + 0.5f - (y1 - radius));
-                if (dx * dx + dy * dy > radius * radius) continue;
-                Blend(x, y, c);
+                float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                float aa = Mathf.Clamp01(radius + 0.85f - dist);
+                if (aa <= 0f) continue;
+                Blend(x, y, new Color32(cr, cg, cb, (byte)Mathf.RoundToInt(255f * aa)));
             }
         }
     }
@@ -316,7 +317,7 @@ public class FacePainter
     {
         var c = Canvas;
         c.Clear(new Color32(0, 0, 0, 0));
-        c.RoundedRect(2f, 2f, W - 2f, H - 2f, 130f, new Color32(0x16, 0x13, 0x1a, 255), new Color32(0x0a, 0x09, 0x0c, 255));
+        c.RoundedRect(2f, 2f, W - 2f, H - 2f, 130f, new Color32(0x16, 0x13, 0x1a, 255), new Color32(0x0c, 0x0a, 0x0e, 255));
         float L = 0.3f * W, R = 0.7f * W, Y = 0.5f * H, s = 0.14f * W;
         bool closed = blink > 0f;
         float k = since;
@@ -612,13 +613,13 @@ public class FacePainter
         float n = k > 1.5f ? 4f : 3f;
         for (int side = 0; side < 2; side++)
         {
-            float cx = side == 0 ? 0.2f * W : 0.8f * W;
+            float cx = side == 0 ? 0.225f * W : 0.775f * W;
             for (int i = 0; i < n; i++)
             {
-                float x = cx - ((n - 1) / 2f) * 17f + i * 17f, y = 0.76f * H;
+                float x = cx - ((n - 1) / 2f) * 16.5f + i * 16.5f, y = 0.72f * H;
                 float dy = 11f * Mathf.Min(k, 1.3f);
                 Canvas.Line(x + 4f, y - dy, x - 4f, y + dy, 7f,
-                    new Color32(BLUSH.r, BLUSH.g, BLUSH.b, (byte)(255 * Mathf.Min(1f, 0.55f + 0.25f * k))), 6f);
+                    new Color32(BLUSH.r, BLUSH.g, BLUSH.b, (byte)(255 * Mathf.Min(1f, 0.58f + 0.25f * k))), 6f);
             }
         }
     }

@@ -1,0 +1,232 @@
+[
+  {
+    "type": "http",
+    "status": 404,
+    "url": "http://127.0.0.1:5196/Build/MainWebGL.data.unityweb.parts.json"
+  },
+  {
+    "type": "log",
+    "text": "You can reduce startup time if you configure your web server to add \"Content-Encoding: gzip\" response header when serving \"Build/MainWebGL.framework.js.unityweb\" file."
+  },
+  {
+    "type": "http",
+    "status": 404,
+    "url": "http://127.0.0.1:5196/favicon.ico"
+  },
+  {
+    "type": "log",
+    "text": "You can reduce startup time if you configure your web server to add \"Content-Encoding: gzip\" response header when serving \"Build/MainWebGL.wasm.unityweb\" file."
+  },
+  {
+    "type": "log",
+    "text": "navigator.mediaDevices support available"
+  },
+  {
+    "type": "log",
+    "text": "You can reduce startup time if you configure your web server to add \"Content-Encoding: gzip\" response header when serving \"Build/MainWebGL.data.unityweb\" file."
+  },
+  {
+    "type": "log",
+    "text": "[UnityCache] 'http://127.0.0.1:5196/Build/MainWebGL.data.unityweb' successfully downloaded and stored in the indexedDB cache"
+  },
+  {
+    "type": "log",
+    "text": "[UnityMemory] Configuration Parameters - Can be set up in boot.config\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-allocator-temp-initial-block-size-main=262144\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-allocator-temp-initial-block-size-worker=262144\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-temp-allocator-size-nav-mesh-worker=65536\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-temp-allocator-size-audio-worker=65536\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-temp-allocator-size-background-worker=32768\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-bucket-allocator-granularity=16\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-bucket-allocator-bucket-count=8\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-bucket-allocator-block-size=4194304\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-bucket-allocator-block-count=1\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-main-allocator-block-size=16777216\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-thread-allocator-block-size=16777216\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-gfx-main-allocator-block-size=16777216\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-gfx-thread-allocator-block-size=16777216\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-cache-allocator-block-size=4194304\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-typetree-allocator-block-size=2097152\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-bucket-allocator-granularity=16\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-bucket-allocator-bucket-count=8\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-bucket-allocator-block-size=4194304\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-bucket-allocator-block-count=1\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-allocator-block-size=16777216\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-profiler-editor-allocator-block-size=1048576\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-temp-allocator-size-main=4194304\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-job-temp-allocator-block-size=2097152\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-job-temp-allocator-block-size-background=1048576\"\n"
+  },
+  {
+    "type": "log",
+    "text": "    \"memorysetup-job-temp-allocator-reduction-small-platforms=262144\"\n"
+  },
+  {
+    "type": "log",
+    "text": "[PhysX] Initialized SinglethreadedTaskDispatcher.\n"
+  },
+  {
+    "type": "log",
+    "text": "Loading player data from data.unity3d\n"
+  },
+  {
+    "type": "log",
+    "text": "Initialize engine version: 2022.3.62f2c1 (92e6e6be66dc)\n"
+  },
+  {
+    "type": "log",
+    "text": "Creating WebGL 2.0 context."
+  },
+  {
+    "type": "log",
+    "text": "Renderer: WebKit WebGL\n"
+  },
+  {
+    "type": "log",
+    "text": "Vendor:   WebKit\n"
+  },
+  {
+    "type": "log",
+    "text": "Version:  OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium))\n"
+  },
+  {
+    "type": "log",
+    "text": "GLES:     3\n"
+  },
+  {
+    "type": "log",
+    "text": " EXT_clip_control EXT_color_buffer_float EXT_color_buffer_half_float EXT_conservative_depth EXT_depth_clamp EXT_disjoint_timer_query_webgl2 EXT_float_blend EXT_polygon_offset_clamp EXT_render_snorm EXT_texture_compression_bptc EXT_texture_compression_rgtc EXT_texture_filter_anisotropic EXT_texture_mirror_clamp_to_edge EXT_texture_norm16 KHR_parallel_shader_compile NV_shader_noperspective_interpolation OES_draw_buffers_indexed OES_sample_variables OES_shader_multisample_interpolation OES_texture_float_linear OVR_multiview2 WEBGL_blend_func_extended WEBGL_clip_cull_distance WEBGL_compressed_texture_s3tc WEBGL_compressed_texture_s3tc_srgb WEBGL_debug_renderer_info WEBGL_debug_shaders WEBGL_lose_context WEBGL_multi_draw WEBGL_polygon_mode WEBGL_provoking_vertex WEBGL_stencil_texturing GL_EXT_clip_control GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_conservative_depth GL_EXT_depth_clamp GL_EXT_disjoint_timer_query_webgl2 GL_EXT_float_blend GL_EXT_polygon_offset_clamp GL_EXT_render_snorm GL_EXT_\n"
+  },
+  {
+    "type": "log",
+    "text": "texture_compression_bptc GL_EXT_texture_compression_rgtc GL_EXT_texture_filter_anisotropic GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_KHR_parallel_shader_compile GL_NV_shader_noperspective_interpolation GL_OES_draw_buffers_indexed GL_OES_sample_variables GL_OES_shader_multisample_interpolation GL_OES_texture_float_linear GL_OVR_multiview2 GL_WEBGL_blend_func_extended GL_WEBGL_clip_cull_distance GL_WEBGL_compressed_texture_s3tc GL_WEBGL_compressed_texture_s3tc_srgb GL_WEBGL_debug_renderer_info GL_WEBGL_debug_shaders GL_WEBGL_lose_context GL_WEBGL_multi_draw GL_WEBGL_polygon_mode GL_WEBGL_provoking_vertex GL_WEBGL_stencil_texturing\n"
+  },
+  {
+    "type": "log",
+    "text": "OPENGL LOG: Creating OpenGL ES 3.0 graphics device ; Context level  <OpenGL ES 3.0> ; Context handle 1\n"
+  },
+  {
+    "type": "log",
+    "text": "ERROR: Shader "
+  },
+  {
+    "type": "log",
+    "text": "Hidden/Universal/HDRDebugView shader is not supported on this GPU (none of subshaders/fallbacks are suitable)\n"
+  },
+  {
+    "type": "log",
+    "text": "Input Manager initialize...\n"
+  },
+  {
+    "type": "log",
+    "text": "[PhysX] Initialized SinglethreadedTaskDispatcher.\n"
+  },
+  {
+    "type": "log",
+    "text": "UnloadTime: 2.599999 ms\n"
+  },
+  {
+    "type": "log",
+    "text": "URP 金属度/粗糙度贴图已接入：2048x2048\n"
+  },
+  {
+    "type": "log",
+    "text": "角色图集已接入：2048x2048\n"
+  },
+  {
+    "type": "log",
+    "text": "EGGBOY skin: shell 26344, leather 8729, visor 2743; gait True, antiClip True, bones 17\n"
+  },
+  {
+    "type": "log",
+    "text": "NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=22681 hull=36 x=-0.238..0.212 y=0.489..0.780\n"
+  },
+  {
+    "type": "log",
+    "text": "UI canvas 1418x802 screen 1418x802 scale 1\n"
+  },
+  {
+    "type": "warning",
+    "text": "Manual synchronization of Unity Application.persistentDataPath via JS_FileSystem_Sync() is deprecated and will be later removed in a future Unity version. The persistent data directory will be automatically synchronized instead on file modification. Pass config.autoSyncPersistentDataPath = true; to configuration in createUnityInstance() to opt in to the new behavior."
+  },
+  {
+    "type": "log",
+    "text": "LUX3D mode=offline library=14\n"
+  },
+  {
+    "type": "log",
+    "text": "Audio context resumed after 5.371 seconds."
+  }
+]

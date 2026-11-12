@@ -344,6 +344,7 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         if (restoreChase) chaseCam.enabled = false;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        MenuController.NoteScriptUnlock();
 
         EnsurePuzzleUI();
         if (noteCard != null) noteCard.gameObject.SetActive(true);

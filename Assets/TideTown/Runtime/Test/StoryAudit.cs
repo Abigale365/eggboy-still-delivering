@@ -255,7 +255,7 @@ public class StoryAudit : MonoBehaviour
 
         if (status == "passed")
         {
-            yield return WalkRoute(route, i12 + 1, i13 - 1);   // 从烤炉沿绕行点出院子（同上，避开集市摊）
+            yield return WalkRoute(route, i12 + 1, i13);   // 先到 13 号，再转向坡道，避免从上一点抄近路撞上集市护栏。
             if (walkFail == "") yield return WalkRoute(route, i13 + 1, i20);
             if (walkFail != "") { status = "blocked_walk_" + walkFail; error = walkFail; }
 

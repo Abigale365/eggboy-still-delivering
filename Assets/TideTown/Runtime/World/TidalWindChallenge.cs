@@ -35,6 +35,8 @@ public sealed class TidalWindChallenge : MonoBehaviour
     ParticleSystem streaks, trail;
     AudioSource windAudio;
     bool crouchedByWind;
+    ExprId expressionBeforeWind;
+    ExprId? windExpression;
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, GameState s)
     {
@@ -136,7 +138,7 @@ public sealed class TidalWindChallenge : MonoBehaviour
         cooldown = Random.Range(7f, 10f);
         EnsureFx();
         streaks.Play();
-        if (game != null) game.SetExpression(ExprId.nervous);
+        SetWindExpression(ExprId.nervous);
         ShadowAndChimeSystem.PlayProceduralChime(440f, 0.18f);
     }
 
@@ -162,7 +164,7 @@ public sealed class TidalWindChallenge : MonoBehaviour
             player.transform.position = next;
         }
         UpdateAudio(dt, 1f);
-        if (game != null && !brace && Imbalance > 0.55f) game.SetExpression(ExprId.scared);
+        if (!brace && Imbalance > 0.55f) SetWindExpression(ExprId.scared);
 
         if (Imbalance >= 1f) { Fail(); return; }
         if (gustTimer <= 0f)
@@ -224,8 +226,19 @@ public sealed class TidalWindChallenge : MonoBehaviour
     {
         warnTimer = 0f; gustTimer = 0f; Imbalance = 0f;
         SetWindCrouch(false);
+        if (windExpression.HasValue && game != null && player.pose?.expr == windExpression.Value)
+            game.SetExpression(expressionBeforeWind);
+        windExpression = null;
         if (streaks != null) streaks.Stop();
         if (!keepBoostFx && trail != null && boostTimer <= 0f) trail.Stop();
+    }
+
+    void SetWindExpression(ExprId expression)
+    {
+        if (game == null || player.pose == null) return;
+        if (player.pose.expr != windExpression) expressionBeforeWind = player.pose.expr;
+        windExpression = expression;
+        game.SetExpression(expression);
     }
 
     void SetWindCrouch(bool on)

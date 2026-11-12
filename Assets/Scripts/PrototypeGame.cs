@@ -171,7 +171,7 @@ public class PrototypeGame : MonoBehaviour
     void Update()
     {
         if (player == null || player.pose == null || chase == null) return;
-        if ((ui != null && ui.LetterOpen) || (townMap != null && townMap.IsOpen)) return;
+        if ((ui != null && (ui.LetterOpen || ui.Paused || ui.TitleShowing)) || (townMap != null && townMap.IsOpen) || MenuController.OverlayOpen) return;
         float dt = Mathf.Min(0.05f, Time.deltaTime);
         float f = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f) - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
         float s = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f) - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
@@ -241,7 +241,7 @@ public class PrototypeGame : MonoBehaviour
         if (face != null) face.Update(dt, Camera.main);
         bool moving = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)
             || Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow);
-        if (chase.enabled && (townMap == null || !townMap.IsOpen) && (ui == null || !ui.LetterOpen))
+        if (chase.enabled && (townMap == null || !townMap.IsOpen) && (ui == null || (!ui.LetterOpen && !ui.Paused && !ui.TitleShowing)) && !MenuController.OverlayOpen)
             chase.Tick(dt, player.camFocus, player.transform.eulerAngles.y * Mathf.Deg2Rad, moving && !frontView && !player.locked, Input.GetKey(KeyCode.LeftShift));
     }
 }

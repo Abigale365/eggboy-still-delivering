@@ -394,7 +394,7 @@ public class EggboyUI : MonoBehaviour
             ApplySensitivity(ChaseCamera.Sensitivity);
         }
         Time.timeScale = on ? 0f : 1f;
-        if (player != null) player.locked = on;
+        if (player != null) player.locked = on || LetterOpen || MenuController.OverlayOpen;
         if (on)
         {
             Cursor.lockState = CursorLockMode.None;

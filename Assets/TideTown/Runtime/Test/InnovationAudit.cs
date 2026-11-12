@@ -37,7 +37,7 @@ public sealed class InnovationAudit : MonoBehaviour
         Time.timeScale = 1f;
         string fatal = "";
         TidalWindChallenge.Suppress = true; // 只在测海风那一段放开
-        var steps = new IEnumerator[] { AuditWooden(), AuditWind(), AuditDog(), AuditPrint(), AuditShadowSound(), AuditHints(), AuditWordSlips(), AuditEcho(), AuditLux3DAndWish() };
+        var steps = new IEnumerator[] { AuditWooden(), AuditWind(), AuditDog(), AuditPrint(), AuditShadowSound(), AuditHints(), AuditWordSlips(), AuditEcho(), AuditLux3DAndWish(), AuditPauseGuard() };
         foreach (var s in steps)
         {
             // 一个方向出错不影响后面的方向
@@ -69,6 +69,64 @@ public sealed class InnovationAudit : MonoBehaviour
         Debug.Log("INNOVAUDIT status=" + (all ? "passed" : "failed"));
         yield return new WaitForSecondsRealtime(0.5f);
         Application.Quit();
+    }
+
+    // ---- 修复（2026-11-11）：解密弹窗打开时不会自动弹出暂停菜单 ----
+    // 旧物端详 / 木匣 / 心愿造物笺打开时，游戏自己会解锁鼠标。网页版把“鼠标锁定被解除”当成按了 Esc 就暂停，
+    // 暂停会隐藏 HUD、冻结时间，弹窗卡片和右侧 3D 旧物都看不到了。这里在 Windows 上打开网页版的同一套判断来测。
+    IEnumerator AuditPauseGuard()
+    {
+        var menu = FindObjectOfType<MenuController>();
+        Check("pause_guard_present", menu != null);
+        if (menu == null) yield break;
+        bool oldAuto = menu.AutoPauseOnLockLoss;
+        menu.AutoPauseOnLockLoss = true;
+        var ui = boot.ui;
+        var st = boot.state;
+
+        // 让前面方向留下的“弹窗刚关闭”宽限期先过去
+        if (AIAgentCalibrationDirector.IsOpen) AIAgentCalibrationDirector.DebugSetConsole(false);
+        yield return new WaitForSecondsRealtime(1.3f);
+        Check("pause_guard_idle_esc_pauses", menu.WouldTogglePause(true));
+        Check("pause_guard_idle_unexpected_unlock_pauses", menu.WouldAutoPause(true, false, true));
+        MenuController.NoteScriptUnlock();
+        Check("pause_guard_script_unlock_is_not_unexpected", !menu.WouldAutoPause(true, false, true));
+        yield return new WaitForSecondsRealtime(1.2f);
+        Check("pause_guard_unexpected_unlock_after_grace", menu.WouldAutoPause(true, false, true));
+
+        yield return GuardOverlay(menu, "inspect",
+            () => ObjectInspectModal.DebugOpen("slipper", "被咬过的拖鞋", "拖鞋上留着一道小小的牙印。", st, boot.player, ui, boot.gate) && ObjectInspectModal.DebugHasVisibleModel,
+            () => ObjectInspectModal.IsOpen, ObjectInspectModal.DebugClose);
+        yield return GuardOverlay(menu, "wooden",
+            () => WoodenMechanismPuzzleModal.DebugOpen("school_lock", st, null, boot.player, ui, boot.gate, null),
+            () => WoodenMechanismPuzzleModal.IsOpen, WoodenMechanismPuzzleModal.DebugClose);
+        yield return GuardOverlay(menu, "wish",
+            () => { AIAgentCalibrationDirector.DebugSetConsole(true); return AIAgentCalibrationDirector.IsOpen; },
+            () => AIAgentCalibrationDirector.IsOpen, () => AIAgentCalibrationDirector.DebugSetConsole(false));
+
+        menu.AutoPauseOnLockLoss = oldAuto;
+        if (ui.Paused) ui.SetPaused(false);
+        Time.timeScale = 1f;
+    }
+
+    // 打开一个解密弹窗：Esc 不暂停、意外解锁不暂停、没有被暂停；关闭后立刻按 Esc 也不暂停（同一下 Esc 关弹窗）；过了宽限期又能暂停
+    IEnumerator GuardOverlay(MenuController menu, string tag, System.Func<bool> open, System.Func<bool> isOpen, System.Action close)
+    {
+        var ui = boot.ui;
+        bool opened = open();
+        yield return new WaitForSecondsRealtime(0.4f);
+        Check("pause_guard_" + tag + "_opened", opened && isOpen());
+        // 打开时游戏自己解了鼠标：模拟这个解锁被网页版的检测看到（过了 1 秒的“自己解锁”宽限，只靠弹窗占用名单拦住）
+        yield return new WaitForSecondsRealtime(1.1f);
+        Check("pause_guard_" + tag + "_unlock_does_not_pause", !menu.WouldAutoPause(true, false, true) && !ui.Paused, "paused=" + ui.Paused);
+        Check("pause_guard_" + tag + "_esc_does_not_pause", !menu.WouldTogglePause(true));
+        close();
+        Check("pause_guard_" + tag + "_closed", !isOpen());
+        // 关弹窗的同一帧：谁先跑都不能让这一下 Esc 打开暂停
+        Check("pause_guard_" + tag + "_closing_esc_does_not_pause", !menu.WouldTogglePause(true) && !menu.WouldAutoPause(true, false, true));
+        yield return new WaitForSecondsRealtime(0.8f);
+        Check("pause_guard_" + tag + "_esc_works_again", menu.WouldTogglePause(true));
+        Check("pause_guard_" + tag + "_never_paused", !ui.Paused);
     }
 
     // ---- WP-03：卡住才给提示（面包店烤炉旁站着不动，四层依次触发；有进展就清零） ----
@@ -191,6 +249,32 @@ public sealed class InnovationAudit : MonoBehaviour
 
         st.carrying = ""; st.step = "P1_mailbox";
         boot.player.SetStoryCrouch(false);
+
+        // Let the pickup emote finish before starting the next independent gust.
+        float pickupDeadline = Time.realtimeSinceStartup + 4f;
+        while (boot.player.Emoting && Time.realtimeSinceStartup < pickupDeadline) yield return null;
+
+        // Mid-gust exit must release both the crouch and the expression that drives the arm pose.
+        var game = FindObjectOfType<PrototypeGame>();
+        if (game != null)
+        {
+            TidalWindChallenge.Suppress = false;
+            boot.player.idle = 0f;
+            game.SetExpression(ExprId.curious);
+            Teleport(mid);
+            yield return new WaitForSeconds(0.2f);
+            wind.DebugBrace = true;
+            wind.DebugStartGust();
+            yield return new WaitForSeconds(2.0f);
+            Check("wind_exit_setup", wind.Phase == "gust" && boot.player.IsStoryCrouched
+                && boot.player.pose.expr == ExprId.nervous);
+            Teleport(FindWalkableNear(stove, 1.5f, 4f));
+            yield return new WaitForSeconds(0.45f);
+            Check("wind_exit_restores_pose", wind.Phase == "calm" && !boot.player.IsStoryCrouched
+                && boot.player.pose.expr == ExprId.curious, "expr=" + boot.player.pose.expr);
+            wind.DebugBrace = false;
+            TidalWindChallenge.Suppress = true;
+        }
         yield return new WaitForSeconds(0.3f);
     }
 
@@ -346,7 +430,9 @@ public sealed class InnovationAudit : MonoBehaviour
         ps.DebugSelect("ruler");
         // 找一个拍下去能同时盖住缺口两端的姿势（真人就是这样慢慢调的）
         float yaw = Mathf.Atan2(ab.x, ab.z) * Mathf.Rad2Deg;
-        bool found = false; string tried = "";
+        bool found = false;
+        string tried = "";
+        float heldYaw = 0f, holdDistance = 0f, aimPitch = 0f;
         for (float hy = 0f; hy <= 90f && !found; hy += 90f)
             for (float hold = 0.35f; hold <= 1.1f && !found; hold += 0.05f)
                 for (float pitch = 5f; pitch <= 50f && !found; pitch += 1.5f)
@@ -356,12 +442,20 @@ public sealed class InnovationAudit : MonoBehaviour
                     var hb = Lux3DModelFit.WorldBounds(ps.DebugHeldModel);
                     Vector3 cp = Camera.main.transform.position;
                     var pb = new Bounds(cp + (hb.center - cp) * ps.AimScale, hb.size * ps.AimScale);
-                    pb.Expand(new Vector3(1.2f, 8f, 1.2f));
+                    pb.Expand(new Vector3(1.1f, 8f, 1.1f));
                     if (pb.Contains(new Vector3(a.x, pb.center.y, a.z)) && pb.Contains(new Vector3(b.x, pb.center.y, b.z)))
-                    { found = true; tried = $"heldYaw={hy} hold={hold:F2} pitch={pitch:F1} k={ps.AimScale:F1}"; }
+                    {
+                        found = true;
+                        heldYaw = hy;
+                        holdDistance = hold;
+                        aimPitch = pitch;
+                        tried = $"heldYaw={hy} hold={hold:F2} pitch={pitch:F1} k={ps.AimScale:F1}";
+                    }
                 }
         Check("print_gap_aim_found", found, tried);
         yield return SnapScreen("innov_print_gap_aim.png");
+        // Apply the selected aim again after the screenshot delay, before taking the actual print.
+        if (found) ps.DebugSetView(yaw, aimPitch, holdDistance, heldYaw);
         var bridge = ps.Shutter();
         ps.CloseViewfinder();
         yield return new WaitForSeconds(0.3f);
@@ -663,8 +757,7 @@ public sealed class InnovationAudit : MonoBehaviour
     // ---- WP-D：信纸揭字 + 拼字（面包店：湿柴点不着 → 拼出干木柴 → 点着） ----
     IEnumerator AuditWordSlips()
     {
-        string cacheDir = Path.Combine(Application.persistentDataPath, "lux3d");
-        if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, true);
+        Lux3DService.ClearInnovationAuditCache();
         var lux = Lux3DService.Ensure();
         lux.SetMode("mock");
         lux.OverrideSessionCap(50);
@@ -775,8 +868,7 @@ public sealed class InnovationAudit : MonoBehaviour
     IEnumerator AuditLux3DAndWish()
     {
         // 上一轮留下的生成缓存先清掉，否则同一句话会直接走缓存，测不到"生成中 → 替换"
-        string cacheDir = Path.Combine(Application.persistentDataPath, "lux3d");
-        if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, true);
+        Lux3DService.ClearInnovationAuditCache();
         var lux = Lux3DService.Ensure();
         lux.SetMode("mock");
         Check("lux_mock_mode", lux.Mode == "mock");

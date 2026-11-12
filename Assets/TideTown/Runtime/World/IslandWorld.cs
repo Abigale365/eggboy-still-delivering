@@ -22,15 +22,97 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
     public float waterLevel;
 
     public List<WalkPoly> walkPolys = new List<WalkPoly>();
+    public List<WalkPoly> lawnPolys = new List<WalkPoly>();
+    public WalkPoly beachPoly;
 
     readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
+    const float SpatialCell = 2.0f;
+    readonly Dictionary<long, List<EggboyCollider>> spatialBuckets = new Dictionary<long, List<EggboyCollider>>();
+    bool spatialDirty = true;
+    EggboyCollider endingDeskCollider;
 
     public IReadOnlyList<EggboyCollider> Colliders => colliders;
 
     // WP-08：水位由 WaterLevel 管，IslandWorld 只读它
     public float WaterY => WaterLevel.Main != null ? WaterLevel.Main.Y : waterLevel;
-    public void AddCollider(EggboyCollider c) { if (c != null && !colliders.Contains(c)) colliders.Add(c); }
-    public void RemoveCollider(EggboyCollider c) { if (c != null) colliders.Remove(c); }
+    public void AddCollider(EggboyCollider c)
+    {
+        if (c != null && !colliders.Contains(c))
+        {
+            colliders.Add(c);
+            spatialDirty = true;
+        }
+    }
+    public void RemoveCollider(EggboyCollider c)
+    {
+        if (c != null && colliders.Remove(c))
+            spatialDirty = true;
+    }
+
+    public void SyncEndingDeskCollider()
+    {
+        if (endingDesk == null) return;
+        if (endingDesk.activeInHierarchy)
+        {
+            if (endingDeskCollider == null)
+            {
+                var p = endingDesk.transform.position;
+                endingDeskCollider = new EggboyCollider
+                {
+                    x = p.x,
+                    z = p.z,
+                    r = 0.20f,
+                    top = p.y + 0.76f
+                };
+            }
+            AddCollider(endingDeskCollider);
+        }
+        else if (endingDeskCollider != null)
+        {
+            RemoveCollider(endingDeskCollider);
+        }
+    }
+
+    void RebuildSpatialGrid()
+    {
+        spatialDirty = false;
+        spatialBuckets.Clear();
+        const float Margin = 0.60f; // 大于 EggboyPlayer.Radius (0.42m)，保证单格查询即可覆盖全部可能接触的碰撞体
+        for (int i = 0; i < colliders.Count; i++)
+        {
+            var c = colliders[i];
+            float ex = (c.hw ?? c.r ?? 0.5f) + Margin;
+            float ez = (c.hd ?? c.r ?? 0.5f) + Margin;
+            int x0 = Mathf.FloorToInt((c.x - ex) / SpatialCell);
+            int x1 = Mathf.FloorToInt((c.x + ex) / SpatialCell);
+            int z0 = Mathf.FloorToInt((c.z - ez) / SpatialCell);
+            int z1 = Mathf.FloorToInt((c.z + ez) / SpatialCell);
+            for (int gz = z0; gz <= z1; gz++)
+            {
+                for (int gx = x0; gx <= x1; gx++)
+                {
+                    long key = ((long)gx << 32) | (uint)gz;
+                    if (!spatialBuckets.TryGetValue(key, out var list))
+                    {
+                        list = new List<EggboyCollider>(8);
+                        spatialBuckets[key] = list;
+                    }
+                    list.Add(c);
+                }
+            }
+        }
+    }
+
+    public void QueryColliders(float x, float z, List<EggboyCollider> results)
+    {
+        results.Clear();
+        if (spatialDirty) RebuildSpatialGrid();
+        int gx = Mathf.FloorToInt(x / SpatialCell);
+        int gz = Mathf.FloorToInt(z / SpatialCell);
+        long key = ((long)gx << 32) | (uint)gz;
+        if (spatialBuckets.TryGetValue(key, out var list))
+            results.AddRange(list);
+    }
     public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
     public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
 
@@ -117,11 +199,15 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
             var verts = mesh.vertices;
             for (int i = 0; i < verts.Length; i++)
             {
-                // 坡道与 y=3.02 石板主街平齐的起止端微压到石板层下方，彻底消除路面交界处 Z-fighting 穿模
+                // 坡道与各层台地（3.0m 主街、5.0m 灯塔台地、5.5m 住宅石板台地、6.5m 山顶邮局台地）交界处微压，彻底消除路面接缝 Z-fighting
                 if (verts[i].y >= 2.95f && verts[i].y <= 3.05f)
-                {
                     verts[i].y = 3.010f;
-                }
+                else if (verts[i].y >= 4.96f && verts[i].y <= 5.05f)
+                    verts[i].y = 4.992f;
+                else if (verts[i].y >= 5.46f && verts[i].y <= 5.55f)
+                    verts[i].y = 5.510f;
+                else if (verts[i].y >= 6.46f && verts[i].y <= 6.55f)
+                    verts[i].y = 6.492f;
             }
             mesh.vertices = verts;
             mesh.RecalculateBounds();
@@ -167,19 +253,66 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
         foreach (var set in FindObjectsOfType<TownObstacleSet>())
             for (int i = 0; i < set.x.Length; i++)
                 colliders.Add(new EggboyCollider { x = set.x[i], z = set.z[i], r = set.r[i], top = set.top[i] });
+        spatialDirty = true;
     }
 
-    public bool Walkable(float x, float z)
+    public bool Walkable(float x, float z) => walkPolys.Count == 0 || TryWalkableGround(x, z, out _);
+
+    bool TryWalkableGround(float x, float z, out float ground)
+    {
+        ground = 0f;
+        bool road = InWalkArea(x, z);
+        bool lawn = !road && InLawnArea(x, z);
+        bool sand = beachPoly != null && Contains(beachPoly.points, x, z);
+        if (!road && !lawn && !sand) return false;
+        ground = GroundAt(x, z);
+        if (ground < WaterY - 0.05f) return false;
+        return sand && Mathf.Abs(ground - beachPoly.y) <= 0.12f || (road ? ground > 0.22f : lawn && ground >= 2.5f);
+    }
+
+    public bool IsBeachSurface(float x, float z, float height) =>
+        beachPoly != null && Mathf.Abs(height - beachPoly.y) <= 0.12f && Contains(beachPoly.points, x, z);
+
+    public bool CanTraverse(Vector3 from, float x, float z, bool jumping)
     {
         if (walkPolys.Count == 0) return true;
-        if (!InWalkArea(x, z)) return false;
-        // 工程书 5.4：地面低于水位 0.05 就走进水里了
-        return GroundAt(x, z) >= WaterY - 0.05f;
+        if (!TryWalkableGround(x, z, out float ground)) return jumping && beachPoly != null && from.y >= beachPoly.y + 0.55f && IsDryBeachApproach(x, z);
+        if (beachPoly == null) return true;
+        // 跳下沙滩才进入低层。沙滩上的人不能从崖壁底部穿进上层地形。
+        bool onBeach = from.y < beachPoly.y + 0.65f && Contains(beachPoly.points, from.x, from.z);
+        if (IsBeachSurface(x, z, ground)) return onBeach || jumping;
+        return !onBeach || ground <= from.y + 0.30f;
+    }
+
+    bool IsDryBeachApproach(float x, float z)
+    {
+        if (beachPoly?.points == null || beachPoly.points.Length < 3 || WaterY > 0.05f) return false;
+        // 北侧坡道与沙滩之间有一条低矮的干岸带，允许角色在空中越过这段间隙。
+        const float MaxGap = 0.90f;
+        var point = new Vector2(x, z);
+        var vertices = beachPoly.points;
+        for (int i = 0, j = vertices.Length - 1; i < vertices.Length; j = i++)
+        {
+            var edge = vertices[i] - vertices[j];
+            float t = Mathf.Clamp01(Vector2.Dot(point - vertices[j], edge) / Mathf.Max(edge.sqrMagnitude, 0.0001f));
+            if ((point - vertices[j] - t * edge).sqrMagnitude >= MaxGap * MaxGap) continue;
+            float ground = GroundAt(x, z);
+            return ground > 0.05f && ground <= beachPoly.y + 0.10f;
+        }
+        return false;
     }
 
     public bool InWalkArea(float x, float z)
     {
         foreach (var p in walkPolys)
+            if (Contains(p.points, x, z)) return true;
+        return false;
+    }
+
+    public bool InLawnArea(float x, float z)
+    {
+        if (lawnPolys == null) return false;
+        foreach (var p in lawnPolys)
             if (Contains(p.points, x, z)) return true;
         return false;
     }

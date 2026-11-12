@@ -186,6 +186,23 @@ public sealed class ObjectInspectModal : MonoBehaviour
 
     public static bool IsOpen => instance != null && instance.active;
 
+    // 审计用：绕过 ui.inputClose 检查，打开 / 关闭旧物端详（验证打开时不会自动弹出暂停菜单）
+    public static bool DebugOpen(string itemId, string label, string surfaceText, GameState state, EggboyPlayer player, EggboyUI ui, ControlGate gate)
+    {
+        if (instance == null)
+        {
+            var host = new GameObject("ObjectInspectModal");
+            DontDestroyOnLoad(host);
+            instance = host.AddComponent<ObjectInspectModal>();
+        }
+        instance.ShowModal(itemId, label, surfaceText, state, null, player, ui, gate);
+        return instance.active;
+    }
+    public static void DebugClose() { if (IsOpen) instance.CloseModal(); }
+    public static bool DebugHasVisibleModel =>
+        IsOpen && instance.inspectRig != null && instance.inspectRig.layer == OverlayRender.Layer
+        && instance.inspectRig.GetComponentInChildren<Renderer>() != null;
+
     public static void ExternalRotate(float deltaYaw, float deltaPitch)
     {
         if (!IsOpen) return;
@@ -271,9 +288,13 @@ public sealed class ObjectInspectModal : MonoBehaviour
     bool detailUnlocked;
     float pulseTimer;
     Vector2 mouseDownPos;
+    Vector2 lastMousePos;
     bool isDraggingRotate;
+    bool overlayHeld;
 
     RectTransform inspectCard;
+    Button enableMicrophoneButton;
+    bool microphoneRequested;
     Text headerTitleText, codeSubText, surfaceBodyText, progressTitleText, guideSubText, hiddenTitleText, hiddenBodyText, clueBadgeText;
     readonly Text[] pinBtnTexts = new Text[3];
 
@@ -322,6 +343,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
         sweetSpotExposed = detailUnlocked;
         dustCleared = detailUnlocked;
         rubProgress = 0f;
+        microphoneRequested = false;
         pinStepIndex = detailUnlocked ? 3 : 0;
         for (int i = 0; i < 3; i++) pinPressed[i] = detailUnlocked;
         pinFeedbackMsg = "";
@@ -335,6 +357,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        MenuController.NoteScriptUnlock();
 
         EnsureInspectUI();
         if (inspectCard != null) inspectCard.gameObject.SetActive(true);
@@ -401,8 +424,21 @@ public sealed class ObjectInspectModal : MonoBehaviour
             inspectCard, "", 14, TideTownStyleUI.AmberAccent, TextAnchor.MiddleLeft,
             new Vector2(0f, -152f), new Vector2(458f, 26f), true);
 
+        enableMicrophoneButton = TideTownStyleUI.CreateWarmButton(
+            inspectCard, "启用麦克风", new Vector2(0f, -153f), new Vector2(172f, 32f), false, EnableMicrophone);
+
         TideTownStyleUI.CreateWarmButton(
             inspectCard, "放下旧物（空格 / Esc）", new Vector2(0f, -202f), new Vector2(260f, 38f), true, CloseModal);
+    }
+
+    void EnableMicrophone()
+    {
+        if (!active || !sweetSpotExposed || dustCleared || detailUnlocked || microphoneRequested) return;
+        var hub = HardwareAndSensorHub.Instance;
+        if (hub == null) return;
+        microphoneRequested = true;
+        hub.EnableInspectMicrophone();
+        RefreshInspectUI();
     }
 
     void RefreshInspectUI()
@@ -411,6 +447,8 @@ public sealed class ObjectInspectModal : MonoBehaviour
         headerTitleText.text = "旧物端详 · " + currentLabel;
         codeSubText.text = currentMeta.code;
         surfaceBodyText.text = currentSurface;
+        enableMicrophoneButton.gameObject.SetActive(sweetSpotExposed && !dustCleared && !detailUnlocked && !microphoneRequested
+            && HardwareAndSensorHub.Instance != null);
 
         if (detailUnlocked)
         {
@@ -514,6 +552,23 @@ public sealed class ObjectInspectModal : MonoBehaviour
 
         modelPivot.localRotation = Quaternion.Euler(currentEuler);
         UpdatePinVisuals();
+        SetupOverlayCamera(cam);
+    }
+
+    // 右侧 3D 旧物特写通过 OverlayRender 叠加相机绘制在最上层，避免室内墙壁或柜台遮挡模型与暗扣
+    void SetupOverlayCamera(Camera cam)
+    {
+        OverlayRender.SetLayerRecursive(inspectRig, OverlayRender.Layer);
+        OverlayRender.LimitLights(inspectRig);
+        OverlayRender.Acquire(cam);
+        overlayHeld = true;
+    }
+
+    void TeardownOverlayCamera()
+    {
+        if (!overlayHeld) return;
+        overlayHeld = false;
+        OverlayRender.Release();
     }
 
     void Build3DInteractivePinsOnModel()
@@ -616,6 +671,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
     {
         if (dustCleared) return;
         dustCleared = true;
+        HardwareAndSensorHub.Instance?.StopInspectMicrophone();
         ShadowAndChimeSystem.PlayProceduralChime(698.46f, 0.22f);
         pinFeedbackMsg = byBreath
             ? "呼——你吹散了覆盖在背面的海盐霜尘，露出了底下的三枚黄铜暗扣！"
@@ -694,7 +750,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
         if (cam == null || pinClusterRoot == null || !pinClusterRoot.gameObject.activeSelf) return false;
 
         Ray ray = cam.ScreenPointToRay(screenPos);
-        var hits = Physics.RaycastAll(ray, 8f);
+        var hits = Physics.RaycastAll(ray, 8f, ~0, QueryTriggerInteraction.Collide);
         for (int i = 0; i < hits.Length; i++)
         {
             var col = hits[i].collider;
@@ -729,16 +785,28 @@ public sealed class ObjectInspectModal : MonoBehaviour
             }
         }
 
+        if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1))
+        {
+            lastMousePos = Input.mousePosition;
+        }
         if (Input.GetMouseButtonDown(0))
         {
             mouseDownPos = Input.mousePosition;
             isDraggingRotate = false;
         }
 
+        Vector2 curMouse = Input.mousePosition;
+        Vector2 pixDelta = curMouse - lastMousePos;
+        lastMousePos = curMouse;
+        float mx = Input.GetAxis("Mouse X");
+        float my = Input.GetAxis("Mouse Y");
+        if (Mathf.Abs(mx) < 0.001f && Mathf.Abs(pixDelta.x) > 0.01f) mx = pixDelta.x * 0.085f;
+        if (Mathf.Abs(my) < 0.001f && Mathf.Abs(pixDelta.y) > 0.01f) my = pixDelta.y * 0.085f;
+
         float rotX = 0f, rotY = 0f;
         if (Input.GetMouseButton(0))
         {
-            if (Vector2.Distance(Input.mousePosition, mouseDownPos) > 6f)
+            if (Vector2.Distance(curMouse, mouseDownPos) > 6f)
                 isDraggingRotate = true;
 
             if (isDraggingRotate)
@@ -746,20 +814,20 @@ public sealed class ObjectInspectModal : MonoBehaviour
                 if (sweetSpotExposed && !dustCleared)
                 {
                     // 在背面覆霜状态下来回拖动鼠标相当于擦拭盐霜
-                    rubProgress += (Mathf.Abs(Input.GetAxis("Mouse X")) + Mathf.Abs(Input.GetAxis("Mouse Y"))) * 0.18f;
+                    rubProgress += (Mathf.Abs(mx) + Mathf.Abs(my)) * 0.18f;
                     if (rubProgress >= 1f) ClearSaltDust(false);
                 }
                 else
                 {
-                    rotY = -Input.GetAxis("Mouse X") * 5.2f;
-                    rotX = Input.GetAxis("Mouse Y") * 5.2f;
+                    rotY = -mx * 5.2f;
+                    rotX = my * 5.2f;
                 }
             }
         }
         else if (Input.GetMouseButton(1))
         {
-            rotY = -Input.GetAxis("Mouse X") * 5.2f;
-            rotX = Input.GetAxis("Mouse Y") * 5.2f;
+            rotY = -mx * 5.2f;
+            rotX = my * 5.2f;
         }
 
         if (Input.GetMouseButtonUp(0) && !isDraggingRotate)
@@ -878,6 +946,8 @@ public sealed class ObjectInspectModal : MonoBehaviour
     {
         if (!active) return;
         active = false;
+        HardwareAndSensorHub.Instance?.StopInspectMicrophone();
+        TeardownOverlayCamera();
         if (inspectRig != null) Destroy(inspectRig);
         inspectRig = null;
         modelPivot = null;

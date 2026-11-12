@@ -352,6 +352,7 @@ public static partial class IslandBuilder
 
     static Mesh RoadMesh(RoadDef r)
     {
+        if (HasJoinedSlope(r.id)) return JoinedSlopeMesh(r, false);
         var verts = new List<Vector3>();
         var uv = new List<Vector2>();
         var idx = new List<int>();
@@ -400,6 +401,7 @@ public static partial class IslandBuilder
     // 碰撞专用：路面顶面 + 路缘坡 + 人行道（都可以站人），不含外侧裙边
     static Mesh RoadTopMesh(RoadDef r)
     {
+        if (HasJoinedSlope(r.id)) return JoinedSlopeMesh(r, true);
         var verts = new List<Vector3>();
         var uv = new List<Vector2>();
         var idx = new List<int>();
@@ -966,7 +968,7 @@ public static partial class IslandBuilder
     {
         bool tower = b.instance == "B4_lighthouse";
         string id = b.instance.Split('_')[0];
-        string prefabPath = id == "B6" || id == "B7" ? BuildingPrefabPath(b.instance) : SourceModelPath(id);
+        string prefabPath = BuildingPrefabPath(b.instance) ?? SourceModelPath(id);
         var prefab = prefabPath != null ? AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) : null;
         if (prefab == null) return default;
 
@@ -1006,8 +1008,36 @@ public static partial class IslandBuilder
             float sy = (h + 0.16f) / Mathf.Max(0.01f, deck);
             visual.transform.localScale = Vector3.Scale(visual.transform.localScale, new Vector3(s, sy, s));
             lighthouseLantern = rends.Find(r => r.name == "Lantern chamber");
+            // 将灯塔的裸 glTF 材质升级为 Art/Materials/B4_灯塔_分享包版 的 URP PBR 材质
+            foreach (var r in rends)
+            {
+                var sharedMats = r.sharedMaterials;
+                for (int m = 0; m < sharedMats.Length; m++)
+                {
+                    if (sharedMats[m] == null) continue;
+                    string matName = sharedMats[m].name.Replace(" (Instance)", "");
+                    string artMatPath = $"{ArtRoot}/Materials/B4_灯塔_分享包版/{matName}_0.mat";
+                    var artMat = AssetDatabase.LoadAssetAtPath<Material>(artMatPath);
+                    if (artMat != null) sharedMats[m] = artMat;
+                }
+                r.sharedMaterials = sharedMats;
+            }
         }
         else visual.transform.localScale *= s;
+
+        if (id == "B3")
+        {
+            var b3Mat = AssetDatabase.LoadAssetAtPath<Material>($"{ArtRoot}/Materials/B3_小学校舍_精修版/Material_0_0.mat");
+            if (b3Mat != null)
+            {
+                foreach (var r in rends)
+                {
+                    var sharedMats = r.sharedMaterials;
+                    for (int m = 0; m < sharedMats.Length; m++) sharedMats[m] = b3Mat;
+                    r.sharedMaterials = sharedMats;
+                }
+            }
+        }
 
         vb = rends[0].bounds;
         foreach (var r in rends) vb.Encapsulate(r.bounds);
@@ -1032,8 +1062,8 @@ public static partial class IslandBuilder
         {
             case "B1_post_office": return ArtRoot + "/Buildings/B1_邮局_分享包版.prefab";
             case "B2_bakery": return ArtRoot + "/Buildings/B2_面包店_分享包版.prefab";
-            case "B3_school": return ArtRoot + "/Buildings/B3_小学校舍_精修版.prefab";
-            case "B4_lighthouse": return ArtRoot + "/Buildings/B4_灯塔_分享包版.prefab";
+            case "B3_school": return null; // 使用 SourceGLB 的 01 原版高精度模型
+            case "B4_lighthouse": return null; // 保持 GLB 层次供 Balcony slab/Lantern chamber 挂接
             case "B5_boathouse": return ArtRoot + "/Buildings/B5_船棚_分享包版.prefab";
             default:
                 // 2026-11-07 新地图：住宅和集市房子都是 B6/B7 反复用，按前缀取
@@ -1158,6 +1188,16 @@ public static partial class IslandBuilder
                 for (int i = 0; i < a.x.Length; i++) poly.Add(new Vector2(a.x[i], a.z[i]));
                 world.walkPolys.Add(new WalkPoly { id = a.id, y = a.y, points = poly.ToArray() });
             }
+        world.lawnPolys = new List<WalkPoly>();
+        if (layout.tiers != null)
+            foreach (var t in layout.tiers)
+            {
+                if (t.id != "main" && t.id != "houses") continue;
+                var poly = new List<Vector2>();
+                for (int i = 0; i < t.x.Length; i++) poly.Add(new Vector2(t.x[i], t.z[i]));
+                world.lawnPolys.Add(new WalkPoly { id = t.id, y = t.y, points = poly.ToArray() });
+            }
+        SetBeachPolygon(layout, world);
         // P_xx 是预览图标签，可能贴在建筑上；出生点用 route.json 的第一站（站位）
         var spawnGO = new GameObject("SpawnPoint");
         spawnGO.transform.SetParent(go.transform, false);

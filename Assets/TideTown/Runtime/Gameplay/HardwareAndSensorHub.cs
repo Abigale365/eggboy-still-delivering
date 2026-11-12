@@ -1,7 +1,7 @@
 // 单手柄 + 键鼠双轨无缝兼容 + 麦克风吹气 + 摄像头 AR 手势中枢（HardwareAndSensorHub）。
 // 严格遵循「全设备无死角兼容 · 单手柄不接开发板」设计：
 //   1. 单游戏手柄（1P 手柄）与键鼠全程无缝共存，拔掉手柄仅用键鼠、或全程只用 1 个手柄均可 100% 丝滑通关；
-//   2. 麦克风实时吹气检测（用于拂去 3D 旧物背面海盐霜、给面包房烤炉鼓风助燃、稳住海风重心），无麦克风时随时可用鼠标擦拭 / F 键 / 手柄 RB 键替代；
+//   2. 旧物特写中主动启用麦克风吹散盐霜，无麦克风时随时可用鼠标擦拭 / F 键 / 手柄 RB 键替代；
 //   3. 摄像头 AR 手势感应（内置原生 WebCamTexture 动作捕捉 + UDP 18888 手势扩展），用于灯塔顶层挥手闪灯呼唤山那边的人；无摄像头时用空格 / E 键 / 手柄按键无缝替代。
 using System;
 using System.Collections.Concurrent;
@@ -69,10 +69,7 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
     // 麦克风实时吹气状态
     public bool MicActive { get; private set; }
     public float MicLoudness { get; private set; }
-    AudioClip micClip;
-    string micDeviceName;
-    readonly float[] micSamples = new float[512];
-    float blowHoldTimer;
+    IMicLevel inspectMicrophone;
 
     // 外部稳定加成（供 TidalWindChallenge 读取）
     public float ExternalWindStabilizeBoost { get; private set; }
@@ -92,30 +89,22 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         state = s;
         interactionSvc = FindObjectOfType<InteractionService>();
 
-        StartMicrophoneCapture();
         StartBackgroundUdpThread();
     }
 
-    void StartMicrophoneCapture()
+    public void EnableInspectMicrophone()
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        // 网页版没有 Unity 的 Microphone 类（编译都过不了）：吹气用键鼠 / 手柄替代（工程书 WP-04 的 jslib 还没做）
+        if (!ObjectInspectModal.IsOpen || inspectMicrophone != null) return;
+        inspectMicrophone = new PlatformMicLevel();
+        inspectMicrophone.Start();
+    }
+
+    public void StopInspectMicrophone()
+    {
+        inspectMicrophone?.Stop();
+        inspectMicrophone = null;
         MicActive = false;
-#else
-        try
-        {
-            if (Microphone.devices != null && Microphone.devices.Length > 0)
-            {
-                micDeviceName = Microphone.devices[0];
-                micClip = Microphone.Start(micDeviceName, true, 1, 16000);
-                MicActive = micClip != null;
-            }
-        }
-        catch (Exception)
-        {
-            MicActive = false;
-        }
-#endif
+        MicLoudness = 0f;
     }
 
     public bool ToggleBuiltInWebcam()
@@ -194,6 +183,7 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
 
     void OnDestroy()
     {
+        StopInspectMicrophone();
         running = false;
         try { udpListener?.Close(); } catch (Exception) { }
         try { if (webCamTex != null && webCamTex.isPlaying) webCamTex.Stop(); } catch (Exception) { }
@@ -225,8 +215,9 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         // 2. 轮询单游戏手柄（1P 手柄与键鼠无缝双轨共存）
         PollSingleGamepad(dt);
 
-        // 3. 实时分析麦克风吹气声压（以及无麦克风时的 F 键 / 手柄 RB 吹气平替）
-        AnalyzeMicrophoneBlow(dt);
+        float rms = inspectMicrophone?.ReadRms() ?? -1f;
+        MicActive = rms >= 0f;
+        MicLoudness = MicActive ? Mathf.Clamp01(rms * 14f) : 0f;
     }
 
     void UpdateBuiltInWebcamMotion(float dt)
@@ -408,7 +399,7 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         }
         if ((down1 & 32u) != 0)
         {
-            TriggerBlowEffect(false);
+            TriggerButtonBlowEffect();
         }
     }
 
@@ -438,50 +429,11 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
 #endif
     }
 
-    void AnalyzeMicrophoneBlow(float dt)
-    {
-        // （v3 在大世界里按 F 也算吹气；F 现在是指挥小黑，风箱用烤炉旁的 E）
-        if (!MicActive || micClip == null) return;
-#if UNITY_WEBGL && !UNITY_EDITOR
-        int pos = -1;
-#else
-        int pos = Microphone.GetPosition(micDeviceName) - micSamples.Length;
-#endif
-        if (pos < 0) return;
-
-        micClip.GetData(micSamples, pos);
-
-        float sumSq = 0f;
-        for (int i = 0; i < micSamples.Length; i++)
-        {
-            float s = micSamples[i];
-            sumSq += s * s;
-        }
-
-        float rms = Mathf.Sqrt(sumSq / micSamples.Length);
-        MicLoudness = Mathf.Clamp01(rms * 14f);
-
-        if (MicLoudness > 0.16f)
-        {
-            ExternalWindStabilizeBoost = 1f;
-            blowHoldTimer += dt;
-            if (blowHoldTimer >= 0.75f)
-            {
-                blowHoldTimer = 0f;
-                TriggerBlowEffect(true);
-            }
-        }
-        else
-        {
-            blowHoldTimer = Mathf.Max(0f, blowHoldTimer - dt * 0.5f);
-        }
-    }
-
-    void TriggerBlowEffect(bool byMic)
+    void TriggerButtonBlowEffect()
     {
         if (ObjectInspectModal.IsOpen)
         {
-            ObjectInspectModal.ExternalClearDust(byMic);
+            ObjectInspectModal.ExternalClearDust(false);
             return;
         }
 

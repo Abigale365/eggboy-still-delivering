@@ -1,0 +1,20 @@
+BUGREVIEW wind zone=True start=warn expr=nervous
+BUGREVIEW during=gust expr=nervous
+BUGREVIEW exit=calm expr=nervous crouched=False armLDelta=47.09898 armRDelta=132.7497
+ 
+NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=33923 hull=50 x=-0.238..0.212 y=0.489..0.780
+BUGREVIEW submesh starts shell=0 leather=28590 visor=37130
+BUGREVIEW wind zone=True start=warn expr=nervous
+BUGREVIEW during=gust expr=nervous
+BUGREVIEW exit=calm expr=happy crouched=False armLDelta=0 armRDelta=0
+SLOPEWINCH (10.031, 2.153, -13.430)
+SLOPEWALK mountain reverse=False reached=True air=0/576 maxStep=0.013 steepest=0.38 pos=(-27.24, 6.53, 15.14)
+SLOPEWALK mountain reverse=True reached=True air=0/578 maxStep=0.013 steepest=0.38 pos=(-30.93, 3.04, -0.80)
+SLOPEWALK to_lighthouse reverse=False reached=True air=0/378 maxStep=0.013 steepest=0.39 pos=(29.96, 5.03, 8.34)
+SLOPEWALK to_lighthouse reverse=True reached=True air=0/379 maxStep=0.012 steepest=0.37 pos=(26.61, 3.05, -2.53)
+SLOPEWALK to_shed reverse=False reached=True air=0/315 maxStep=0.021 steepest=0.62 pos=(15.01, 1.43, -14.74)
+SLOPEWALK to_shed reverse=True reached=True air=0/315 maxStep=0.021 steepest=0.62 pos=(7.14, 3.03, -11.14)
+SLOPEWALK branch_n reverse=False reached=True air=0/158 maxStep=0.018 steepest=0.55 pos=(-1.53, 5.52, 15.61)
+SLOPEWALK branch_n reverse=True reached=True air=0/158 maxStep=0.018 steepest=0.55 pos=(-1.96, 3.28, 10.90)
+SLOPEWALK branch_n_plaza_crossing reverse=False reached=True air=0/118 maxStep=0.010 steepest=0.30 pos=(2.43, 3.02, 11.06)
+SLOPEWALK branch_n_plaza_crossing reverse=True reached=True air=0/118 maxStep=0.010 steepest=0.30 pos=(-1.20, 3.22, 10.86)

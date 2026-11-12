@@ -41,7 +41,15 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
     public static void ToggleConsole()
     {
         if (instance == null) return;
+        if (!instance.consoleOpen && instance.OtherOverlayOpen()) return;
         instance.SetConsoleOpen(!instance.consoleOpen);
+    }
+
+    // 暂停、标题、读信、旧物端详、木匣、取景框开着时，心愿造物笺不叠上去（会抢鼠标、盖住别的弹窗）
+    bool OtherOverlayOpen()
+    {
+        return ui != null && (ui.Paused || ui.TitleShowing || ui.LetterOpen
+            || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || AvantGardeGameplayHub.AnyModalOpen);
     }
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
@@ -65,9 +73,13 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            MenuController.NoteScriptUnlock();
             RefreshAchievementGallery();
         }
     }
+
+    // 审计用：不按 V 也能开关心愿造物笺（验证打开时不会自动弹出暂停菜单）
+    public static void DebugSetConsole(bool open) { if (instance != null) instance.SetConsoleOpen(open); }
 
     void EnsureConsoleUI()
     {
@@ -435,9 +447,14 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         if (ui == null || !ui.inputClose) return;
 
         bool typing = promptInput != null && promptInput.isFocused;
-        if (!typing && Input.GetKeyDown(KeyCode.V))
+        // V 开关心愿造物笺（笺已经开着时 V 随时能关）。Esc 也能关：Esc 在笺开着时不会触发暂停，不关的话没有别的办法用键盘退出
+        if (consoleOpen && Input.GetKeyDown(KeyCode.Escape))
         {
-            SetConsoleOpen(!consoleOpen);
+            SetConsoleOpen(false);
+        }
+        else if (!typing && Input.GetKeyDown(KeyCode.V))
+        {
+            if (consoleOpen || !OtherOverlayOpen()) SetConsoleOpen(!consoleOpen);
         }
 
         float dt = Time.deltaTime;
@@ -461,7 +478,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
                 : "当前使用键鼠模式 (随时插入任意 1 个手柄即可无缝切换)";
             string micStr = hub.MicActive
                 ? $"已就绪 (实时声压 {Mathf.RoundToInt(hub.MicLoudness * 100f)}% · 无麦时可用 F 键/鼠标擦拭/手柄 RB 平替)"
-                : "未接麦克风 (已自动启用鼠标擦拭 / F 键 / 手柄 RB 无缝平替)";
+                : "待启用 (旧物特写中可开启，也可用鼠标擦拭 / F 键 / 手柄 RB)";
             string camStr = hub.CamOpen
                 ? $"已开启 (挥手速度 {hub.HandWaveSpeed:F2} · 可在灯塔顶对着镜头挥手闪灯)"
                 : "待机中 (可点下方按钮开启摄像头挥手，或直接用空格/E/手柄按键)";

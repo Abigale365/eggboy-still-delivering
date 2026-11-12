@@ -44,12 +44,17 @@ public sealed class SafePoints : MonoBehaviour
         // 以前按“每帧挪动 < 2 cm”判断，帧率一高正常走路每帧也不到 2 cm（60 帧走路约 1.1 cm），
         // 结果走着走着每 3 秒被传送一次。改成按累计位移判断，和帧率无关。（2026-11-07）
         float speed = new Vector2(player.vel.x, player.vel.z).magnitude;
-        bool trying = !player.locked && speed > stuckSpeed;
+        bool onBeach = world != null && player.grounded && world.IsBeachSurface(p.x, p.z, p.y);
+        bool trying = !player.locked && (onBeach ? player.TryingToMove : speed > stuckSpeed);
         if (!trying || stuck <= 0f) { last = p; stuck = trying ? Time.deltaTime : 0f; }
         else if (new Vector2(p.x - last.x, p.z - last.z).magnitude > stuckRadius) { last = p; stuck = Time.deltaTime; }
         else stuck += Time.deltaTime;
 
-        if (stuck >= stuckSeconds) { Rescue("stuck"); return; }
+        if (stuck >= stuckSeconds)
+        {
+            Rescue(onBeach ? "beach" : "stuck");
+            return;
+        }
 
         // 掉层：从路边掉到路面下方，人还能走动但回不去（known-issues #14）
         Vector3 back = p;
@@ -86,13 +91,16 @@ public sealed class SafePoints : MonoBehaviour
     public bool FellBelowRoute(Vector3 p, out Vector3 back)
     {
         back = p;
-        if (world == null) return false;
+        if (world == null || world.IsBeachSurface(p.x, p.z, p.y)) return false;
         if (routePts == null) LoadRoute();
         if (routePts.Length < 2) return false;
 
         // 3：落在别的可走层上就不管
         foreach (var poly in world.walkPolys)
             if (Mathf.Abs(poly.y - p.y) < 0.6f && InPoly(poly.points, p.x, p.z)) return false;
+        if (world.lawnPolys != null)
+            foreach (var poly in world.lawnPolys)
+                if (Mathf.Abs(poly.y - p.y) < 0.6f && InPoly(poly.points, p.x, p.z)) return false;
 
         var me = new Vector2(p.x, p.z);
         bool above = false;

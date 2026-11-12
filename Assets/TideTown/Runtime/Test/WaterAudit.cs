@@ -324,7 +324,8 @@ public class WaterAudit : MonoBehaviour
                     {
                         var q = c + side * s;
                         float g = world.GroundAt(q.x, q.y, roadY - 0.6f);
-                        if (g < 0.2f || g < water.Y - 0.05f || roadY - g < 0.6f || roadY - g > 2.2f) continue;
+                        // 开放草坪后，旧的浅落点成为正常地面。更深的干地由掉层判定确认。
+                        if (g <= 0.05f || g < water.Y - 0.05f || roadY - g < 0.6f) continue;
                         var cand = new Vector3(q.x, g, q.y);
                         if (!safe.FellBelowRoute(cand, out var bk)) continue;
                         bool walk = world.Walkable(q.x, q.y);

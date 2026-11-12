@@ -197,3 +197,14 @@
 - 2026-11-12 晚补：用户定「白天玩，结尾黄昏」。`TownLook` 分 Day / Dusk 两套，`TownLighting` 按邮戳过渡：面包店盖完往黄昏走三成，学校盖完 45 秒内走到黄昏（路灯亮、月亮升起）；灯塔点灯和天亮由 SkyDimmer 接手前先落到黄昏。`-look day|dusk` 可固定一档。look.json 改成 `{"day":{},"dusk":{}}`。Windows 剧情 22/22、创新审计通过。
 
 - 2026-11-12 夜 · 卡通材质样张：`Resources/TideToon.shader`（明暗分块、带色阴影、边缘光、空气感）+ `TownToon.cs` 进游戏时把不透明的 URP Lit / glTFast 材质换成运行时副本，`-notoon` 关掉对比；参数在 `TownLookSet` 的 toon* 字段。Windows 版 GlbTex 贴图改成原尺寸 BC7 / BC5（网页版仍是 1024 crunch），全局各向异性过滤，阴影图 4096、四级级联（URP 资产里也要是 4 级，否则级联变体会被裁掉）。坑：自写 ShadowCaster 通道要先引 CommonMaterial.hlsl，否则编译报 LerpWhiteTo、整个通道失效，构建不会失败，只在日志里有 Shader error。Windows 包 880 → 1143 MB。剧情 22/22；其余审计、WebGL、核显帧率未跑。
+
+## 2026-11-13 · 植被与海岸重做（只打了预览版）
+
+- 用户要求花簇、树、草地、海岸更真实又保留童趣，参考《塞尔达》。做法见 `IslandBuilder.Flora.cs` 开头。
+- 新着色器 `Resources/TideFoliage.shader`（叶片面片、随风摆、逆光透亮）、`TideGrass.shader`（草叶风浪、主角踩倒）；`TideToon.shader` 加了青苔 / 湿痕 / 岩层三个开关，礁石、崖壁、沙子直接用它。
+- 树冠和灌木：原鼓包留作实心体积，外面加叶片面片；花换成五瓣花面片；草皮上 7 万丛草叶（每平方米 15 丛）和 2400 朵小野花。碰撞数量和重做前一致（17372 个圆）。
+- 海面：推岸浪线；近岸浅水不再半白（原来礁石水下那截像裹了冰）。
+- 全局量由 TownLighting 每帧设：_TideWind、_TideWaterY、_TidePlayerPos。look.json 的 wind 可调风力。
+- 新工具：`tools\regen-preview.ps1`（生成场景，不查游戏是否开着）、`tools\preview-shots.ps1`（打 Build\Preview 并截图）、`TideBuild.WindowsPreview`。截图机位 meadow / lawn / coast / shore 写在 ShotTool 里。
+- **没做**：正式包 Build\Main 没更新（用户的游戏一直开着，文件被占），所以五项审计、帧率都没跑；WebGL 没重建。
+- 坑：ps1 第一行写中文注释且文件无 BOM 时，PowerShell 5.1 会把下一行 param 吞掉；工具脚本用英文注释。

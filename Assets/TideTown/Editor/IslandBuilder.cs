@@ -52,6 +52,11 @@ public static partial class IslandBuilder
     static Vector3 lighthouseCenter;
     static Vector3 lighthouseSize;
     static Renderer lighthouseLantern;
+    static float lighthouseDeckRadius = 1.6f;
+    // 2026-11-12 布局改造的三个旋钮
+    const float BuildingOverHeight = 1.3f;   // 撑满目标框宽度时，高度最多超出目标框多少
+    const float TowerWidthFill = 0.92f;      // 灯塔整体宽度占目标框宽的比例
+    const float TowerHeightFill = 0.90f;     // 灯塔整体高度（含灯头）占目标框高的比例
 
     [MenuItem("潮汐镇/场景/生成主场景（WP-05）")]
     public static void BuildMain()
@@ -78,11 +83,12 @@ public static partial class IslandBuilder
 
         // 2026-11-07 草地、沙滩、崖壁换成程序贴图（IslandBuilder.Nature.cs），不再是纯色
         var grass = NatureMat("IslandGrass", "NatureGrass", NatureKind.Grass, new Color32(0x8a, 0xa6, 0x4a, 255), 53, 6f, 2.5f);
-        grass.SetColor("_BaseColor", new Color(0.86f, 0.94f, 0.80f, 1f));   // 第四轮：目标图草色更深更绿，原色偏黄发亮
+        grass.SetColor("_BaseColor", new Color(0.64f, 0.80f, 0.56f, 1f));   // 2026-11-12 美术改版：黄昏暖光下压深一档，不再发荧光绿。上一版的说明：   // 第四轮：目标图草色更深更绿，原色偏黄发亮
         var sand = NatureMat("IslandSand", "NatureSand", NatureKind.Sand, new Color32(0xe6, 0xcd, 0x9c, 255), 57, 3f, 3f);
         sand.SetColor("_BaseColor", new Color(0.9f, 0.8f, 0.66f, 1f));   // 2026-11-08：贴图有缓存，在材质上压暗；新灯光下原色发白
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
         var cliff = NatureMat("IslandCliff", "NatureCliff", NatureKind.Rock, new Color32(0x96, 0x7c, 0x6a, 255), 59, 3f, 6f);
+        cliff.SetColor("_BaseColor", new Color(0.74f, 0.74f, 0.84f, 1f));   // 2026-11-12：崖壁偏灰紫褐（目标图的岩石），暖光一照不至于整面发橙
         var wall = NatureMat("IslandWall", "NatureWall", NatureKind.Rock, new Color32(0xd6, 0xbe, 0x98, 255), 63, 2.5f, 5f);
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
@@ -590,17 +596,20 @@ public static partial class IslandBuilder
             m.shader = shader;
         }
         // 2026-11-08：按目标图调亮——深处饱和的蓝，近岸青绿，礁石边一圈白浪
-        m.SetColor("_ShallowColor", new Color(0.26f, 0.78f, 0.80f, 1f));
-        m.SetColor("_DeepColor", new Color(0.06f, 0.34f, 0.64f, 1f));
+        m.SetColor("_ShallowColor", new Color(0.22f, 0.74f, 0.80f, 1f));
+        m.SetColor("_DeepColor", new Color(0.05f, 0.26f, 0.62f, 1f));
+        // 2026-11-12 美术改版：海面映出黄昏的天色
+        m.SetColor("_SkyColor", new Color(1.0f, 0.70f, 0.62f, 1f));
+        m.SetFloat("_SkyReflect", 0.32f);
         m.SetColor("_FoamColor", new Color(0.96f, 0.99f, 0.98f, 1f));
         m.SetFloat("_ShoreRange", 9f);
         m.SetFloat("_FoamWidth", 2.0f);
         m.SetFloat("_DepthRange", 4f);
         m.SetFloat("_FoamDepth", 1.2f);
-        m.SetFloat("_Alpha", 0.8f);
+        m.SetFloat("_Alpha", 0.97f);   // 2026-11-12：深水几乎不透。外海底下没有海床，透出来的是天空盒的粉橙色，整片海会发紫
         m.SetFloat("_WaveSpeed", 1f);
         m.SetFloat("_WaveStrength", 0.6f);
-        m.SetFloat("_SpecStrength", 0.35f);
+        m.SetFloat("_SpecStrength", 0.5f);
         m.SetFloat("_VertWave", 0.06f);
         EditorUtility.SetDirty(m);
         return m;
@@ -1001,12 +1010,23 @@ public static partial class IslandBuilder
         float s = h / vb.size.y;
         if (vb.size.x * s > w * 1.15f) s = w * 1.15f / vb.size.x;
         if (vb.size.z * s > d * 1.15f) s = d * 1.15f / vb.size.z;
+        // 2026-11-12 布局改造：模型要撑满目标图里那栋房子的宽度。原来只按高度对齐，
+        // 又宽又矮的房子（学校、船棚、住宅）在画面上比目标小一圈。高度最多超出目标框 BuildingOverHeight。
+        float fill = Mathf.Min(w / vb.size.x, h * BuildingOverHeight / vb.size.y);
+        if (fill > s) s = fill;
+        float towerBodyH = 0f;
+        Renderer towerBalcony = null;
         if (tower)
         {
-            var balcony = rends.Find(r => r.name == "Balcony slab");
+            // 2026-11-12：目标图的灯塔又矮又敦实，整座塔（含灯头）都在目标框里。
+            // 原来只把塔身（到平台）对到框高，灯头全在框外面，塔又细又高，顶还出了画面。
+            var balcony = towerBalcony = rends.Find(r => r.name == "Balcony slab");
             float deck = balcony != null ? balcony.bounds.max.y - vb.min.y : vb.size.y;
-            float sy = (h + 0.16f) / Mathf.Max(0.01f, deck);
-            visual.transform.localScale = Vector3.Scale(visual.transform.localScale, new Vector3(s, sy, s));
+            float sxz = w * TowerWidthFill / vb.size.x;
+            float sy = h * TowerHeightFill / vb.size.y;
+            towerBodyH = deck * sy - 0.16f;
+            Debug.Log($"TOWER_FIT native={vb.size.x:F2}x{vb.size.y:F2}x{vb.size.z:F2} deck={deck:F2} sxz={sxz:F3} sy={sy:F3} bodyH={towerBodyH:F2}");
+            visual.transform.localScale = Vector3.Scale(visual.transform.localScale, new Vector3(sxz, sy, sxz));
             lighthouseLantern = rends.Find(r => r.name == "Lantern chamber");
             // 将灯塔的裸 glTF 材质升级为 Art/Materials/B4_灯塔_分享包版 的 URP PBR 材质
             foreach (var r in rends)
@@ -1049,6 +1069,18 @@ public static partial class IslandBuilder
             visualRoot.transform.position += Vector3.forward * frontShift;
             vb.center += Vector3.forward * frontShift;
         }
+        else
+        {
+            // 塔身灰盒（带顶面的碰撞）跟着新的平台高度走；塔门、平台、栏杆都按这组数搭
+            float baseY = center.y - h * 0.5f;
+            go.transform.localScale = new Vector3(w, towerBodyH, d);
+            go.transform.position = new Vector3(center.x, baseY + towerBodyH * 0.5f, center.z);
+            lighthouseCenter = go.transform.position;
+            lighthouseSize = new Vector3(vb.size.x, towerBodyH, vb.size.z);
+            lighthouseDeckRadius = towerBalcony != null ? Mathf.Max(towerBalcony.bounds.extents.x, towerBalcony.bounds.extents.z) : 1.6f;
+            info.size = new Vector3(vb.size.x, vb.size.y, vb.size.z);
+            Debug.Log($"TOWER_PLACED size={vb.size.x:F2}x{vb.size.y:F2}x{vb.size.z:F2} deckRadius={lighthouseDeckRadius:F2}");
+        }
         // The GLB keeps the same silhouette when viewed from afar.
         go.GetComponent<Renderer>().enabled = false;
         info.sourceFile = prefabPath;
@@ -1061,10 +1093,10 @@ public static partial class IslandBuilder
         switch (instance)
         {
             case "B1_post_office": return ArtRoot + "/Buildings/B1_邮局_分享包版.prefab";
-            case "B2_bakery": return ArtRoot + "/Buildings/B2_面包店_分享包版.prefab";
+            case "B2_bakery": return null; // 2026-11-12：预制体里 7 个部件全挂成同一个灰泥材质，整栋没有贴图；改用原 GLB（各部件各自的材质）
             case "B3_school": return null; // 使用 SourceGLB 的 01 原版高精度模型
             case "B4_lighthouse": return null; // 保持 GLB 层次供 Balcony slab/Lantern chamber 挂接
-            case "B5_boathouse": return ArtRoot + "/Buildings/B5_船棚_分享包版.prefab";
+            case "B5_boathouse": return null; // 同上：预制体只剩一个木头材质
             default:
                 // 2026-11-07 新地图：住宅和集市房子都是 B6/B7 反复用，按前缀取
                 if (instance.StartsWith("B6_")) return ArtRoot + "/Buildings/B6_瓦房_分享包版.prefab";

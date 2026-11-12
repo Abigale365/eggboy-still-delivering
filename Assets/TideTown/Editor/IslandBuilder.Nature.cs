@@ -491,8 +491,8 @@ public static partial class IslandBuilder
         var rockA = NatureMat("NatureRockA", "NatureRockA", NatureKind.Rock, new Color32(0xb8, 0x95, 0x80, 255), 61, 2.2f, 6f);
         var rockB = NatureMat("NatureRockB", "NatureRockB", NatureKind.Rock, new Color32(0xa3, 0x86, 0x74, 255), 67, 2.2f, 6f);
         // 2026-11-08：目标图的礁石偏灰褐、比路面深；贴图有缓存，在材质上压暗
-        rockA.SetColor("_BaseColor", new Color(0.80f, 0.77f, 0.76f, 1f));
-        rockB.SetColor("_BaseColor", new Color(0.74f, 0.71f, 0.70f, 1f));
+        rockA.SetColor("_BaseColor", new Color(0.72f, 0.72f, 0.82f, 1f));   // 2026-11-12：暖光下原色发红，往灰紫收
+        rockB.SetColor("_BaseColor", new Color(0.66f, 0.66f, 0.76f, 1f));
         var leafA = NatureMat("NatureLeafA", "NatureLeafA", NatureKind.Leaves, new Color32(0x6e, 0x8e, 0x3a, 255), 71, 1.6f, 5f);
         var leafB = NatureMat("NatureLeafB", "NatureLeafB", NatureKind.Leaves, new Color32(0x84, 0x9c, 0x3c, 255), 73, 1.6f, 5f);
         var leafC = NatureMat("NatureLeafC", "NatureLeafC", NatureKind.Leaves, new Color32(0x5a, 0x7c, 0x38, 255), 79, 1.6f, 5f);

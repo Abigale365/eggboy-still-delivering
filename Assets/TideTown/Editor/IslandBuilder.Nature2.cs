@@ -19,8 +19,9 @@ public static partial class IslandBuilder
     static Material CobbleMat()
     {
         if (!AssetDatabase.IsValidFolder(TexRoot)) AssetDatabase.CreateFolder("Assets/TideTown/Art", "Textures");
-        string albedoPath = TexRoot + "/NatureCobble_Albedo.png";
-        string normalPath = TexRoot + "/NatureCobble_Normal.png";
+        // 2026-11-12 美术改版：石板换成浅奶油粉的配色（文件名带 2，旧贴图有缓存不会重画）
+        string albedoPath = TexRoot + "/NatureCobble2_Albedo.png";
+        string normalPath = TexRoot + "/NatureCobble2_Normal.png";
         if (!System.IO.File.Exists(albedoPath) || !System.IO.File.Exists(normalPath))
         {
             BuildCobbleTextures(albedoPath, normalPath, 83);
@@ -99,12 +100,12 @@ public static partial class IslandBuilder
             height[i] = (1f - mortar) * (0.35f + 0.5f * Mathf.Sqrt(dome)) + 0.08f * grain;
             // 石块：暖米色 / 浅粉，块与块深浅不一；灰缝偏沙色、更暗（目标图的路是暖粉米色）
             float t = tone[best], h = hue[best];
-            float sr = 0.80f + 0.10f * h, sg = 0.64f + 0.05f * h, sb = 0.54f - 0.03f * h;   // 暖粉米色
-            if (h < 0.2f) { sr = 0.74f; sg = 0.66f; sb = 0.60f; }
+            float sr = 0.88f + 0.06f * h, sg = 0.79f + 0.04f * h, sb = 0.72f - 0.02f * h;   // 浅奶油粉（黄昏暖光会再染一层橙，底色要浅、要淡）
+            if (h < 0.25f) { sr = 0.80f; sg = 0.77f; sb = 0.78f; }
             float shade = 0.74f + 0.22f * t + 0.10f * (mott - 0.5f) + 0.06f * (grain - 0.5f) + 0.10f * dome;
-            float r = Mathf.Lerp(sr * shade, 0.44f, mortar);
-            float g = Mathf.Lerp(sg * shade, 0.35f, mortar);
-            float b = Mathf.Lerp(sb * shade, 0.28f, mortar);
+            float r = Mathf.Lerp(sr * shade, 0.54f, mortar);
+            float g = Mathf.Lerp(sg * shade, 0.46f, mortar);
+            float b = Mathf.Lerp(sb * shade, 0.44f, mortar);
             albedo[i] = new Color32(ToByte(r), ToByte(g), ToByte(b), 255);
         }
         for (int y = 0; y < n; y++)
@@ -181,7 +182,8 @@ public static partial class IslandBuilder
                             var lamp = new GameObject("Lamp");
                             lamp.transform.SetParent(root, false);
                             lamp.transform.position = new Vector3(c.x, w.y + 0.01f, c.y);
-                            MountSourceModel(lamp.transform, "S4", Vector3.zero, 2.2f, true, yaw);
+                            var lampModel = MountSourceModel(lamp.transform, "S4", Vector3.zero, 2.2f, true, yaw);
+                            AddLampGlow(lamp.transform, lampModel);
                             lamps++;
                         }
                     }
@@ -225,6 +227,64 @@ public static partial class IslandBuilder
         // 5. 广场中心：大道上的星星罗盘、三个住宅组团小广场（左：一棵树，中：月亮雕塑，右：星星地砖）
         BuildCenterpieces(root);
         Debug.Log($"STREETSCAPE fences={fences} lamps={lamps} blockers={streetscapeBlockers.Count}");
+    }
+
+    // ---------- 路灯发光（2026-11-12 美术改版） ----------
+    // 灯罩位置从模型里量：取 58%–88% 高度那一段顶点的重心（灯罩顶点远多于细灯杆）。
+    static void AddLampGlow(Transform lamp, GameObject model)
+    {
+        var b = ModelBounds(model);
+        Vector3 sum = Vector3.zero; int n = 0;
+        foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+        {
+            var m = mf.sharedMesh;
+            if (m == null) continue;
+            var vs = m.vertices; var t = mf.transform;
+            for (int i = 0; i < vs.Length; i += 3)
+            {
+                var w = t.TransformPoint(vs[i]);
+                float k = (w.y - b.min.y) / Mathf.Max(0.01f, b.size.y);
+                if (k > 0.58f && k < 0.88f) { sum += w; n++; }
+            }
+        }
+        Vector3 pos = n > 0 ? sum / n : new Vector3(b.center.x, b.min.y + b.size.y * 0.75f, b.center.z);
+
+        string path = MatRoot + "/LampHalo.mat";
+        var shader = Shader.Find("TideTown/Glow");
+        if (shader == null) throw new Exception("找不到 TideTown/Glow 着色器（Assets/Resources/TideGlow.shader）");
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (mat == null) { mat = new Material(shader); AssetDatabase.CreateAsset(mat, path); }
+        else if (mat.shader != shader) mat.shader = shader;
+        mat.SetColor("_Color", new Color(1.9f, 1.15f, 0.48f, 1f));
+        mat.SetFloat("_Size", 1.9f);
+        mat.SetFloat("_Core", 2.6f);
+        EditorUtility.SetDirty(mat);
+
+        var go = new GameObject("LampGlow");
+        go.transform.SetParent(lamp, false);
+        go.transform.position = pos;
+        var halo = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        UnityEngine.Object.DestroyImmediate(halo.GetComponent<Collider>());
+        halo.name = "halo";
+        halo.transform.SetParent(go.transform, false);
+        halo.transform.localRotation = Quaternion.Euler(35f, 45f, 0f);   // 面片只用来给裁剪算包围盒，朝向由着色器定
+        halo.transform.localScale = Vector3.one * 1.9f;
+        var hr = halo.GetComponent<Renderer>();
+        hr.sharedMaterial = mat;
+        hr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        hr.receiveShadows = false;
+        var lightGo = new GameObject("light");
+        lightGo.transform.SetParent(go.transform, false);
+        var l = lightGo.AddComponent<Light>();
+        l.type = LightType.Point;
+        l.color = new Color32(0xff, 0xc2, 0x78, 255);
+        l.range = 7.5f;
+        l.intensity = 3.2f;
+        l.shadows = LightShadows.None;
+        l.enabled = false;   // LampGlowDirector 只开离镜头最近的几盏
+        var glow = go.AddComponent<LampGlow>();
+        glow.lamp = l;
+        glow.halo = hr;
     }
 
     // ---------- 集市摊位占位 ----------

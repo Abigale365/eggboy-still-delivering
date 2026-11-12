@@ -16,6 +16,8 @@ Shader "TideTown/Water"
         _WaveStrength ("Normal Strength", Range(0, 2)) = 0.6
         _SpecStrength ("Spec Strength", Float) = 0.35
         _VertWave ("Vertex Wave (m)", Float) = 0.06
+        _SkyColor ("Sky Reflection", Color) = (1.0, 0.72, 0.62, 1)
+        _SkyReflect ("Sky Reflection Strength", Range(0, 1)) = 0.55
     }
     SubShader
     {
@@ -37,6 +39,7 @@ Shader "TideTown/Water"
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 3.0
+            #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -54,6 +57,8 @@ Shader "TideTown/Water"
                 float _WaveStrength;
                 float _SpecStrength;
                 float _VertWave;
+                float4 _SkyColor;
+                float _SkyReflect;
             CBUFFER_END
 
             struct Attributes
@@ -68,6 +73,7 @@ Shader "TideTown/Water"
                 float3 worldPos : TEXCOORD0;
                 float shore : TEXCOORD1;
                 float noise : TEXCOORD2;
+                float fogFactor : TEXCOORD3;
             };
 
             float hash21(float2 p)
@@ -101,6 +107,7 @@ Shader "TideTown/Water"
                 o.worldPos = wp;
                 o.shore = v.color.r;
                 o.noise = v.color.g;
+                o.fogFactor = ComputeFogFactor(o.positionCS.z);
                 return o;
             }
 
@@ -138,12 +145,20 @@ Shader "TideTown/Water"
                 foam = saturate(foam);
                 col = lerp(col, _FoamColor.rgb, foam);
 
+                // 2026-11-12 美术改版：斜着看海面时映出天色（黄昏的粉橙），正着往下看还是水色
+                float3 V = normalize(_WorldSpaceCameraPos - i.worldPos);
+                float fresnel = pow(1.0 - saturate(dot(N, V)), 5.0);
+                col = lerp(col, _SkyColor.rgb, fresnel * _SkyReflect * (1.0 - foam));
+
                 // 主光高光
                 Light mainLight = GetMainLight();
-                float3 V = normalize(_WorldSpaceCameraPos - i.worldPos);
                 float3 H = normalize(normalize(mainLight.direction) + V);
                 float spec = pow(saturate(dot(N, H)), 48.0) * _SpecStrength;
                 col += spec * mainLight.color;
+                // 细碎的波光：只在朝太阳的那一片海面上闪
+                float glint = pow(saturate(dot(N, H)), 220.0) * step(0.62, nA * nB * 2.2);
+                col += glint * mainLight.color * 1.2;
+                col = MixFog(col, i.fogFactor);
 
                 float alpha = lerp(0.32, _Alpha, depthT);
                 alpha = saturate(alpha + foam * 0.35);

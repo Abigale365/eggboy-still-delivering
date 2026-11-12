@@ -83,6 +83,8 @@ public class ShotTool : MonoBehaviour
         cam.fieldOfView = def.fov;
         cam.nearClipPlane = 1f;
         cam.farClipPlane = 800f;
+        // 2026-11-12：全镇俯视机位离镇子一百多米，平时的阴影范围照不到，图上没有影子；截图时把范围拉开
+        if (shotName == "preview") TownLighting.ApplyShadowRange(260f, 4);
 
         int w = def.width > 0 ? def.width : 1774, h = def.height > 0 ? def.height : 887;
         yield return Capture(cam, w, h, Path.Combine(dir, shotName + ".png"));

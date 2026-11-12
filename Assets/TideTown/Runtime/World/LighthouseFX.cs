@@ -21,6 +21,7 @@ public sealed class SkyDimmer : MonoBehaviour
     float dawnT, dawnSeconds;
     float fSunI, fExposure, fAmbient, fAtmosphere;
     Color fSun, fSkyTint, fGround, fAmbSky, fAmbEq;
+    Color ambSky0, ambEq0;   // 2026-11-12：变暗从当时的环境光颜色起步（原来写死白天那组暖色，换了气氛会跳一下）
 
     public void Dim(float s)
     {
@@ -90,6 +91,8 @@ public sealed class SkyDimmer : MonoBehaviour
             atmosphere0 = sky.HasProperty("_AtmosphereThickness") ? sky.GetFloat("_AtmosphereThickness") : 1f;
         }
         ambient0 = RenderSettings.ambientIntensity;
+        ambSky0 = RenderSettings.ambientSkyColor;
+        ambEq0 = RenderSettings.ambientEquatorColor;
     }
 
     void Update()
@@ -140,7 +143,7 @@ public sealed class SkyDimmer : MonoBehaviour
             if (sky.HasProperty("_AtmosphereThickness")) sky.SetFloat("_AtmosphereThickness", Mathf.Lerp(atmosphere0, atmosphere0 * 2.4f, p));
         }
         RenderSettings.ambientIntensity = Mathf.Lerp(ambient0, ambient0 * 0.6f, p);
-        RenderSettings.ambientEquatorColor = Color.Lerp(new Color32(228, 204, 170, 255), new Color32(86, 78, 96, 255), p);
-        RenderSettings.ambientSkyColor = Color.Lerp(new Color32(250, 239, 221, 255), new Color32(58, 66, 106, 255), p);
+        RenderSettings.ambientEquatorColor = Color.Lerp(ambEq0, new Color32(86, 78, 96, 255), p);
+        RenderSettings.ambientSkyColor = Color.Lerp(ambSky0, new Color32(58, 66, 106, 255), p);
     }
 }

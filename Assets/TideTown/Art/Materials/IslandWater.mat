@@ -25,17 +25,19 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Alpha: 0.8
+    - _Alpha: 0.97
     - _DepthRange: 4
     - _FoamDepth: 1.2
     - _FoamWidth: 2
     - _ShoreRange: 9
-    - _SpecStrength: 0.35
+    - _SkyReflect: 0.32
+    - _SpecStrength: 0.5
     - _VertWave: 0.06
     - _WaveSpeed: 1
     - _WaveStrength: 0.6
     m_Colors:
-    - _DeepColor: {r: 0.06, g: 0.34, b: 0.64, a: 1}
+    - _DeepColor: {r: 0.05, g: 0.26, b: 0.62, a: 1}
     - _FoamColor: {r: 0.96, g: 0.99, b: 0.98, a: 1}
-    - _ShallowColor: {r: 0.26, g: 0.78, b: 0.8, a: 1}
+    - _ShallowColor: {r: 0.22, g: 0.74, b: 0.8, a: 1}
+    - _SkyColor: {r: 1, g: 0.7, b: 0.62, a: 1}
   m_BuildTextureStacks: []

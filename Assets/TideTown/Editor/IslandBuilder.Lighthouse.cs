@@ -35,16 +35,18 @@ public static partial class IslandBuilder
         floor.transform.localPosition = new Vector3(0f, deckTop - 0.08f, 0f);
         floor.layer = 6; // Ground
         var floorBox = floor.AddComponent<BoxCollider>();
-        floorBox.size = new Vector3(3.2f, 0.16f, 3.2f);
+        float deckR = lighthouseDeckRadius;   // 2026-11-12：平台和栏杆跟着塔的实际粗细走（原来写死 1.6 m）
+        floorBox.size = new Vector3(deckR * 2f, 0.16f, deckR * 2f);
 
         // The original GLB provides the gallery and rails; these boxes are gameplay barriers.
         foreach (var side in new[] { new Vector3(0, 0, 1), new Vector3(0, 0, -1), new Vector3(1, 0, 0), new Vector3(-1, 0, 0) })
         {
             var go = new GameObject("rail_block");
             go.transform.SetParent(root.transform, false);
-            go.transform.localPosition = new Vector3(side.x * 1.62f, deckTop + 0.25f, side.z * 1.62f);
+            go.transform.localPosition = new Vector3(side.x * (deckR + 0.02f), deckTop + 0.25f, side.z * (deckR + 0.02f));
             var box = go.AddComponent<BoxCollider>();
-            box.size = new Vector3(side.x != 0f ? 0.12f : 3.36f, 0.7f, side.z != 0f ? 0.12f : 3.36f);
+            float railLen = deckR * 2f + 0.16f;
+            box.size = new Vector3(side.x != 0f ? 0.12f : railLen, 0.7f, side.z != 0f ? 0.12f : railLen);
             // 只在塔顶高度挡人；TownObstacle 没有高度，会在塔下把路线挡死
             var raised = go.AddComponent<RaisedObstacle>();
             raised.minY = basePos.y + deckTop - 0.25f;

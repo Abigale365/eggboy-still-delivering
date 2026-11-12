@@ -208,3 +208,5 @@
 - 新工具：`tools\regen-preview.ps1`（生成场景，不查游戏是否开着）、`tools\preview-shots.ps1`（打 Build\Preview 并截图）、`TideBuild.WindowsPreview`。截图机位 meadow / lawn / coast / shore 写在 ShotTool 里。
 - **没做**：正式包 Build\Main 没更新（用户的游戏一直开着，文件被占），所以五项审计、帧率都没跑；WebGL 没重建。
 - 坑：ps1 第一行写中文注释且文件无 BOM 时，PowerShell 5.1 会把下一行 param 吞掉；工具脚本用英文注释。
+
+- 2026-11-13 补：用户关掉游戏后正式包 Build\Main 已更新。Windows：剧情 22/22（零救援）、路线 28/28（零离地帧）、水位、地图、创新 162 项通过；审计平均约 165–170 帧（RTX 5070 Ti，改版前约 190–205）。证据 docs/evidence/flora-20261113/audit。通行审计、核显帧率、WebGL 仍未跑。

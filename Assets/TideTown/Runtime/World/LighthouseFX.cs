@@ -76,6 +76,9 @@ public sealed class SkyDimmer : MonoBehaviour
     {
         if (captured) return;
         captured = true;
+        // 2026-11-12：白天 / 黄昏两套天色由 TownLighting 管；这里要接手之前先让它落到黄昏并停手，
+        // 下面取的基准值才是黄昏那一套
+        TownLighting.HandOverAtDusk();
         foreach (var l in FindObjectsOfType<Light>())
             if (l.type == LightType.Directional) { sun = l; break; }
         if (sun != null) { sun0 = sun.intensity; sunColor0 = sun.color; }
@@ -93,6 +96,17 @@ public sealed class SkyDimmer : MonoBehaviour
         ambient0 = RenderSettings.ambientIntensity;
         ambSky0 = RenderSettings.ambientSkyColor;
         ambEq0 = RenderSettings.ambientEquatorColor;
+    }
+
+    // TownLighting 比这里晚装好时调：按现在的（黄昏）天色重取基准，再把已有的变暗 / 天亮状态重新落上去
+    public void Rebase()
+    {
+        if (!captured) return;
+        bool wasDawn = Dawned;
+        captured = false;
+        Capture();
+        if (wasDawn) { Dawned = false; dawning = false; SetDawnInstant(); }
+        else if (Lit) Apply(Mathf.SmoothStep(0f, 1f, Progress));
     }
 
     void Update()

@@ -5,12 +5,18 @@
 // 太阳软阴影、全局后期。不改任何模型和材质。
 // 灯塔点灯和天亮（LighthouseFX）改的是 RenderSettings 的环境光颜色，这里每帧检测到变化就重算。
 //
-// 2026-11-12 美术改版：整体气氛照目标图（docs/reference/preview.png）改成"黄昏绘本"——
-//   低角度的金橙色太阳、粉紫色天空和云、偏紫的阴影、暖色高光、亮着的路灯、更明显的泛光。
-//   所有数值集中在 TownLook 里；包目录下放一个 look.json 可以不重新打包直接调（字段名同 TownLook）。
-//   全部用 URP 自带的东西：URP Lit 材质、URP 后期 Volume、URP 阴影级联、自写的 URP 天空和光晕着色器。
+// 2026-11-12 美术改版：气氛照目标图（docs/reference/preview.png）做成"绘本"感，分两套——
+//   白天（TownLook.Day）：开局到学校那封信读完。晴朗蓝天、白云、暖白的太阳，路灯不亮。
+//   黄昏（TownLook.Dusk）：学校的邮戳盖完以后慢慢过渡过去，去灯塔和结局都在黄昏里。
+//                        低角度的金橙色太阳、粉紫色天空、偏紫的阴影、路灯亮起、月亮升上来。
+//   面包店的邮戳盖完先往黄昏走三成（午后，光线开始变暖）。
+//   之后灯塔点灯变暗、结局天亮仍由 LighthouseFX 的 SkyDimmer 接手，这里不再动。
+// 包目录下放 look.json 可以不重新打包直接调：{"day":{...},"dusk":{...}}，字段名同 TownLook。
+// 命令行 -look day / -look dusk 固定在一档（截图、调色用）。
+// 全部用 URP 自带的东西：URP Lit 材质、URP 后期 Volume、URP 阴影级联、自写的 URP 天空和光晕着色器。
 using System;
 using System.IO;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -18,80 +24,206 @@ using UnityEngine.Rendering.Universal;
 [Serializable]
 public sealed class TownLook
 {
-    // 太阳：从东南方低低地照过来（预览机位朝北，房子正面和东墙受光，影子拖向西北）
-    public Vector3 sunFrom = new Vector3(0.62f, 0.50f, -0.64f);
-    public Color sunColor = new Color32(255, 210, 164, 255);
-    public float sunIntensity = 2.3f;
-    public float shadowStrength = 0.82f;
-    public float shadowDistance = 75f;
-    public int shadowCascades = 2;
+    // 太阳（sunFrom 是太阳所在的方向；预览机位朝北，房子正面和东墙受光）
+    public Vector3 sunFrom;
+    public float skySunY;          // 天上画的太阳的高度（黄昏时画得比实际光照低，贴着海面）
+    public Color sunColor;
+    public float sunIntensity;
+    public float shadowStrength;
 
-    // 环境光：上面冷紫、中间粉、下面暗玫瑰，阴影就不再是灰的
-    public Color ambientSky = new Color32(170, 156, 222, 255);
-    public Color ambientEquator = new Color32(234, 190, 170, 255);
-    public Color ambientGround = new Color32(124, 88, 92, 255);
-    public float ambientIntensity = 0.62f;
+    // 环境光：上 / 中 / 下三色
+    public Color ambientSky, ambientEquator, ambientGround;
+    public float ambientIntensity;
 
     // 天空（TideTown/Sky）
-    public Color skyTop = new Color32(58, 70, 152, 255);
-    public Color skyMid = new Color32(158, 120, 190, 255);
-    public Color skyHorizon = new Color32(255, 178, 132, 255);
-    public Color skySun = new Color32(255, 220, 150, 255);
-    public Color cloudLight = new Color32(255, 186, 190, 255);
-    public Color cloudShade = new Color32(150, 108, 178, 255);
-    public float cloudCover = 0.48f;
-    public Vector3 moonDir = new Vector3(0.42f, 0.46f, 0.78f);
-    public float stars = 0.8f;
+    public Color skyTop, skyMid, skyHorizon, skySun, cloudLight, cloudShade;
+    public float cloudCover;
+    public Vector3 moonDir;
+    public float stars;
 
-    // 雾：远处往粉橙色的地平线收
-    public Color fogColor = new Color32(238, 176, 160, 255);
-    public float fogStart = 150f;
-    public float fogEnd = 700f;
+    // 雾
+    public Color fogColor;
+    public float fogStart, fogEnd;
+
+    // 海面映出的天色
+    public Color waterSky;
+    public float waterSkyReflect;
 
     // 后期
-    public float exposure = 0.05f;
-    public float contrast = 10f;
-    public float saturation = 10f;
-    public float temperature = 2f;
-    public float tint = 0f;
-    public Color splitShadows = new Color(0.46f, 0.45f, 0.57f, 1f);
-    public Color splitHighlights = new Color(0.60f, 0.52f, 0.42f, 1f);
-    public float splitBalance = -8f;
-    public float bloomThreshold = 0.95f;
-    public float bloomIntensity = 0.5f;
-    public float bloomScatter = 0.72f;
-    public Color bloomTint = new Color32(255, 226, 196, 255);
-    public float vignette = 0.2f;
+    public float exposure, contrast, saturation, temperature, tint;
+    public Color splitShadows, splitHighlights;
+    public float splitBalance;
+    public float bloomThreshold, bloomIntensity, bloomScatter;
+    public Color bloomTint;
+    public float vignette;
 
-    // 路灯
+    // 路灯：0 不亮，1 全亮
+    public float lampOn;
+
+    public static TownLook Day()
+    {
+        return new TownLook
+        {
+            sunFrom = new Vector3(0.50f, 0.95f, -0.60f),
+            skySunY = 0.80f,
+            sunColor = new Color32(255, 241, 216, 255),
+            sunIntensity = 2.0f,
+            shadowStrength = 0.72f,
+            ambientSky = new Color32(196, 216, 246, 255),
+            ambientEquator = new Color32(234, 224, 208, 255),
+            ambientGround = new Color32(132, 114, 94, 255),
+            ambientIntensity = 0.62f,
+            skyTop = new Color32(64, 134, 224, 255),
+            skyMid = new Color32(130, 190, 240, 255),
+            skyHorizon = new Color32(226, 236, 238, 255),
+            skySun = new Color32(255, 246, 220, 255),
+            cloudLight = new Color32(255, 255, 250, 255),
+            cloudShade = new Color32(188, 200, 226, 255),
+            cloudCover = 0.42f,
+            moonDir = new Vector3(0.42f, -0.35f, 0.78f),
+            stars = 0f,
+            fogColor = new Color32(206, 226, 238, 255),
+            fogStart = 150f,
+            fogEnd = 700f,
+            waterSky = new Color32(206, 230, 244, 255),
+            waterSkyReflect = 0.28f,
+            exposure = 0.05f,
+            contrast = 8f,
+            saturation = 10f,
+            temperature = 3f,
+            tint = 0f,
+            splitShadows = new Color(0.48f, 0.49f, 0.53f, 1f),
+            splitHighlights = new Color(0.52f, 0.51f, 0.48f, 1f),
+            splitBalance = 0f,
+            bloomThreshold = 1.0f,
+            bloomIntensity = 0.25f,
+            bloomScatter = 0.68f,
+            bloomTint = Color.white,
+            vignette = 0.15f,
+            lampOn = 0f,
+        };
+    }
+
+    public static TownLook Dusk()
+    {
+        return new TownLook
+        {
+            sunFrom = new Vector3(0.62f, 0.50f, -0.64f),
+            skySunY = 0.14f,
+            sunColor = new Color32(255, 210, 164, 255),
+            sunIntensity = 2.3f,
+            shadowStrength = 0.82f,
+            ambientSky = new Color32(170, 156, 222, 255),
+            ambientEquator = new Color32(234, 190, 170, 255),
+            ambientGround = new Color32(124, 88, 92, 255),
+            ambientIntensity = 0.62f,
+            skyTop = new Color32(58, 70, 152, 255),
+            skyMid = new Color32(158, 120, 190, 255),
+            skyHorizon = new Color32(255, 178, 132, 255),
+            skySun = new Color32(255, 220, 150, 255),
+            cloudLight = new Color32(255, 186, 190, 255),
+            cloudShade = new Color32(150, 108, 178, 255),
+            cloudCover = 0.48f,
+            moonDir = new Vector3(0.42f, 0.46f, 0.78f),
+            stars = 0.8f,
+            fogColor = new Color32(238, 176, 160, 255),
+            fogStart = 150f,
+            fogEnd = 700f,
+            waterSky = new Color32(255, 178, 158, 255),
+            waterSkyReflect = 0.32f,
+            exposure = 0.05f,
+            contrast = 10f,
+            saturation = 10f,
+            temperature = 2f,
+            tint = 0f,
+            splitShadows = new Color(0.46f, 0.45f, 0.57f, 1f),
+            splitHighlights = new Color(0.60f, 0.52f, 0.42f, 1f),
+            splitBalance = -8f,
+            bloomThreshold = 0.95f,
+            bloomIntensity = 0.5f,
+            bloomScatter = 0.72f,
+            bloomTint = new Color32(255, 226, 196, 255),
+            vignette = 0.2f,
+            lampOn = 1f,
+        };
+    }
+
+    static readonly FieldInfo[] Fields = typeof(TownLook).GetFields(BindingFlags.Public | BindingFlags.Instance);
+
+    // 两套之间逐项插值（只有 float / Color / Vector3 三种字段）
+    public static void Lerp(TownLook a, TownLook b, float t, TownLook into)
+    {
+        foreach (var f in Fields)
+        {
+            if (f.FieldType == typeof(float)) f.SetValue(into, Mathf.Lerp((float)f.GetValue(a), (float)f.GetValue(b), t));
+            else if (f.FieldType == typeof(Color)) f.SetValue(into, Color.Lerp((Color)f.GetValue(a), (Color)f.GetValue(b), t));
+            else if (f.FieldType == typeof(Vector3)) f.SetValue(into, Vector3.Lerp((Vector3)f.GetValue(a), (Vector3)f.GetValue(b), t));
+        }
+    }
+}
+
+[Serializable]
+public sealed class TownLookSet
+{
+    public TownLook day = TownLook.Day();
+    public TownLook dusk = TownLook.Dusk();
+    public float shadowDistance = 75f;
+    public int shadowCascades = 2;
     public int lampLights = 6;
     public float lampIntensity = 3.2f;
+    public float duskSeconds = 45f;      // 从白天完整走到黄昏要多久
+    public float afternoon = 0.3f;       // 面包店送完以后往黄昏走多少
 
-    public static TownLook Load()
+    public static TownLookSet Load()
     {
-        var look = new TownLook();
+        var set = new TownLookSet();
         try
         {
             string path = Path.Combine(Application.dataPath, "..", "look.json");
             if (File.Exists(path))
             {
-                JsonUtility.FromJsonOverwrite(File.ReadAllText(path), look);
+                JsonUtility.FromJsonOverwrite(File.ReadAllText(path), set);
                 Debug.Log("TOWNLOOK 读取 look.json");
             }
         }
         catch (Exception e) { Debug.LogWarning("TOWNLOOK look.json 读取失败：" + e.Message); }
-        return look;
+        return set;
     }
 }
 
 public sealed class TownLighting : MonoBehaviour
 {
-    public static TownLook Look { get; private set; }
+    static TownLighting instance;
+    static bool duskRequested;     // SkyDimmer 在这里装好之前就要求过黄昏（读档）
+
+    TownLookSet set;
+    readonly TownLook current = new TownLook();
+    float phase;                   // 0 白天 … 1 黄昏
+    float phaseTarget;
+    bool frozen;                   // 交给 SkyDimmer 以后不再动
+    float nextPoll;
+    float bornAt;
+
+    Light sun;
+    Material sky;
+    Material water;
+    ColorAdjustments fxColor;
+    WhiteBalance fxWhite;
+    SplitToning fxSplit;
+    Bloom fxBloom;
+    Vignette fxVignette;
+    LampGlowDirector lamps;
+    GameBootstrap boot;
 
     Color lastSky, lastEq, lastGround;
     float lastIntensity = -1f;
     ReflectionProbe probe;
     float probeDirtyAt = -1f;
+
+    public static float Phase => instance != null ? instance.phase : -1f;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() { instance = null; duskRequested = false; }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Install()
@@ -101,49 +233,36 @@ public sealed class TownLighting : MonoBehaviour
         new GameObject("TownLighting").AddComponent<TownLighting>();
     }
 
+    // SkyDimmer 要接手天色（灯塔点灯、读档直接落到夜里 / 黎明）之前调：立刻落到黄昏，之后这里不再改任何东西
+    public static void HandOverAtDusk()
+    {
+        duskRequested = true;
+        if (instance == null || instance.frozen) return;
+        instance.phase = instance.phaseTarget = 1f;
+        instance.ApplyLook();
+        instance.frozen = true;
+    }
+
     void Awake()
     {
-        var look = Look = TownLook.Load();
+        instance = this;
+        bornAt = Time.unscaledTime;
+        set = TownLookSet.Load();
 
-        // 环境光
         RenderSettings.ambientMode = AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = look.ambientSky;
-        RenderSettings.ambientEquatorColor = look.ambientEquator;
-        RenderSettings.ambientGroundColor = look.ambientGround;
-        RenderSettings.ambientIntensity = look.ambientIntensity;
-        RefreshAmbient(true);
-
-        // 雾
         RenderSettings.fog = true;
         RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = look.fogColor;
-        RenderSettings.fogStartDistance = look.fogStart;
-        RenderSettings.fogEndDistance = look.fogEnd;
 
-        // 天空
-        Vector3 sunFrom = look.sunFrom.normalized;
         var skyShader = Resources.Load<Shader>("TideSky");
         if (skyShader != null)
         {
-            var sky = new Material(skyShader);
-            sky.SetColor("_TopColor", look.skyTop);
-            sky.SetColor("_MidColor", look.skyMid);
-            sky.SetColor("_HorizonColor", look.skyHorizon);
-            sky.SetColor("_SunColor", look.skySun);
-            // 天上的太阳画得比实际光照方向低一些：贴着海面的落日，光照太低的话影子会长到盖住整条街
-            sky.SetVector("_SunDir", new Vector3(sunFrom.x, 0.14f, sunFrom.z).normalized);
-            sky.SetColor("_CloudLight", look.cloudLight);
-            sky.SetColor("_CloudShade", look.cloudShade);
-            sky.SetFloat("_CloudCover", look.cloudCover);
-            sky.SetVector("_MoonDir", look.moonDir.normalized);
-            sky.SetFloat("_Stars", look.stars);
+            sky = new Material(skyShader);
             sky.SetFloat("_Exposure", 1f);
             RenderSettings.skybox = sky;
         }
         else Debug.LogWarning("TOWNLOOK 找不到 Resources/TideSky，天空保持原样");
 
         // 太阳：场景里有两盏叫 Sun 的平行光（生成器一盏、EggboyEnv 一盏），只留一盏，另一盏关掉
-        Light sun = null;
         foreach (var l in FindObjectsOfType<Light>())
         {
             if (l.type != LightType.Directional || l.name != "Sun") continue;
@@ -152,15 +271,14 @@ public sealed class TownLighting : MonoBehaviour
         }
         if (sun != null)
         {
-            sun.transform.rotation = Quaternion.LookRotation(-sunFrom);
-            sun.color = look.sunColor;
-            sun.intensity = look.sunIntensity;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = look.shadowStrength;
             sun.shadowBias = 0.6f;
             sun.shadowNormalBias = 0.6f;
         }
-        ApplyShadowRange(look.shadowDistance, look.shadowCascades);
+        ApplyShadowRange(set.shadowDistance, set.shadowCascades);
+
+        var sea = GameObject.Find("Sea");
+        if (sea != null && sea.GetComponent<Renderer>() != null) water = sea.GetComponent<Renderer>().material;
 
         // 反射：整镇一个实时探针，开局渲一次
         var pgo = new GameObject("TownReflection");
@@ -177,18 +295,127 @@ public sealed class TownLighting : MonoBehaviour
         probe.importance = 0;
         probeDirtyAt = 0f;
 
-        // 后期：全局 Volume
-        BuildVolume(look);
+        BuildVolume();
         foreach (var cam in FindObjectsOfType<Camera>())
         {
             cam.clearFlags = CameraClearFlags.Skybox;
             cam.GetUniversalAdditionalCameraData().renderPostProcessing = true;
         }
 
-        // 路灯：只开最近的几盏点光
-        var lamps = gameObject.AddComponent<LampGlowDirector>();
-        lamps.maxLights = look.lampLights;
-        lamps.lightIntensity = look.lampIntensity;
+        lamps = gameObject.AddComponent<LampGlowDirector>();
+        lamps.maxLights = set.lampLights;
+
+        // 命令行 -look day / dusk：截图和调色用，固定在一档不跟进度走
+        var args = Environment.GetCommandLineArgs();
+        int li = Array.IndexOf(args, "-look");
+        if (li >= 0 && li + 1 < args.Length)
+        {
+            phase = phaseTarget = args[li + 1] == "dusk" ? 1f : 0f;
+            ApplyLook();
+            frozen = true;
+        }
+        else
+        {
+            phase = phaseTarget = duskRequested ? 1f : ProgressTarget();
+            ApplyLook();
+            if (duskRequested)
+            {
+                // SkyDimmer 抢在前面按旧天色取过基准：让它按黄昏重取一遍
+                frozen = true;
+                foreach (var d in FindObjectsOfType<SkyDimmer>()) d.Rebase();
+            }
+        }
+        RefreshAmbient(true);
+    }
+
+    // 剧情进度 → 天色：面包店送完往黄昏走一点，学校送完就是黄昏
+    float ProgressTarget()
+    {
+        if (boot == null) boot = FindObjectOfType<GameBootstrap>();
+        var s = boot != null ? boot.state : null;
+        if (s == null || s.stamps == null) return 0f;
+        if (s.stamps.Contains("school") || s.stamps.Contains("lighthouse")) return 1f;
+        if (s.stamps.Contains("bakery")) return set.afternoon;
+        return 0f;
+    }
+
+    void Update()
+    {
+        if (frozen) return;
+        if (Time.unscaledTime >= nextPoll)
+        {
+            nextPoll = Time.unscaledTime + 0.5f;
+            float target = ProgressTarget();
+            // 刚进游戏的头两秒读到的是存档进度：直接落过去，不演过渡
+            if (Time.unscaledTime - bornAt < 2f && !Mathf.Approximately(phase, target)) { phase = target; ApplyLook(); }
+            phaseTarget = target;
+        }
+        if (Mathf.Approximately(phase, phaseTarget)) return;
+        phase = Mathf.MoveTowards(phase, phaseTarget, Time.deltaTime / Mathf.Max(1f, set.duskSeconds));
+        ApplyLook();
+    }
+
+    void ApplyLook()
+    {
+        float t = Mathf.SmoothStep(0f, 1f, phase);
+        TownLook.Lerp(set.day, set.dusk, t, current);
+        var look = current;
+
+        RenderSettings.ambientSkyColor = look.ambientSky;
+        RenderSettings.ambientEquatorColor = look.ambientEquator;
+        RenderSettings.ambientGroundColor = look.ambientGround;
+        RenderSettings.ambientIntensity = look.ambientIntensity;
+        RenderSettings.fogColor = look.fogColor;
+        RenderSettings.fogStartDistance = look.fogStart;
+        RenderSettings.fogEndDistance = look.fogEnd;
+
+        Vector3 sunFrom = look.sunFrom.normalized;
+        if (sun != null)
+        {
+            sun.transform.rotation = Quaternion.LookRotation(-sunFrom);
+            sun.color = look.sunColor;
+            sun.intensity = look.sunIntensity;
+            sun.shadowStrength = look.shadowStrength;
+        }
+        if (sky != null)
+        {
+            sky.SetColor("_TopColor", look.skyTop);
+            sky.SetColor("_MidColor", look.skyMid);
+            sky.SetColor("_HorizonColor", look.skyHorizon);
+            sky.SetColor("_SunColor", look.skySun);
+            sky.SetVector("_SunDir", new Vector3(sunFrom.x, look.skySunY, sunFrom.z).normalized);
+            sky.SetColor("_CloudLight", look.cloudLight);
+            sky.SetColor("_CloudShade", look.cloudShade);
+            sky.SetFloat("_CloudCover", look.cloudCover);
+            sky.SetVector("_MoonDir", look.moonDir.normalized);
+            sky.SetFloat("_Stars", look.stars);
+        }
+        if (water != null)
+        {
+            water.SetColor("_SkyColor", look.waterSky);
+            water.SetFloat("_SkyReflect", look.waterSkyReflect);
+        }
+
+        if (fxColor != null)
+        {
+            fxColor.postExposure.Override(look.exposure);
+            fxColor.contrast.Override(look.contrast);
+            fxColor.saturation.Override(look.saturation);
+            fxWhite.temperature.Override(look.temperature);
+            fxWhite.tint.Override(look.tint);
+            fxSplit.shadows.Override(look.splitShadows);
+            fxSplit.highlights.Override(look.splitHighlights);
+            fxSplit.balance.Override(look.splitBalance);
+            bool hdr = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR);
+            fxBloom.threshold.Override(hdr ? look.bloomThreshold : look.bloomThreshold - 0.15f);
+            fxBloom.intensity.Override(look.bloomIntensity);
+            fxBloom.scatter.Override(look.bloomScatter);
+            fxBloom.tint.Override(look.bloomTint);
+            fxVignette.intensity.Override(look.vignette);
+        }
+
+        Shader.SetGlobalFloat("_TideLampOn", look.lampOn);
+        if (lamps != null) lamps.lightIntensity = set.lampIntensity * look.lampOn;
     }
 
     // 阴影范围：URP 资产上的设置，运行时改的是内存里的副本，不动工程文件
@@ -225,28 +452,35 @@ public sealed class TownLighting : MonoBehaviour
         heroDone = true;
     }
 
-    // 环境光颜色一变就重算球谐；变化较大时 1 秒后重渲一次反射（灯塔变暗、天亮）
+    // 环境光颜色一变就重算球谐；和上次渲反射时比天色变了一截，1 秒后重渲一次反射（过渡到黄昏、灯塔变暗、天亮）
+    float probeBase = float.NaN;
     void RefreshAmbient(bool force)
     {
-        var sky = RenderSettings.ambientSkyColor;
+        var skyC = RenderSettings.ambientSkyColor;
         var eq = RenderSettings.ambientEquatorColor;
         var gr = RenderSettings.ambientGroundColor;
         float k = RenderSettings.ambientIntensity;
-        if (!force && sky == lastSky && eq == lastEq && gr == lastGround && Mathf.Approximately(k, lastIntensity)) return;
-        bool big = Mathf.Abs(k - lastIntensity) > 0.08f || Mathf.Abs(sky.grayscale - lastSky.grayscale) > 0.08f;
-        lastSky = sky; lastEq = eq; lastGround = gr; lastIntensity = k;
+        if (!force && skyC == lastSky && eq == lastEq && gr == lastGround && Mathf.Approximately(k, lastIntensity)) return;
+        lastSky = skyC; lastEq = eq; lastGround = gr; lastIntensity = k;
 
         // 三色环境光 → L2 球谐：赤道色做底，天空色从上方补，地面色从下方补
         var sh = new SphericalHarmonicsL2();
         sh.AddAmbientLight(eq.linear * k);
-        sh.AddDirectionalLight(Vector3.up, (sky.linear - eq.linear) * k * 1.6f, 1f);
+        sh.AddDirectionalLight(Vector3.up, (skyC.linear - eq.linear) * k * 1.6f, 1f);
         sh.AddDirectionalLight(Vector3.down, (gr.linear - eq.linear) * k * 1.6f, 1f);
         RenderSettings.ambientProbe = sh;
 
-        if (!force && big && probe != null && probeDirtyAt < 0f) probeDirtyAt = Time.unscaledTime + 1f;
+        // 慢慢过渡时每帧只变一点点，所以跟"上次渲反射时"比，不跟上一帧比
+        float mark = (skyC.b - skyC.r) + skyC.grayscale * k;
+        if (float.IsNaN(probeBase)) probeBase = mark;
+        if (!force && Mathf.Abs(mark - probeBase) > 0.06f && probe != null && probeDirtyAt < 0f)
+        {
+            probeBase = mark;
+            probeDirtyAt = Time.unscaledTime + 1f;
+        }
     }
 
-    void BuildVolume(TownLook look)
+    void BuildVolume()
     {
         var vgo = new GameObject("TownPostFX");
         vgo.transform.SetParent(transform, false);
@@ -259,30 +493,12 @@ public sealed class TownLighting : MonoBehaviour
         var tone = profile.Add<Tonemapping>(true);
         tone.mode.Override(TonemappingMode.Neutral);   // ACES 会把暖色压灰、压暗
 
-        var color = profile.Add<ColorAdjustments>(true);
-        color.postExposure.Override(look.exposure);
-        color.contrast.Override(look.contrast);
-        color.saturation.Override(look.saturation);
-        color.colorFilter.Override(Color.white);
-
-        var white = profile.Add<WhiteBalance>(true);
-        white.temperature.Override(look.temperature);
-        white.tint.Override(look.tint);
-
-        var split = profile.Add<SplitToning>(true);
-        split.shadows.Override(look.splitShadows);
-        split.highlights.Override(look.splitHighlights);
-        split.balance.Override(look.splitBalance);
-
-        var bloom = profile.Add<Bloom>(true);
-        bool hdr = SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.DefaultHDR);
-        bloom.threshold.Override(hdr ? look.bloomThreshold : look.bloomThreshold - 0.15f);
-        bloom.intensity.Override(look.bloomIntensity);
-        bloom.scatter.Override(look.bloomScatter);
-        bloom.tint.Override(look.bloomTint);
-
-        var vignette = profile.Add<Vignette>(true);
-        vignette.intensity.Override(look.vignette);
-        vignette.smoothness.Override(0.45f);
+        fxColor = profile.Add<ColorAdjustments>(true);
+        fxColor.colorFilter.Override(Color.white);
+        fxWhite = profile.Add<WhiteBalance>(true);
+        fxSplit = profile.Add<SplitToning>(true);
+        fxBloom = profile.Add<Bloom>(true);
+        fxVignette = profile.Add<Vignette>(true);
+        fxVignette.smoothness.Override(0.45f);
     }
 }

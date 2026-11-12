@@ -27,6 +27,7 @@ Shader "TideTown/Glow"
                 float _Size;
                 float _Core;
             CBUFFER_END
+            float _TideLampOn;   // 全局：TownLighting 按天色设，白天 0（灯不亮），黄昏 1
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -47,7 +48,7 @@ Shader "TideTown/Glow"
             {
                 float r = saturate(1.0 - length(i.uv));
                 float a = pow(r, _Core) + pow(r, 12.0) * 1.5;
-                return half4(_Color.rgb * a, 1.0);
+                return half4(_Color.rgb * a * _TideLampOn, 1.0);
             }
             ENDHLSL
         }

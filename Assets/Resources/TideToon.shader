@@ -19,6 +19,10 @@ Shader "TideTown/Toon"
         _Cutoff ("Alpha Cutoff", Range(0, 1)) = 0.5
         _AlphaClip ("Alpha Clip", Float) = 0
         _Cull ("Cull", Float) = 2
+        _TopColor ("Moss Color (up-facing)", Color) = (0.36, 0.56, 0.20, 1)
+        _TopAmount ("Moss Amount", Range(0, 1)) = 0
+        _WetBand ("Wet Band Above Water (m)", Float) = 0
+        _Strata ("Rock Strata", Range(0, 1)) = 0
     }
     SubShader
     {
@@ -40,7 +44,13 @@ Shader "TideTown/Toon"
             half _Cutoff;
             half _AlphaClip;
             half _Cull;
+            half4 _TopColor;
+            half _TopAmount;
+            half _WetBand;
+            half _Strata;
         CBUFFER_END
+
+        float _TideWaterY;   // 全局：现在的海面高度（TownLighting 每帧设）
 
         half4 SampleBase(float2 uv)
         {
@@ -131,6 +141,27 @@ Shader "TideTown/Toon"
                     N = normalize(lerp(N, Nm, _ToonNormal));
                 }
                 half3 V = normalize(GetWorldSpaceViewDir(i.positionWS));
+
+                // 2026-11-13 海岸的三样自然效果（石头 / 崖壁 / 沙子的材质才打开）
+                if (_Strata > 0.001)
+                {
+                    float wob = sin(i.positionWS.x * 0.9 + i.positionWS.z * 0.7) * 1.4;
+                    float s = sin(i.positionWS.y * 6.5 + wob) * 0.6 + sin(i.positionWS.y * 17.0 + wob * 2.0) * 0.4;
+                    albedo *= 1.0 + s * 0.09 * _Strata;
+                }
+                if (_TopAmount > 0.001)
+                {
+                    float nz = frac(sin(dot(floor(i.positionWS.xz * 3.0), float2(12.9898, 78.233))) * 43758.5453);
+                    half up = smoothstep(0.80, 0.95, normalize(i.normalWS).y + (nz - 0.5) * 0.10);
+                    // 泡在水里和刚出水的石头不长苔：离水面一米以上才慢慢长出来
+                    half dry = smoothstep(0.5, 1.6, i.positionWS.y - _TideWaterY);
+                    albedo = lerp(albedo, _TopColor.rgb * (0.9 + 0.2 * nz), up * dry * _TopAmount);
+                }
+                if (_WetBand > 0.001)
+                {
+                    float wet = saturate(1.0 - (i.positionWS.y - _TideWaterY) / _WetBand);
+                    albedo *= lerp(1.0, 0.60, wet * wet);
+                }
 
                 float4 shadowCoord = TransformWorldToShadowCoord(i.positionWS);
                 Light sun = GetMainLight(shadowCoord);

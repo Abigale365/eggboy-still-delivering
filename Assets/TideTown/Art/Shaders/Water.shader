@@ -134,15 +134,19 @@ Shader "TideTown/Water"
 
                 // 浅水到深水：用场景深度和水平面的深度差，而不是只看离岸距离
                 float depthT = saturate(thickness / max(0.01, _DepthRange));
-                float3 col = lerp(_ShallowColor.rgb, _DeepColor.rgb, depthT);
+                float3 col = lerp(lerp(_DeepColor.rgb, _ShallowColor.rgb, 0.5), _DeepColor.rgb, depthT);   // 2026-11-13：浅水色压一半，不再是一圈亮青色
                 col += (N.x + N.z) * 0.03;
                 col += nB * 0.02;
 
                 // 岸线泡沫：深度差贴岸 + 顶点色 R 的离岸距离，两路一起驱动
                 float foam = saturate(1.0 - thickness / max(0.05, _FoamDepth));
                 foam *= 0.55 + 0.45 * nA;
-                foam += saturate(1.0 - i.shore * _ShoreRange / max(0.1, _FoamWidth)) * (1.0 - depthT) * 0.5;
-                foam = saturate(foam);
+                foam += saturate(1.0 - i.shore * _ShoreRange / max(0.1, _FoamWidth)) * (1.0 - depthT) * 0.14;   // 2026-11-13：原来 0.5，近岸所有浅水都半白，礁石水下那截像裹了冰
+                // 2026-11-13：离岸几米内一道道白浪线往岸上推，被噪声打碎成一段一段的
+                float sd = i.shore * _ShoreRange;
+                float band = smoothstep(0.78, 0.97, sin(sd * 2.4 + t * 1.1) * 0.5 + 0.5);
+                band *= saturate(1.0 - sd / 5.5) * smoothstep(0.15, 0.7, sd) * smoothstep(0.25, 0.6, nA * 0.6 + nB * 0.4);
+                foam = saturate(foam + band * 0.6);
                 col = lerp(col, _FoamColor.rgb, foam);
 
                 // 2026-11-12 美术改版：斜着看海面时映出天色（黄昏的粉橙），正着往下看还是水色
@@ -160,7 +164,7 @@ Shader "TideTown/Water"
                 col += glint * mainLight.color * 1.2;
                 col = MixFog(col, i.fogFactor);
 
-                float alpha = lerp(0.32, _Alpha, depthT);
+                float alpha = lerp(0.26, _Alpha, smoothstep(0.0, 0.6, depthT));   // 2026-11-13：浅水太透时礁石水下那截发白，像裹了一圈冰
                 alpha = saturate(alpha + foam * 0.35);
                 return half4(col, alpha);
             }

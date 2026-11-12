@@ -342,7 +342,14 @@ public static partial class IslandBuilder
         var rnd = new Lcg(400 + variant);
         float h = 1.5f + rnd.Next01() * 0.6f;
         float cr = 1.25f + rnd.Next01() * 0.35f;
-        AddBlobCluster(verts, normals, uvs, crown, new Vector3(0, h + cr * 0.55f, 0), cr, 6 + variant % 3, 0.9f, 500 + variant * 17);
+        var crownCenter = new Vector3(0, h + cr * 0.55f, 0);
+        AddBlobCluster(verts, normals, uvs, crown, crownCenter, cr, 6 + variant % 3, 0.9f, 500 + variant * 17);
+        // 2026-11-13：鼓包留作里面的实心体积，外面长一层叶片（IslandBuilder.Flora.cs）
+        var colors = new List<Color32>();
+        int blobEnd = verts.Count;
+        FillBlobColors(verts, colors, 0, blobEnd, 1f);
+        AddLeafCards(verts, normals, uvs, colors, crown, 0, blobEnd, crownCenter, cr, cr * 0.15f, 5100 + variant, 1f, 1f);
+        AddLeafCards(verts, normals, uvs, colors, crown, 0, blobEnd, crownCenter, cr, cr * 0.12f, 5300 + variant, 0.8f, 1f);   // 叶片小一点、多一层：近看不是几张大纸片
 
         // 树干：8 边收分圆柱，插进树冠
         int sides = 8; int o = verts.Count;
@@ -359,8 +366,9 @@ public static partial class IslandBuilder
             int a = o + s * 2;
             trunk.AddRange(new[] { a, a + 1, a + 2, a + 1, a + 3, a + 2 });
         }
+        while (colors.Count < verts.Count) colors.Add(new Color32(0, 0, 0, 0));   // 树干不摆
         var mesh = new Mesh { name = "Tree_" + variant, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-        mesh.SetVertices(verts); mesh.SetNormals(normals); mesh.SetUVs(0, uvs);
+        mesh.SetVertices(verts); mesh.SetNormals(normals); mesh.SetUVs(0, uvs); mesh.SetColors(colors);
         mesh.subMeshCount = 2; mesh.SetTriangles(crown, 0); mesh.SetTriangles(trunk, 1);
         mesh.RecalculateTangents(); mesh.RecalculateBounds();
         return SaveMesh(mesh, NatureMeshRoot + "/Tree_" + variant + ".asset");
@@ -371,27 +379,30 @@ public static partial class IslandBuilder
     {
         var verts = new List<Vector3>(); var normals = new List<Vector3>(); var uvs = new List<Vector2>();
         var leaf = new List<int>(); var flower = new List<int>();
-        AddBlobCluster(verts, normals, uvs, leaf, new Vector3(0, 0.28f, 0), 0.5f, 4, 0.75f, 700 + variant * 13, 0.7f);
+        var bushCenter = new Vector3(0, 0.28f, 0);
+        AddBlobCluster(verts, normals, uvs, leaf, bushCenter, 0.5f, 4, 0.75f, 700 + variant * 13, 0.7f);
+        var colors = new List<Color32>();
+        int blobEnd = verts.Count;
+        FillBlobColors(verts, colors, 0, blobEnd, 0.4f);
+        AddLeafCards(verts, normals, uvs, colors, leaf, 0, blobEnd, bushCenter, 0.5f, 0.115f, 7100 + variant, 0.85f, 0.4f);
 
         // 小花：只长在上半球
         var rnd = new Lcg((blossom ? 900 : 800) + variant);
         var sv = new List<Vector3>(); var st = new List<int>();
         Icosphere(0, sv, st);
-        int count = blossom ? 24 + variant * 2 : 10 + variant * 2;
+        int count = blossom ? 34 + variant * 3 : 12 + variant * 2;
         for (int k = 0; k < count; k++)
         {
             float ang = rnd.Next01() * Mathf.PI * 2f, el = (blossom ? 0.15f : 0.25f) + rnd.Next01() * (blossom ? 1.2f : 0.9f);
             var dir = new Vector3(Mathf.Cos(ang) * Mathf.Cos(el), Mathf.Sin(el), Mathf.Sin(ang) * Mathf.Cos(el));
-            var c = new Vector3(0, 0.28f, 0) + new Vector3(dir.x * 0.55f, dir.y * 0.38f, dir.z * 0.55f);
-            int o = verts.Count;
-            float fr = blossom ? 0.09f + rnd.Next01() * 0.06f : 0.045f + rnd.Next01() * 0.03f;
-            var sq = blossom ? new Vector3(1f, 0.75f, 1f) : Vector3.one;
-            foreach (var d in sv) { verts.Add(c + Vector3.Scale(d, sq) * fr); normals.Add((d + Vector3.up).normalized); uvs.Add(Vector2.zero); }
-            foreach (var idx in st) flower.Add(o + idx);
+            var c = new Vector3(0, 0.28f, 0) + new Vector3(dir.x * 0.60f, dir.y * 0.43f, dir.z * 0.60f);
+            float fr = blossom ? 0.085f + rnd.Next01() * 0.05f : 0.05f + rnd.Next01() * 0.03f;
+            // 2026-11-13：小方块花换成五瓣花面片，朝外开
+            AddFlowerCard(verts, normals, uvs, colors, flower, c, dir + new Vector3(0f, 0.35f, 0f), fr, rnd, 0.4f);
         }
         string nm = (blossom ? "BlossomBush_" : "Bush_") + variant;
         var mesh = new Mesh { name = nm, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
-        mesh.SetVertices(verts); mesh.SetNormals(normals); mesh.SetUVs(0, uvs);
+        mesh.SetVertices(verts); mesh.SetNormals(normals); mesh.SetUVs(0, uvs); mesh.SetColors(colors);
         mesh.subMeshCount = 2; mesh.SetTriangles(leaf, 0); mesh.SetTriangles(flower, 1);
         mesh.RecalculateTangents(); mesh.RecalculateBounds();
         return SaveMesh(mesh, NatureMeshRoot + "/" + nm + ".asset");
@@ -482,6 +493,22 @@ public static partial class IslandBuilder
 
     static int nRockStatic;
 
+    // 2026-11-13 海岸：石头 / 崖壁 / 沙子直接用 TideTown/Toon，并打开它的三样"自然"效果——
+    //   moss 朝上的面长一层青苔草皮；wet 贴着水线往上这么多米是湿的、颜色深；strata 横向的岩层纹
+    static void RockLook(Material m, float moss, float wet, float strata)
+    {
+        var toon = Shader.Find("TideTown/Toon");
+        if (toon == null) throw new Exception("找不到 TideTown/Toon 着色器（Assets/Resources/TideToon.shader）");
+        if (m.shader != toon) m.shader = toon;
+        m.SetFloat("_UseNormal", m.GetTexture("_BumpMap") != null ? 1f : 0f);
+        m.SetFloat("_Cull", 2f);
+        m.SetColor("_TopColor", new Color(0.36f, 0.56f, 0.20f, 1f));
+        m.SetFloat("_TopAmount", moss);
+        m.SetFloat("_WetBand", wet);
+        m.SetFloat("_Strata", strata);
+        EditorUtility.SetDirty(m);
+    }
+
     static void BuildNature(Layout layout, Transform parent)
     {
         nRockStatic = 0;
@@ -493,13 +520,17 @@ public static partial class IslandBuilder
         // 2026-11-08：目标图的礁石偏灰褐、比路面深；贴图有缓存，在材质上压暗
         rockA.SetColor("_BaseColor", new Color(0.72f, 0.72f, 0.82f, 1f));   // 2026-11-12：暖光下原色发红，往灰紫收
         rockB.SetColor("_BaseColor", new Color(0.66f, 0.66f, 0.76f, 1f));
-        var leafA = NatureMat("NatureLeafA", "NatureLeafA", NatureKind.Leaves, new Color32(0x6e, 0x8e, 0x3a, 255), 71, 1.6f, 5f);
-        var leafB = NatureMat("NatureLeafB", "NatureLeafB", NatureKind.Leaves, new Color32(0x84, 0x9c, 0x3c, 255), 73, 1.6f, 5f);
-        var leafC = NatureMat("NatureLeafC", "NatureLeafC", NatureKind.Leaves, new Color32(0x5a, 0x7c, 0x38, 255), 79, 1.6f, 5f);
+        RockLook(rockA, 0.5f, 0.6f, 1f);
+        RockLook(rockB, 0.5f, 0.6f, 1f);
+        // 2026-11-13 植被重做：树叶、花换成 TideTown/Foliage（叶片面片 + 随风摆），材质文件另起名字，旧的不动
+        var leafShade = new Color32(0x1f, 0x4c, 0x3a, 255);
+        var leafA = FoliageMat("FloraLeafA", new Color32(0x5a, 0x9a, 0x34, 255), leafShade, false, 0.07f, 0.012f);
+        var leafB = FoliageMat("FloraLeafB", new Color32(0x78, 0xa6, 0x38, 255), leafShade, false, 0.07f, 0.012f);
+        var leafC = FoliageMat("FloraLeafC", new Color32(0x3f, 0x86, 0x3e, 255), leafShade, false, 0.07f, 0.012f);
         var trunk = FlatMat("NatureTrunk", new Color32(0x6e, 0x4c, 0x30, 255), 0.05f);
-        var flowerW = FlatMat("NatureFlowerWhite", new Color32(0xf6, 0xf0, 0xe0, 255), 0.2f);
-        var flowerP = FlatMat("NatureFlowerPink", new Color32(0xf0, 0xa8, 0xb4, 255), 0.2f);
-        var flowerY = FlatMat("NatureFlowerYellow", new Color32(0xf2, 0xcf, 0x6a, 255), 0.2f);
+        var flowerW = FoliageMat("FloraFlowerWhite", new Color32(0xfb, 0xf6, 0xea, 255), new Color32(0xb8, 0xb4, 0xd0, 255), true, 0.05f, 0.01f);
+        var flowerP = FoliageMat("FloraFlowerPink", new Color32(0xf6, 0xa6, 0xba, 255), new Color32(0xb0, 0x66, 0x90, 255), true, 0.05f, 0.01f);
+        var flowerY = FoliageMat("FloraFlowerYellow", new Color32(0xf8, 0xd2, 0x58, 255), new Color32(0xb8, 0x8a, 0x40, 255), true, 0.05f, 0.01f);
 
         // 第四轮：圆石换成有棱角的岩块（RockMesh 圆石不再用）
         var rocks = new Mesh[6]; for (int i = 0; i < rocks.Length; i++) rocks[i] = CliffRockMesh(i, 2);
@@ -508,13 +539,13 @@ public static partial class IslandBuilder
         var trees = new Mesh[5]; for (int i = 0; i < trees.Length; i++) trees[i] = TreeMesh(i);
         var bushes = new Mesh[4]; for (int i = 0; i < bushes.Length; i++) bushes[i] = BushMesh(i);
         Material[] leafMats = { leafA, leafB, leafC };
-        var leafPink = NatureMat("NatureLeafPink", "NatureLeafPink", NatureKind.Leaves, new Color32(0xec, 0xa6, 0xc4, 255), 89, 1.6f, 5f);   // 开花树
+        var leafPink = FoliageMat("FloraLeafPink", new Color32(0xf4, 0xa4, 0xc4, 255), new Color32(0xa4, 0x5e, 0x9a, 255), false, 0.07f, 0.012f);   // 开花树
         Material[] flowerMats = { flowerW, flowerP, flowerY };
         // 2026-11-08 第三轮：目标图崖顶和海岸是成片粉、紫、白的开花灌木
         // 花色要比普通小花深一档：日光下浅粉、浅紫远看都发白
-        var blossomP = FlatMat("NatureBlossomPink", new Color32(0xe2, 0x7e, 0xaa, 255), 0.2f);
-        var blossomL = FlatMat("NatureBlossomLilac", new Color32(0xa6, 0x8a, 0xdc, 255), 0.2f);
-        var blossomR = FlatMat("NatureBlossomRose", new Color32(0xd2, 0x62, 0x90, 255), 0.2f);
+        var blossomP = FoliageMat("FloraBlossomPink", new Color32(0xf0, 0x86, 0xb4, 255), new Color32(0xa8, 0x56, 0x8c, 255), true, 0.05f, 0.01f);
+        var blossomL = FoliageMat("FloraBlossomLilac", new Color32(0xb4, 0x98, 0xec, 255), new Color32(0x74, 0x62, 0xb4, 255), true, 0.05f, 0.01f);
+        var blossomR = FoliageMat("FloraBlossomRose", new Color32(0xe0, 0x6a, 0x98, 255), new Color32(0x98, 0x48, 0x7c, 255), true, 0.05f, 0.01f);
         Material[] blossomMats = { blossomP, blossomL, flowerW, blossomR, blossomL, blossomP };
         var blossoms = new Mesh[4]; for (int i = 0; i < blossoms.Length; i++) blossoms[i] = BushMesh(i, true);
         Material[] Blossom(int n) => new[] { n % 2 == 0 ? leafC : leafA, blossomMats[(n / 2) % blossomMats.Length] };
@@ -860,6 +891,9 @@ public static partial class IslandBuilder
                 }
             }
         }
+
+        // 5. 草叶和草里的小野花（IslandBuilder.Flora.cs）
+        BuildGrass(layout, parent, new[] { flowerW, flowerY, flowerP });
 
         int tris = 0;
         foreach (var mf in root.GetComponentsInChildren<MeshFilter>()) tris += (int)(mf.sharedMesh.triangles.Length / 3);

@@ -47,6 +47,14 @@ public class ShotTool : MonoBehaviour
             if (list != null && list.cameras != null)
                 foreach (var c in list.cameras) if (c.name == name) return c;
         }
+        // 2026-11-13：看植被和海岸用的几个固定机位（不在 world_layout.json 里，重新生成布局不会丢）
+        switch (name)
+        {
+            case "meadow": return new CamDef { name = name, pos = new[] { -9.5f, 4.1f, -4.0f }, euler = new[] { 8f, -62f, 0f }, fov = 50f, width = 1774, height = 887 };
+            case "lawn": return new CamDef { name = name, pos = new[] { 20.0f, 3.75f, -6.5f }, euler = new[] { 10f, -35f, 0f }, fov = 50f, width = 1774, height = 887 };
+            case "coast": return new CamDef { name = name, pos = new[] { -4.0f, 2.2f, -27.5f }, euler = new[] { 2f, 8f, 0f }, fov = 55f, width = 1774, height = 887 };
+            case "shore": return new CamDef { name = name, pos = new[] { 6.0f, 4.4f, -12.2f }, euler = new[] { 24f, 215f, 0f }, fov = 55f, width = 1774, height = 887 };
+        }
         if (name == "preview")
         {
             var preview = Resources.Load<TextAsset>("World/preview_camera");

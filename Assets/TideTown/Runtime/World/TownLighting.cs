@@ -184,6 +184,7 @@ public sealed class TownLookSet
     public float toonRim = 0.55f;
     public float toonHazeStrength = 0.10f;
     public float toonNormal = 0.7f;
+    public float wind = 1f;              // 风力：0 草木不动，1 微风
     public int lampLights = 6;
     public float lampIntensity = 3.2f;
     public float duskSeconds = 45f;      // 从白天完整走到黄昏要多久
@@ -459,8 +460,23 @@ public sealed class TownLighting : MonoBehaviour
         QualitySettings.shadowDistance = distance;
     }
 
+    Transform hero;
+    float heroLookAt;
+
     void LateUpdate()
     {
+        // 植被和海岸着色器要的三个全局量：风力、海面高度（湿痕跟着潮水走）、主角脚下的位置（草被踩倒）
+        Shader.SetGlobalFloat("_TideWind", set.wind);
+        Shader.SetGlobalFloat("_TideWaterY", WaterLevel.Main != null ? WaterLevel.Main.Y : 0f);
+        if (hero == null && Time.unscaledTime >= heroLookAt)
+        {
+            heroLookAt = Time.unscaledTime + 1f;
+            var h = GameObject.Find("EGGBOY");
+            if (h != null) hero = h.transform;
+        }
+        Shader.SetGlobalVector("_TidePlayerPos", hero != null
+            ? new Vector4(hero.position.x, hero.position.y, hero.position.z, 1f) : Vector4.zero);
+
         RefreshAmbient(false);
         if (!heroDone) ExcludeHeroFromReflections();
         if (probeDirtyAt >= 0f && Time.unscaledTime >= probeDirtyAt)

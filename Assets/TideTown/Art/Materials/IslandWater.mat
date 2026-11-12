@@ -26,8 +26,8 @@ Material:
     m_Ints: []
     m_Floats:
     - _Alpha: 0.97
-    - _DepthRange: 4
-    - _FoamDepth: 1.2
+    - _DepthRange: 2.4
+    - _FoamDepth: 0.16
     - _FoamWidth: 2
     - _ShoreRange: 9
     - _SkyReflect: 0.32
@@ -38,6 +38,6 @@ Material:
     m_Colors:
     - _DeepColor: {r: 0.05, g: 0.26, b: 0.62, a: 1}
     - _FoamColor: {r: 0.96, g: 0.99, b: 0.98, a: 1}
-    - _ShallowColor: {r: 0.22, g: 0.74, b: 0.8, a: 1}
+    - _ShallowColor: {r: 0.15, g: 0.62, b: 0.74, a: 1}
     - _SkyColor: {r: 1, g: 0.7, b: 0.62, a: 1}
   m_BuildTextureStacks: []

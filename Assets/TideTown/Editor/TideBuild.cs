@@ -19,6 +19,9 @@ public static class TideBuild
     // 开发版：只有开发版里才编进 Lux3D 直连（DevDirectGateway），用来在本机真调一次 Lux3D。不发给别人。
     public static void WindowsDev() => Build("Build/Dev/TideTown.exe", BuildTarget.StandaloneWindows64, "WINDOWSDEV", BuildOptions.Development);
 
+    // 预览版：打到 Build/Preview，正式包（Build/Main）开着游戏时也能出图调效果
+    public static void WindowsPreview() => Build("Build/Preview/TideTown.exe", BuildTarget.StandaloneWindows64, "WINDOWSPREVIEW");
+
     public static void WebGL()
     {
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;

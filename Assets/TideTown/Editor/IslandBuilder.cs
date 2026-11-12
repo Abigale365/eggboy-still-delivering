@@ -83,12 +83,14 @@ public static partial class IslandBuilder
 
         // 2026-11-07 草地、沙滩、崖壁换成程序贴图（IslandBuilder.Nature.cs），不再是纯色
         var grass = NatureMat("IslandGrass", "NatureGrass", NatureKind.Grass, new Color32(0x8a, 0xa6, 0x4a, 255), 53, 6f, 2.5f);
-        grass.SetColor("_BaseColor", new Color(0.64f, 0.80f, 0.56f, 1f));   // 2026-11-12 美术改版：黄昏暖光下压深一档，不再发荧光绿。上一版的说明：   // 第四轮：目标图草色更深更绿，原色偏黄发亮
+        grass.SetColor("_BaseColor", new Color(0.46f, 0.66f, 0.42f, 1f));   // 2026-11-13：上面铺了草叶，草皮本身压深，和草根一个颜色。   // 2026-11-12 美术改版：黄昏暖光下压深一档，不再发荧光绿。上一版的说明：   // 第四轮：目标图草色更深更绿，原色偏黄发亮
         var sand = NatureMat("IslandSand", "NatureSand", NatureKind.Sand, new Color32(0xe6, 0xcd, 0x9c, 255), 57, 3f, 3f);
         sand.SetColor("_BaseColor", new Color(0.9f, 0.8f, 0.66f, 1f));   // 2026-11-08：贴图有缓存，在材质上压暗；新灯光下原色发白
         var road = RoadSurfaceMat("IslandRoad", new Color32(0xc2, 0xa9, 0x84, 255), "RoadDirt", 17, 90, 3f, 7f);
         var cliff = NatureMat("IslandCliff", "NatureCliff", NatureKind.Rock, new Color32(0x96, 0x7c, 0x6a, 255), 59, 3f, 6f);
         cliff.SetColor("_BaseColor", new Color(0.74f, 0.74f, 0.84f, 1f));   // 2026-11-12：崖壁偏灰紫褐（目标图的岩石），暖光一照不至于整面发橙
+        RockLook(cliff, 0f, 0.7f, 1f);
+        RockLook(sand, 0f, 0.55f, 0f);
         var wall = NatureMat("IslandWall", "NatureWall", NatureKind.Rock, new Color32(0xd6, 0xbe, 0x98, 255), 63, 2.5f, 5f);
         var rockMat = Mat("IslandRock", new Color32(0x9b, 0x8c, 0x78, 255));
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
@@ -596,7 +598,7 @@ public static partial class IslandBuilder
             m.shader = shader;
         }
         // 2026-11-08：按目标图调亮——深处饱和的蓝，近岸青绿，礁石边一圈白浪
-        m.SetColor("_ShallowColor", new Color(0.22f, 0.74f, 0.80f, 1f));
+        m.SetColor("_ShallowColor", new Color(0.15f, 0.62f, 0.74f, 1f));
         m.SetColor("_DeepColor", new Color(0.05f, 0.26f, 0.62f, 1f));
         // 2026-11-12 美术改版：海面映出黄昏的天色
         m.SetColor("_SkyColor", new Color(1.0f, 0.70f, 0.62f, 1f));
@@ -604,8 +606,8 @@ public static partial class IslandBuilder
         m.SetColor("_FoamColor", new Color(0.96f, 0.99f, 0.98f, 1f));
         m.SetFloat("_ShoreRange", 9f);
         m.SetFloat("_FoamWidth", 2.0f);
-        m.SetFloat("_DepthRange", 4f);
-        m.SetFloat("_FoamDepth", 1.2f);
+        m.SetFloat("_DepthRange", 2.4f);
+        m.SetFloat("_FoamDepth", 0.16f);   // 2026-11-13：1.2 时礁石泡在水里的整面都发白，像冰块
         m.SetFloat("_Alpha", 0.97f);   // 2026-11-12：深水几乎不透。外海底下没有海床，透出来的是天空盒的粉橙色，整片海会发紫
         m.SetFloat("_WaveSpeed", 1f);
         m.SetFloat("_WaveStrength", 0.6f);

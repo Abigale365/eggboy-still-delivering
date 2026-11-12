@@ -38,7 +38,7 @@ public sealed class ContourGrid
         for (var t = r.transform; t != null; t = t.parent)
         {
             string n = t.name;
-            if (n == "Sea" || n == "WaterSystem" || n == "XIAOHEI" || n == "Crates" || n == "PreviewCam" || n == "SafePoints"
+            if (n == "GrassField" || n == "Sea" || n == "WaterSystem" || n == "XIAOHEI" || n == "Crates" || n == "PreviewCam" || n == "SafePoints"
                 || n == "MailboxTrail" || n == "FlashlightReply" || n == "CityGlow" || n == "EndingDesk"          // 结局才出现
                 || n == "A2_GLB" || n == "D1_GLB" || n == "C1_GLB" || n == "C2_GLB" || n == "C3_GLB" || n == "A3_GLB"   // 捡得起来的小件
                 || n.Contains("Beam") || n.Contains("Glow") || n.Contains("Foam") || n.StartsWith("COL", StringComparison.OrdinalIgnoreCase)

@@ -131,7 +131,11 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
     }
 
     public static bool IsOpen => instance != null && instance.active;
-    public static int ActiveRingSelection { get; set; } = 0;
+    public static int ActiveRingSelection
+    {
+        get => instance != null ? instance.selectedRing : 0;
+        set { if (instance != null) instance.selectedRing = Mathf.Clamp(value, 0, 2); }
+    }
     public static string OpenPuzzleId => IsOpen && instance.currentSpec != null ? instance.currentSpec.id : "";
 
     public static void ExternalToggleLatch(int index)
@@ -789,7 +793,7 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.Alpha1)) ToggleLatch(0);
             if (Input.GetKeyDown(KeyCode.Alpha2)) ToggleLatch(1);
             if (Input.GetKeyDown(KeyCode.Alpha3)) ToggleLatch(2);
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) AttemptUnlockSpindle();
+            if (EasyInputBridge.Down(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return)) AttemptUnlockSpindle();
             // 卡了两分钟：笔记上多一行"H 鲁班巧思"，按 H 一步步替你拨好（不给成就）
             if (AssistReady != assistShown) { assistShown = AssistReady; RefreshPuzzleUI(); }
             if (AssistReady && Input.GetKeyDown(KeyCode.H)) ExternalStartAICalibration();
@@ -808,7 +812,7 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
                 return;
             }
         }
-        else if (Input.GetKeyDown(KeyCode.Escape)) CleanupModal(false);
+        else if (EasyInputBridge.Down(KeyCode.Escape)) CleanupModal(false);
     }
 
     void AnimateParts(float dt)

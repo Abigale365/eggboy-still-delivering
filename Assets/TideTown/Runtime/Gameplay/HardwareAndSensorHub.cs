@@ -200,7 +200,7 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         // 0. 塔顶随时按 B 键快速下塔（彻底杜绝困在灯塔顶层）
         if (player != null && player.transform.position.y > 10f && !player.locked && !WoodenMechanismPuzzleModal.IsOpen && !ObjectInspectModal.IsOpen)
         {
-            if (Input.GetKeyDown(KeyCode.B))
+            if (EasyInputBridge.Down(KeyCode.B))
             {
                 if (director != null) director.DescendTower();
             }

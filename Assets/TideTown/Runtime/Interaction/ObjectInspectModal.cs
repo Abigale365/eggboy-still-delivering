@@ -779,7 +779,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
                 rubProgress += Time.unscaledDeltaTime * 2.4f;
                 if (rubProgress >= 1f) ClearSaltDust(true);
             }
-            else if (Input.GetKeyDown(KeyCode.F))
+            else if (EasyInputBridge.Down(KeyCode.F))
             {
                 ClearSaltDust(false);
             }
@@ -835,10 +835,10 @@ public sealed class ObjectInspectModal : MonoBehaviour
             TryRaycast3DPin(Input.mousePosition);
         }
 
-        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) rotY += 95f * Time.unscaledDeltaTime;
-        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) rotY -= 95f * Time.unscaledDeltaTime;
-        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) rotX += 85f * Time.unscaledDeltaTime;
-        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) rotX -= 85f * Time.unscaledDeltaTime;
+        if (EasyInputBridge.Held(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) rotY += 95f * Time.unscaledDeltaTime;
+        if (EasyInputBridge.Held(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) rotY -= 95f * Time.unscaledDeltaTime;
+        if (EasyInputBridge.Held(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) rotX += 85f * Time.unscaledDeltaTime;
+        if (EasyInputBridge.Held(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) rotX -= 85f * Time.unscaledDeltaTime;
 
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.001f)
@@ -909,7 +909,7 @@ public sealed class ObjectInspectModal : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) TryPressPin(0);
         else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) TryPressPin(1);
         else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) TryPressPin(2);
-        else if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+        else if (EasyInputBridge.Down(KeyCode.Escape) || EasyInputBridge.Down(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
         {
             CloseModal();
         }

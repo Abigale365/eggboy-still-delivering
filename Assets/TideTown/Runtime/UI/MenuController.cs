@@ -140,7 +140,7 @@ public sealed class MenuController : MonoBehaviour
     void Update()
     {
         if (ui == null) return;
-        bool esc = Input.GetKeyDown(KeyCode.Escape);
+        bool esc = EasyInputBridge.Down(KeyCode.Escape);
         if (esc) lastEscAt = Time.unscaledTime;
         bool toggle = WouldTogglePause(esc);
         letterOpenLastFrame = ui.LetterOpen;

@@ -668,7 +668,7 @@ public class EggboyUI : MonoBehaviour
     void UpdateGuide()
     {
         // Tab / M / C 本帧可能已经打开模态界面，仍然消费这次教学按键。
-        if (FirstTutorialActive && !Paused && Input.GetKeyDown(firstTutorialKey)) CompleteFirstTutorial();
+        if (FirstTutorialActive && !Paused && EasyInputBridge.Down(firstTutorialKey)) CompleteFirstTutorial();
         bool free=!Paused&&!Cinematic&&!LetterOpen&&!titleShowing&&!MenuController.OverlayOpen;
         if(free){
             if(!freeStarted){freeStarted=true;keysRemaining=12f;}
@@ -1038,7 +1038,7 @@ public class EggboyUI : MonoBehaviour
             toastPanel.SetActive(false);
         if (titleShowing)
         {
-            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || EasyInputBridge.Down(KeyCode.Space))
                 StartFromTitle();
             return;
         }
@@ -1046,7 +1046,7 @@ public class EggboyUI : MonoBehaviour
         if (player == null || world == null) return;
         if (LetterOpen)
         {
-            if (inputClose && (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)))
+            if (inputClose && (EasyInputBridge.Down(KeyCode.E) || EasyInputBridge.Down(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return) || EasyInputBridge.Down(KeyCode.Space)))
                 CloseLetter();
             return;
         }

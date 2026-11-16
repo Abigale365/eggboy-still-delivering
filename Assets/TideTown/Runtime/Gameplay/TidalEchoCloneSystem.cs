@@ -190,7 +190,7 @@ public sealed class TidalEchoCloneSystem : MonoBehaviour
                 sampleAccum -= SampleDt;
                 if (buffer.Count > 0 && (buffer[buffer.Count - 1].pos - player.transform.position).sqrMagnitude > 2.25f)
                     buffer.Clear();
-                bool holding = Input.GetKey(KeyCode.E);
+                bool holding = EasyInputBridge.Held(KeyCode.E);
                 Push(new EchoFrame
                 {
                     pos = player.transform.position, yaw = player.yaw, vel = player.vel, grounded = player.grounded,

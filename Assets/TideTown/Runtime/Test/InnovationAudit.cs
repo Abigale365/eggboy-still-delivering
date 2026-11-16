@@ -581,6 +581,14 @@ public sealed class InnovationAudit : MonoBehaviour
         bool opened = WoodenMechanismPuzzleModal.DebugOpen("bakery_lock", st, null, boot.player, boot.ui, boot.gate, () => solvedCb = true);
         yield return new WaitForSecondsRealtime(0.8f);
         Check("wood_open", opened && WoodenMechanismPuzzleModal.IsOpen);
+        var board = FindObjectOfType<EasyInputBridge>();
+        if (board != null) board.OnAction("combo-s3");
+        yield return null;
+        yield return null;
+        Check("easyinput_ring_selection_persists", board != null && WoodenMechanismPuzzleModal.ActiveRingSelection == 2);
+        if (board != null) board.OnAction("combo-s1");
+        yield return null;
+        Check("easyinput_ring_selection_restores", WoodenMechanismPuzzleModal.ActiveRingSelection == 0);
         var note = GameObject.Find("WoodenMechanismNote");
         Check("wood_only_small_note", note != null && note.activeInHierarchy && GameObject.Find("WoodenMechanismParchmentCard") == null);
 

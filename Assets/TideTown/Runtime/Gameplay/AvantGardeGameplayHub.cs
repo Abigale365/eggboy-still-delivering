@@ -103,7 +103,7 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
 
         // 按 Tab 或 L 键可随时翻阅邮包里的当前信件（在信纸上直接揭下字签抛向空中化为实物）
         // 按键表见 docs/controls.md：Tab 读信揭字，R 潮汐怀表。数字键切"模式"的做法已去掉。
-        if (Input.GetKeyDown(KeyCode.Tab))
+        if (EasyInputBridge.Down(KeyCode.Tab))
         {
             TriggerMode(1);
         }
@@ -112,7 +112,7 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
         {
             perspSys.OpenViewfinder();
         }
-        else if (Input.GetKeyDown(KeyCode.R))
+        else if (EasyInputBridge.Down(KeyCode.R))
         {
             if (!ui.LetterOpen && !AnyModalOpen && !player.locked && !AIAgentCalibrationDirector.IsOpen)
                 TriggerMode(3);

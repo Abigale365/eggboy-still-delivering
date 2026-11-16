@@ -235,8 +235,8 @@ public class PrototypeGame : MonoBehaviour
         if (player == null || player.pose == null || chase == null) return;
         if ((ui != null && (ui.LetterOpen || ui.Paused || ui.TitleShowing)) || (townMap != null && townMap.IsOpen) || MenuController.OverlayOpen) return;
         float dt = Mathf.Min(0.05f, Time.deltaTime);
-        float f = (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f) - (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
-        float s = (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f) - (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
+        float f = (EasyInputBridge.Held(KeyCode.W) || Input.GetKey(KeyCode.UpArrow) ? 1f : 0f) - (EasyInputBridge.Held(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) ? 1f : 0f);
+        float s = (EasyInputBridge.Held(KeyCode.D) || Input.GetKey(KeyCode.RightArrow) ? 1f : 0f) - (EasyInputBridge.Held(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow) ? 1f : 0f);
         var fwd = chase.Forward;
         var right = chase.Right;
         if (wind == null) wind = FindObjectOfType<TidalWindChallenge>();
@@ -244,7 +244,7 @@ public class PrototypeGame : MonoBehaviour
         bool run = ResolveRun(DefaultRun, shiftHeld, wind != null && wind.IsGustActive);
         if (autoWalk) { f = 1f; s = 0f; run = autoRun; }
         movementRunning = run;
-        bool jumpPressed = Input.GetKeyDown(KeyCode.Space);
+        bool jumpPressed = EasyInputBridge.Down(KeyCode.Space);
         if (autoJump && !autoJumped && Time.time > 1.0f) { jumpPressed = true; autoJumped = true; }
         // 2026-11-16 按住中键的表情轮盘开着：人站住（动作 / 姿态照常播），不走不跳、不换表情
         if (EmoteWheel.IsOpen) { player.Move(dt, 0f, 0f, false, false); return; }
@@ -266,7 +266,7 @@ public class PrototypeGame : MonoBehaviour
 
         foreach (var e in Emotes) if (Input.GetKeyDown(e.key)) player.PlayEmote(e.emote, e.repeat);
 
-        if (!frameworkMode && Input.GetKeyDown(KeyCode.E) && Vector3.Distance(world.MailboxPos, player.transform.position) < 1.4f && !gotLetter)
+        if (!frameworkMode && EasyInputBridge.Down(KeyCode.E) && Vector3.Distance(world.MailboxPos, player.transform.position) < 1.4f && !gotLetter)
         {
             gotLetter = true;
             if (ui != null) ui.SetLetterTaken(true);
@@ -316,7 +316,7 @@ public class PrototypeGame : MonoBehaviour
         if (player == null || chase == null) return;
         float dt = Mathf.Min(0.05f, Time.deltaTime);
         if (face != null) face.Update(dt, Camera.main);
-        bool moving = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.D)
+        bool moving = EasyInputBridge.Held(KeyCode.W) || EasyInputBridge.Held(KeyCode.A) || EasyInputBridge.Held(KeyCode.S) || EasyInputBridge.Held(KeyCode.D)
             || Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow);
         if (story == null) story = FindObjectOfType<StoryDirector>();
         bool free = chase.enabled && (townMap == null || !townMap.IsOpen) && (ui == null || (!ui.LetterOpen && !ui.Paused && !ui.TitleShowing)) && !MenuController.OverlayOpen;

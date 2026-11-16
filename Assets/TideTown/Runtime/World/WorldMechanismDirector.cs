@@ -632,14 +632,14 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         {
             bool free = ui.inputClose && !player.locked && !ui.TitleShowing && !ui.Paused && !ui.LetterOpen;
             bool near = Vector3.Distance(player.transform.position, winchWorldPos) < WinchRadius;
-            bool playerHolds = near && ((free && Input.GetKey(KeyCode.E)) || DebugPlayerHoldsWinch);
+            bool playerHolds = near && ((free && EasyInputBridge.Held(KeyCode.E)) || DebugPlayerHoldsWinch);
             if (echoSys == null) echoSys = FindObjectOfType<TidalEchoCloneSystem>();
             bool echoHolds = echoSys != null && echoSys.EchoActive && echoSys.EchoHoldZone == "winch";
             WinchTick(dt, playerHolds, echoHolds);
         }
 
         if (player == null || ui == null || !ui.inputClose || player.locked || ui.TitleShowing || ui.Paused ||
-            ui.LetterOpen || ui.Cinematic || MenuController.OverlayOpen || !Input.GetKeyDown(KeyCode.E))
+            ui.LetterOpen || ui.Cinematic || MenuController.OverlayOpen || !EasyInputBridge.Down(KeyCode.E))
             return;
 
         // 1. 拾取阅读退潮浅滩的漂流瓶（按 E）

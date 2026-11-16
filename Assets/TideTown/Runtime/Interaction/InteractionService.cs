@@ -100,7 +100,7 @@ public sealed class InteractionService : MonoBehaviour
 
         string prompt = best != null ? best.Prompt(s) : "";
         float duration = best is IHoldInteraction action ? action.HoldSeconds(s) : 0f;
-        if (heldTarget != best || !Input.GetKey(KeyCode.E))
+        if (heldTarget != best || !EasyInputBridge.Held(KeyCode.E))
         {
             if (heldTarget != null && !string.IsNullOrEmpty(activeHoldEmote) && player != null)
                 player.StopEmote(activeHoldEmote);
@@ -109,7 +109,7 @@ public sealed class InteractionService : MonoBehaviour
         }
         if (best != null && best.CanInteract(s))
         {
-            if (Input.GetKeyDown(KeyCode.E))
+            if (EasyInputBridge.Down(KeyCode.E))
             {
                 player.FaceTowards(best.Position);
                 if (duration <= 0f) best.Interact(s, this);

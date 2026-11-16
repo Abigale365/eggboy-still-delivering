@@ -275,7 +275,7 @@ public class DogFollower : MonoBehaviour
         bool realPlay = ui != null && ui.inputClose && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen && !player.locked && !ObjectInspectModal.IsOpen && !WoodenMechanismPuzzleModal.IsOpen;
         if (realPlay)
         {
-            if (Input.GetKeyDown(KeyCode.F))
+            if (EasyInputBridge.Down(KeyCode.F))
             {
                 CommandOrPet();
             }

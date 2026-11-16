@@ -414,8 +414,8 @@ public class TownMap : MonoBehaviour
             if (IsOpen) Close();
             return;
         }
-        if (Input.GetKeyDown(KeyCode.M)) Toggle();
-        else if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) Close();
+        if (EasyInputBridge.Down(KeyCode.M)) Toggle();
+        else if (IsOpen && EasyInputBridge.Down(KeyCode.Escape)) Close();
     }
 
     public void CycleGuideMode()

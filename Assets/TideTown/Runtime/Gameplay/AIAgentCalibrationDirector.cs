@@ -494,11 +494,11 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
 
         bool typing = promptInput != null && promptInput.isFocused;
         // V 开关心愿造物笺（笺已经开着时 V 随时能关）。Esc 也能关：Esc 在笺开着时不会触发暂停，不关的话没有别的办法用键盘退出
-        if (consoleOpen && Input.GetKeyDown(KeyCode.Escape))
+        if (consoleOpen && EasyInputBridge.Down(KeyCode.Escape))
         {
             SetConsoleOpen(false);
         }
-        else if (!typing && Input.GetKeyDown(KeyCode.V))
+        else if (!typing && EasyInputBridge.Down(KeyCode.V))
         {
             if (consoleOpen || !OtherOverlayOpen()) SetConsoleOpen(!consoleOpen);
         }

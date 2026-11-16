@@ -227,8 +227,8 @@ public sealed partial class StoryDirector : MonoBehaviour
             if (flashCooldown > 0f) flashCooldown -= dt;
 
             float turn = 0f;
-            if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) turn -= 52f * dt;
-            if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) turn += 52f * dt;
+            if (EasyInputBridge.Held(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) turn -= 52f * dt;
+            if (EasyInputBridge.Held(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) turn += 52f * dt;
             if (Input.GetMouseButton(0)) turn += Input.GetAxis("Mouse X") * 2.6f;
 
             // 单手柄摇杆或摄像头手势横移同步驱动灯头转向
@@ -260,7 +260,7 @@ public sealed partial class StoryDirector : MonoBehaviour
                            Input.GetKeyDown(KeyCode.JoystickButton5);
 
             bool wantFlash = flashCooldown <= 0f &&
-                (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) || camWave || padWave);
+                (EasyInputBridge.Down(KeyCode.Space) || EasyInputBridge.Down(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) || camWave || padWave);
 
             if (idleTimer > 11f)
             {

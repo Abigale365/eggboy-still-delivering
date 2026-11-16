@@ -41,7 +41,13 @@ public static class TideBuild
 
     static void Build(string output, BuildTarget target, string tag, BuildOptions options = BuildOptions.None)
     {
-        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, options);
+        // Clean worktrees must restore the ignored, deterministic GLB texture cache before packing materials.
+        GlbTextureCompressor.Extract();
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        AssetDatabase.ImportAsset(GlbTextureCompressor.MatRoot,
+            ImportAssetOptions.ForceUpdate | ImportAssetOptions.ImportRecursive | ImportAssetOptions.ForceSynchronousImport);
+        AssetDatabase.ImportAsset(Scene, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, options | BuildOptions.CleanBuildCache);
         Debug.Log($"TIDEBUILD {tag} {report.summary.result} errors={report.summary.totalErrors} size={report.summary.totalSize} scene={Scene}");
         if (report.summary.result != BuildResult.Succeeded)
             throw new System.Exception(tag + " build failed");

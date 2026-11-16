@@ -31,6 +31,11 @@
   </div>
 </div>
 <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+<aside style="position:fixed;right:12px;top:12px;z-index:10;color:white;background:#332820;padding:6px">
+  <button id="easyinput-connect" type="button">连接 EasyInput</button>
+  <span id="easyinput-status" role="status"></span>
+</aside>
+<script src="easyinput.js"></script>
 <div id="error"></div>
 <script src="Build/{{{ LOADER_FILENAME }}}"></script>
 <script>
@@ -78,7 +83,13 @@
     const pct = Math.round(progress * 100);
     document.getElementById("loading-text").textContent = "正在开机… " + pct + "%";
     document.getElementById("progress-bar").style.width = pct + "%";
-  })).then(() => {
+  })).then(instance => {
+    window.addEventListener("game-input", ({detail}) =>
+      instance.SendMessage("EasyInputBridge", "OnAction", detail.action));
+    const resetBoard = () => instance.SendMessage("EasyInputBridge", "ResetInput", "");
+    window.addEventListener("blur", resetBoard);
+    window.addEventListener("easyinput-reset", resetBoard);
+    document.addEventListener("visibilitychange", resetBoard);
     loading.style.display = "none";
   }).catch((message) => {
     loading.style.display = "none";

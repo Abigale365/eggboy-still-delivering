@@ -253,6 +253,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
     bool Once(int index, float at) { if (events[index] || u < at) return false; return events[index] = true; }
     void Direct()
     {
+        b.player.idle = 0f; // 拍摄中的停留仍保持角色清醒。
         float ease = Mathf.SmoothStep(0, 1, u);
         if (sceneIndex == 11) TownLighting.SetFilmingPhase(ease);
         if (sceneIndex == 1)
@@ -355,7 +356,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
         {
             string n = rt.name.ToLowerInvariant();
             if (n == "wishpromptinputbg") continue;
-            if (n.Contains("prompt") || n.Contains("tutorial") || n.Contains("toast") || n.Contains("goal") || n == "keys" || n.Contains("debug") || n.Contains("signalcard") || n.Contains("achievementdiducard")) rt.gameObject.SetActive(false);
+            if (n.Contains("prompt") || n.Contains("tutorial") || n.Contains("toast") || n.Contains("goal") || n == "keys" || n.Contains("debug") || n.Contains("signalcard") || n.Contains("achievementdiducard") || n.Contains("achievementgallery")) rt.gameObject.SetActive(false);
         }
         Cursor.visible = false;
     }

@@ -1,0 +1,51 @@
+{
+  "release": {
+    "zip": "G:\\1 business\\02 项目工作区\\2026.09.05 AI赛事\\2026.11.19 群核Aholo全球3D AI黑客松\\08_最终提交材料\\2026-11-16_TideTown-Windows-终版.zip",
+    "sha256": "542D776769A7B2B0DA49F81639D788CE14435622D8B06CF4E38EB8E9FEDAC770",
+    "size": 627798701,
+    "launch": "G:\\1 business\\02 项目工作区\\2026.09.05 AI赛事\\2026.11.19 群核Aholo全球3D AI黑客松\\08_最终提交材料\\TideTown-Launch-Test-46a506",
+    "backup": "G:\\1 business\\02 项目工作区\\2026.09.05 AI赛事\\2026.11.19 群核Aholo全球3D AI黑客松\\08_最终提交材料\\TideTown-Launch-Test-46a506\\_旧版备份_20261116\\再次更新前_20261116_075941",
+    "generated": "2026-11-16T08:02:59.6764103-08:00"
+  },
+  "source_assembly_sha256": "FE306F5119C0391D5235281CF3A71C32CF99738A07DDA7E4BDFE047872A55A77",
+  "story_audit": "final-trailer-20261116_074158",
+  "final_innovation_audit": "final-trailer-20261116_081053",
+  "innovation_pass": 166,
+  "innovation_total": 166,
+  "concurrent_load_failed_audit_preserved": "final-trailer-20261116_080752",
+  "videos": [
+    {
+      "path": "G:\\1 business\\02 项目工作区\\2026.09.05 AI赛事\\2026.11.19 群核Aholo全球3D AI黑客松\\08_最终提交材料\\2026-11-16_介绍视频\\2026-11-16_记忆邮局_还在送_介绍片_1080p.mp4",
+      "resolution": [
+        1920,
+        1080
+      ],
+      "frames": 4500,
+      "fps": 30,
+      "duration": 150,
+      "black_frames": [],
+      "static_seconds": [],
+      "lufs": -16.0,
+      "audio_offset_ms": 0
+    },
+    {
+      "path": "G:\\1 business\\02 项目工作区\\2026.09.05 AI赛事\\2026.11.19 群核Aholo全球3D AI黑客松\\08_最终提交材料\\2026-11-16_介绍视频\\2026-11-16_记忆邮局_还在送_小红书竖屏_60s.mp4",
+      "resolution": [
+        1080,
+        1920
+      ],
+      "frames": 1800,
+      "fps": 30,
+      "duration": 60,
+      "black_frames": [],
+      "static_seconds": [],
+      "lufs": -15.9,
+      "audio_offset_ms": 0
+    }
+  ],
+  "manual_remaining": [
+    "实板旋钮/S5验收",
+    "真人麦克风吹气验收",
+    "H1-H9手机素材补拍"
+  ]
+}

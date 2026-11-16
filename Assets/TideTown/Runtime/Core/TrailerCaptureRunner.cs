@@ -122,6 +122,17 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
 
     void Mark(string flag) { if (!b.state.flags.Contains(flag)) b.state.flags.Add(flag); }
     Vector3 Ground(Vector3 p) { p.y = b.world.GroundAt(p.x, p.z); return p; }
+    Vector3 SafeStand(Vector3 p)
+    {
+        for (float r = 0; r <= 4f; r += .35f)
+        for (int i = 0; i < 24; i++)
+        {
+            float a = i * Mathf.PI / 12;
+            var q = Ground(p + new Vector3(Mathf.Cos(a) * r, 0, Mathf.Sin(a) * r));
+            if (b.world.Walkable(q.x, q.z) && q.y > WaterLevel.StaticY + .1f) return q;
+        }
+        return Ground(p);
+    }
     Vector3 Stove()
     {
         var s = Array.Find(BakeryData.Load(), x => x.id == "stove");
@@ -129,7 +140,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
     }
     void Actor(Vector3 at, Vector3 look)
     {
-        actor = actorEnd = Ground(at);
+        actor = actorEnd = SafeStand(at);
         b.player.locked = true;
         b.player.transform.position = actor; b.player.vel = Vector3.zero;
         b.player.FaceTowards(look);
@@ -149,7 +160,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
         radius = 5; height = 2.6f; orbit = 205; focus = Stove();
         var postOffice = GameObject.Find("B1_post_office_visual");
         var postBounds = postOffice != null ? Lux3DModelFit.WorldBounds(postOffice) : new Bounds(b.world.MailboxPos, Vector3.one);
-        var post = new Vector3(postBounds.center.x, 0, postBounds.min.z - .65f);
+        var post = new Vector3(postBounds.center.x - 1f, 0, postBounds.min.z - 1.5f);
         switch (s)
         {
             case 0:
@@ -179,10 +190,10 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
                 actorEnd = Ground(actor + new Vector3(.7f, 0, .7f)); radius = 6.2f; height = 3; orbit = 220;
                 b.water.SetLevel("L1", 3); break;
             case 7:
-                focus = mech.GetDogBowlPosition(); radius = 3.8f; height = 1.8f;
+                focus = mech.GetDogBowlPosition(); radius = 5f; height = 2.6f;
                 AIAgentCalibrationDirector.DebugSetConsole(true); break;
             case 8:
-                focus = mech.GetDogBowlPosition(); radius = 4; height = 1.1f; orbit = 165;
+                focus = mech.GetDogBowlPosition(); radius = 4.8f; height = 2.7f; orbit = 165;
                 var dog = FindObjectOfType<DogFollower>();
                 if (dog != null) { dog.ShowAt(dog.PeekPoint); dog.Follow(); }
                 Pose("wave", ExprId.happy); break;
@@ -190,7 +201,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
                 b.state.step = "L0_cross"; Mark("school_read");
                 b.water.SetInstant(WaterLevel.LevelYs[2]); mech.DebugResetCrossing();
                 focus = mech.WinchPosition; Actor(focus + new Vector3(-.8f, 0, -.7f), focus);
-                radius = 5; height = 2.7f; orbit = 190;
+                radius = 6.5f; height = 4; orbit = 190;
                 Pose("give", ExprId.nervous); mech.DebugPlayerHoldsWinch = true; break;
             case 10:
                 mech.DebugPlayerHoldsWinch = false;
@@ -213,7 +224,15 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
                 Pose("wave", ExprId.excited); break;
             case 13:
                 var reply = FindObjectOfType<FlashlightReply>(); if (reply != null) reply.Begin();
-                focus = EndingData.Point(EndingData.Load().city); radius = 22; height = 9; orbit = 220; break;
+                FindObjectOfType<CityGlow>()?.Show();
+                focus = EndingData.Point(EndingData.Load().city); radius = 22; height = 9; orbit = 220;
+                if (reply != null && reply.dots.Length > 0 && reply.dots[0] != null)
+                {
+                    var lights = reply.dots[0].bounds;
+                    foreach (var dot in reply.dots) if (dot != null) lights.Encapsulate(dot.bounds);
+                    focus = lights.center; radius = Mathf.Max(18, lights.size.magnitude * .85f);
+                }
+                break;
             case 14:
                 b.director.StopAllCoroutines(); b.state.step = "E1_read"; Mark("dawn_shown");
                 focus = EndingData.Point(EndingData.Load().desk); Actor(focus + new Vector3(0, 0, -1.1f), focus);
@@ -227,6 +246,7 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
             case 16:
                 focus = new Vector3(-3, 3, -3); radius = 48; height = 35; orbit = 190; break;
         }
+        if (!viewfinder.IsViewfinderActive) b.ui.SetCinematic(true, "trailer");
         Debug.Log("TRAILER_SCENE " + (s + 1) + " focus=" + focus + " actor=" + actor);
     }
 
@@ -291,6 +311,11 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
     void LateUpdate()
     {
         if (cam == null || sceneIndex < 0) return;
+        if (sceneIndex == 8)
+        {
+            var dog = FindObjectOfType<DogFollower>();
+            if (dog != null) focus = dog.transform.position + Vector3.up * .2f;
+        }
         if (sceneIndex == 10 && viewfinder != null && viewfinder.IsViewfinderActive) return;
         float a = (orbit + u * 7f) * Mathf.Deg2Rad;
         float r = radius * (1 - .07f * Mathf.SmoothStep(0, 1, u));
@@ -329,7 +354,8 @@ public sealed class TrailerCaptureRunner : MonoBehaviour
         foreach (var rt in b.ui.GetComponentsInChildren<RectTransform>(true))
         {
             string n = rt.name.ToLowerInvariant();
-            if (n.Contains("prompt") || n.Contains("tutorial") || n.Contains("toast") || n.Contains("goal") || n == "keys" || n.Contains("debug") || n.Contains("signalcard")) rt.gameObject.SetActive(false);
+            if (n == "wishpromptinputbg") continue;
+            if (n.Contains("prompt") || n.Contains("tutorial") || n.Contains("toast") || n.Contains("goal") || n == "keys" || n.Contains("debug") || n.Contains("signalcard") || n.Contains("achievementdiducard")) rt.gameObject.SetActive(false);
         }
         Cursor.visible = false;
     }

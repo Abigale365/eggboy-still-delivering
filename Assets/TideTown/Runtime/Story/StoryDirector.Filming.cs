@@ -30,7 +30,7 @@ public sealed partial class StoryDirector
         {
             var house = GameObject.Find("B1_post_office_visual");
             var bounds = house != null ? Lux3DModelFit.WorldBounds(house) : new Bounds(island.MailboxPos, Vector3.one);
-            at = new Vector3(bounds.center.x, 0, bounds.min.z - .65f);
+            at = new Vector3(bounds.center.x - 1f, 0, bounds.min.z - 1.5f);
             target = at + Vector3.back * 3f; State.step = "P0_boot";
         }
         else if (stage == 6)

@@ -24,7 +24,9 @@ results={}
 for mode in modes:
     argv=[str(BUILD/'TideTown.exe'),'-'+mode+'audit','-screen-width','1920','-screen-height','1080','-screen-fullscreen','0','-resetsave','-logFile',str(EVIDENCE/(mode+'-Player.log'))]
     if mode=='innov':argv+=['-lux3d','mock','-lux3ddelay','3']
-    start=time.time();process=subprocess.Popen(argv,cwd=BUILD)
+    start=time.time()
+    launcher=PROJECT/'tools'/'run-visible-audit.ps1'
+    process=subprocess.Popen(['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(launcher),'-Exe',str(BUILD/'TideTown.exe'),'-Mode',mode,'-Log',str(EVIDENCE/(mode+'-Player.log'))],cwd=BUILD)
     target=BUILD/(mode+'-audit.json');finished=None
     while process.poll() is None:
         if target.exists():

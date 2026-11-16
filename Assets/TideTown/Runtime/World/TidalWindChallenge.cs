@@ -244,7 +244,8 @@ public sealed class TidalWindChallenge : MonoBehaviour
 
     void SetWindCrouch(bool on)
     {
-        if (on == crouchedByWind) return;
+        // Active wind owns the crouch request each tick; another story interaction may have released it.
+        if (!on && !crouchedByWind) return;
         crouchedByWind = on;
         player.SetStoryCrouch(on);
     }

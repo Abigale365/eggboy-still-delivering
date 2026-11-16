@@ -10,7 +10,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 [Serializable] public class WordSlipDef
@@ -40,6 +39,7 @@ public sealed class WordMaterializerSystem : MonoBehaviour
     RectTransform hudCanvasRoot, letterOverlay, letterPaper;
     CanvasGroup paperCanvasGroup;
     Image overlayBackdropImage;
+    Button letterCloseButton;
     GameObject slipTrayRoot;
     readonly List<GameObject> trayObjects = new List<GameObject>();
     readonly Dictionary<string, RectTransform> slipCards = new Dictionary<string, RectTransform>();
@@ -47,12 +47,17 @@ public sealed class WordMaterializerSystem : MonoBehaviour
     int currentLetter;
 
     WordSlipDef draggingSlip;
-    RectTransform draggedSlipUI, draggedOriginal;
-    Vector2 dragStartScreenPos;
+    RectTransform draggedSlipUI;
+    CanvasGroup draggedSource;
+    Vector2 dragStartScreenPos, lastDragPointer;
+    int restoreLetterCloseAt;
     bool aimedInAir;
-    Vector3 currentAimWorldPos;
     GameObject aimPreviewRoot;
-    readonly Transform[] arcDots = new Transform[14];
+    readonly Transform[] arcDots = new Transform[8];
+    LineRenderer landing;
+    Material arcMaterial, landingMaterial;
+    float landingTime;
+    const float LandingSeconds = .36f;
 
     // 同一个字在世界里只留一份：再扔一次，旧的收回
     readonly Dictionary<string, Lux3DSpawn> materialized = new Dictionary<string, Lux3DSpawn>();
@@ -188,7 +193,11 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         if (paperImg != null) paperImg.raycastTarget = true; // 点信纸内部不算"点背景关信"
         paperCanvasGroup = letterPaper.GetComponent<CanvasGroup>();
         if (paperCanvasGroup == null) paperCanvasGroup = letterPaper.gameObject.AddComponent<CanvasGroup>();
-        if (letterOverlay != null) overlayBackdropImage = letterOverlay.GetComponent<Image>();
+        if (letterOverlay != null)
+        {
+            overlayBackdropImage = letterOverlay.GetComponent<Image>();
+            letterCloseButton = letterOverlay.GetComponent<Button>();
+        }
 
         slipTrayRoot = new GameObject("WordSlipTray", typeof(RectTransform));
         slipTrayRoot.transform.SetParent(letterPaper, false);
@@ -215,21 +224,38 @@ public sealed class WordMaterializerSystem : MonoBehaviour
             if (!HasLetter(LetterIds[i])) continue;
             int idx = i;
             var btn = TideTownStyleUI.CreateWarmButton(slipTrayRoot.transform, LetterTabs[i],
-                new Vector2(-186f + shown * 124f, 294f), new Vector2(116f, 28f), i == currentLetter, () => OpenSpecificLetter(idx));
+                // 2026-11-16 下午：信件页签挪到信纸上沿外面（像索引签），不再压住信的第一行
+                new Vector2(-186f + shown * 124f, 324f), new Vector2(116f, 28f), i == currentLetter, () => OpenSpecificLetter(idx));
             tabButtons.Add(btn.gameObject);
             shown++;
         }
 
         var pocket = PocketSlips();
+        var hintBar = letterPaper != null ? letterPaper.Find("LetterHintBar") : null;
+        if (hintBar != null) hintBar.gameObject.SetActive(true);
         if (pocket.Count == 0) return;
 
+        // 先数一遍要几行；两行以上时整片往上挪一行，并把信纸页脚的"收起信"小条让出来（信纸上沿 +310，页脚条在 -274 附近）
+        int rows = 1;
+        {
+            float px = -250f;
+            foreach (var def in pocket)
+            {
+                float w = def.kind == "char" ? 48f : 30f + def.word.Length * 20f;
+                if (px + w > 250f) { px = -250f; rows++; }
+                px += w + 8f;
+            }
+        }
+        if (rows >= 2 && hintBar != null) hintBar.gameObject.SetActive(false);
+        float lift = rows >= 2 ? 22f : 0f;
+
         var hint = TideTownStyleUI.CreateText(slipTrayRoot.transform, "· 信上橘色的字可以撕下来 ·",
-            12, TideTownStyleUI.InkMuted, TextAnchor.MiddleCenter, new Vector2(0f, -220f), new Vector2(500f, 18f), false);
+            12, TideTownStyleUI.InkMuted, TextAnchor.MiddleCenter, new Vector2(0f, -214f + lift), new Vector2(500f, 18f), false);
         trayObjects.Add(hint.gameObject);
 
         // 流式排版：单字是小方块，词和拼出来的字长一些
-        float x = -250f, y = -246f;
-        const float gap = 8f, rowH = 42f;
+        float x = -250f, y = -240f + lift;
+        const float gap = 8f, rowH = 40f;
         foreach (var def in pocket)
         {
             float w = def.kind == "char" ? 48f : 30f + def.word.Length * 20f;
@@ -239,6 +265,7 @@ public sealed class WordMaterializerSystem : MonoBehaviour
 
             var card = TideTownStyleUI.CreatePanel(slipTrayRoot.transform, "WordSlip_" + def.id, w, 34f,
                 def.combo ? TideTownStyleUI.AmberSoft : TideTownStyleUI.SlipColor, true);
+            card.sprite = TideTownStyleUI.RoundedBorderSprite;   // 2026-11-16 字条和手账同款内缩细线
             var srt = card.rectTransform;
             srt.anchorMin = srt.anchorMax = srt.pivot = new Vector2(0.5f, 0.5f);
             srt.anchoredPosition = pos;
@@ -248,8 +275,7 @@ public sealed class WordMaterializerSystem : MonoBehaviour
             TideTownStyleUI.CreateText(card.transform, def.word, 16,
                 def.kind == "char" ? (Color32)new Color32(0xC2, 0x62, 0x1D, 255) : TideTownStyleUI.InkDark,
                 TextAnchor.MiddleCenter, Vector2.zero, new Vector2(w - 6f, 28f), true);
-            var relay = card.gameObject.AddComponent<WordSlipDragRelay>();
-            relay.system = this; relay.slipDef = def; relay.cardRect = srt;
+            card.gameObject.AddComponent<CanvasGroup>();
             trayObjects.Add(card.gameObject);
             slipCards[def.id] = srt;
         }
@@ -259,26 +285,57 @@ public sealed class WordMaterializerSystem : MonoBehaviour
 
     void Update()
     {
+        if (restoreLetterCloseAt > 0 && Time.frameCount >= restoreLetterCloseAt)
+        {
+            restoreLetterCloseAt = 0;
+            if (letterCloseButton != null) letterCloseButton.interactable = ui != null && ui.inputClose;
+        }
+        if (draggingSlip == null && landingTime > 0f)
+        {
+            landingTime = Mathf.Max(0f, landingTime - Time.unscaledDeltaTime);
+            float fraction = 1f - landingTime / LandingSeconds;
+            UpdateLandingMarker(landing.transform.position - Vector3.up * .012f, Mathf.Lerp(.14f, .29f, fraction), .8f * (1f - fraction));
+            if (landingTime <= 0f) landing.enabled = false;
+        }
         if (ui == null || !ui.inputClose) return;
         if (ui.LetterOpen && !lastLetterOpen) { RestorePaperOpacity(); RebuildTray(); }
         else if (!ui.LetterOpen && lastLetterOpen) { CancelActiveDrag(); RestorePaperOpacity(); }
         lastLetterOpen = ui.LetterOpen;
-        if (draggingSlip != null) UpdateDraggingInAir();
+        if (!ui.LetterOpen) return;
+
+        Vector2 pointer = Input.mousePosition;
+        if (draggingSlip == null && Input.GetMouseButtonDown(0))
+        {
+            string slip = SlipUnder(pointer, null);
+            if (slip != null) BeginSlipDrag(FindSlip(slip), slipCards[slip], pointer);
+        }
+        if (draggingSlip == null) return;
+        if (Input.GetMouseButtonUp(0)) EndSlipDrag(pointer);
+        else if (!Input.GetMouseButton(0)) { CancelActiveDrag(); RestorePaperOpacity(); }
+        else
+        {
+            UpdateDraggedSlipScreenPos(pointer, pointer - lastDragPointer);
+            lastDragPointer = pointer;
+            UpdateDraggingInAir();
+        }
     }
 
     // ---- 拖拽 ----
 
-    internal void OnSlipBeginDrag(WordSlipDef def, RectTransform originalCard, PointerEventData ev)
+    void BeginSlipDrag(WordSlipDef def, RectTransform originalCard, Vector2 pointer)
     {
         if (def == null || hudCanvasRoot == null) return;
         draggingSlip = def;
-        draggedOriginal = originalCard;
-        dragStartScreenPos = ev.position;
+        draggedSource = originalCard != null ? originalCard.GetComponent<CanvasGroup>() : null;
+        dragStartScreenPos = lastDragPointer = pointer;
         aimedInAir = false;
-        if (originalCard != null) originalCard.gameObject.SetActive(false);
+        if (draggedSource != null) draggedSource.alpha = 0f;
+        // The backdrop normally closes the letter on click. The slip owns this press until release.
+        if (letterCloseButton != null) letterCloseButton.interactable = false;
 
         float w = def.kind == "char" ? 56f : 36f + def.word.Length * 22f;
         var dragImg = TideTownStyleUI.CreatePanel(hudCanvasRoot, "DraggedWordSlip", w, 40f, TideTownStyleUI.PaperColor, true);
+        dragImg.sprite = TideTownStyleUI.RoundedBorderSprite;
         dragImg.raycastTarget = false;
         var sh = dragImg.gameObject.AddComponent<Shadow>();
         sh.effectColor = new Color32(0, 0, 0, 120);
@@ -286,24 +343,17 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         TideTownStyleUI.CreateText(dragImg.transform, def.word, 18, TideTownStyleUI.InkDark, TextAnchor.MiddleCenter,
             Vector2.zero, new Vector2(w - 8f, 34f), true);
         draggedSlipUI = dragImg.rectTransform;
-        UpdateDraggedSlipScreenPos(ev.position, Vector2.zero);
+        UpdateDraggedSlipScreenPos(pointer, Vector2.zero);
         ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.18f);
     }
 
-    internal void OnSlipDrag(PointerEventData ev)
-    {
-        if (draggingSlip == null || draggedSlipUI == null) return;
-        UpdateDraggedSlipScreenPos(ev.position, ev.delta);
-    }
-
-    internal void OnSlipEndDrag(RectTransform originalCard, PointerEventData ev)
+    void EndSlipDrag(Vector2 pointer)
     {
         if (draggingSlip == null) return;
         var def = draggingSlip;
-        Vector3 landPos = currentAimWorldPos;
 
         // 1) 松手时压在另一张字上：拼字
-        string over = SlipUnder(ev.position, def.id);
+        string over = SlipUnder(pointer, def.id);
         if (over != null)
         {
             CleanupDragVisuals();
@@ -316,8 +366,9 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         }
 
         // 2) 拖出了信纸：扔出去
-        bool outsidePaper = letterPaper == null || !RectTransformUtility.RectangleContainsScreenPoint(letterPaper, ev.position, null);
-        bool shouldThrow = outsidePaper && (aimedInAir || Vector2.Distance(ev.position, dragStartScreenPos) > 48f);
+        bool outsidePaper = letterPaper == null || !RectTransformUtility.RectangleContainsScreenPoint(letterPaper, pointer, null);
+        bool shouldThrow = outsidePaper && (aimedInAir || Vector2.Distance(pointer, dragStartScreenPos) > 48f);
+        Vector3 landPos = shouldThrow ? ComputeAimWorldPoint(pointer) : Vector3.zero;
         CleanupDragVisuals();
         RestorePaperOpacity();
         if (shouldThrow && player != null)
@@ -325,7 +376,6 @@ public sealed class WordMaterializerSystem : MonoBehaviour
             if (ui != null && ui.LetterOpen) ui.CloseLetter();
             StartCoroutine(ThrowRoutine(def, landPos));
         }
-        else if (originalCard != null) originalCard.gameObject.SetActive(true);
     }
 
     string SlipUnder(Vector2 screenPos, string exceptId)
@@ -370,8 +420,7 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         if (paperCanvasGroup != null)
             paperCanvasGroup.alpha = Mathf.Lerp(paperCanvasGroup.alpha, outside ? 0.12f : 1f, Time.unscaledDeltaTime * 12f);
         if (overlayBackdropImage != null && outside) overlayBackdropImage.color = new Color32(0, 0, 0, 10);
-        currentAimWorldPos = ComputeAimWorldPoint(mousePos);
-        UpdateArcPreview(currentAimWorldPos, outside);
+        UpdateArcPreview(ComputeAimWorldPoint(mousePos), outside && draggingSlip.kind != "char");
     }
 
     Vector3 ComputeAimWorldPoint(Vector2 screenPos)
@@ -407,36 +456,91 @@ public sealed class WordMaterializerSystem : MonoBehaviour
 
     void UpdateArcPreview(Vector3 targetPos, bool visible)
     {
-        if (player == null) return;
+        if (player == null || !visible)
+        {
+            if (aimPreviewRoot != null && landingTime <= 0f) aimPreviewRoot.SetActive(false);
+            return;
+        }
+        EnsureArcPreview();
+        landingTime = 0f;
+        aimPreviewRoot.SetActive(true);
+        Vector3 startPos = player.transform.position + Vector3.up * 0.72f;
+        for (int i = 0; i < arcDots.Length; i++)
+        {
+            float t = (i + 1f) / (arcDots.Length + 1f);
+            arcDots[i].gameObject.SetActive(true);
+            arcDots[i].position = ThrowArc(startPos, targetPos + Vector3.up * .05f, t, 2.1f);
+        }
+        UpdateLandingMarker(targetPos, .14f, .76f);
+    }
+
+    void EnsureArcPreview()
+    {
         if (aimPreviewRoot == null)
         {
             aimPreviewRoot = new GameObject("WordThrowAimPreview");
+            aimPreviewRoot.transform.SetParent(transform, false);
             var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            var dotMat = new Material(sh) { color = TideTownStyleUI.PaperColor };
-            if (dotMat.HasProperty("_EmissionColor"))
+            arcMaterial = new Material(sh) { color = TideTownStyleUI.SlipColor };
+            if (arcMaterial.HasProperty("_EmissionColor"))
             {
-                dotMat.EnableKeyword("_EMISSION");
-                dotMat.SetColor("_EmissionColor", new Color(1f, 0.82f, 0.42f) * 1.5f);
+                arcMaterial.EnableKeyword("_EMISSION");
+                arcMaterial.SetColor("_EmissionColor", new Color(.65f, .42f, .14f));
             }
             for (int i = 0; i < arcDots.Length; i++)
             {
                 var d = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 Destroy(d.GetComponent<Collider>());
                 d.transform.SetParent(aimPreviewRoot.transform, false);
-                d.transform.localScale = Vector3.one * Mathf.Lerp(0.05f, 0.09f, (float)i / arcDots.Length);
-                d.GetComponent<Renderer>().sharedMaterial = dotMat;
+                d.transform.localScale = Vector3.one * Mathf.Lerp(.043f, .024f, i / (arcDots.Length - 1f));
+                var renderer = d.GetComponent<Renderer>();
+                renderer.sharedMaterial = arcMaterial;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 arcDots[i] = d.transform;
             }
+            var marker = new GameObject("WordLandingRing");
+            marker.transform.SetParent(aimPreviewRoot.transform, false);
+            landing = marker.AddComponent<LineRenderer>();
+            landingMaterial = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Universal Render Pipeline/Unlit"));
+            landing.sharedMaterial = landingMaterial;
+            landing.useWorldSpace = false;
+            landing.loop = true;
+            landing.positionCount = 24;
+            landing.widthMultiplier = .009f;
+            landing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            for (int i = 0; i < landing.positionCount; i++)
+            {
+                float angle = i * Mathf.PI * 2f / landing.positionCount;
+                landing.SetPosition(i, new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)));
+            }
         }
-        aimPreviewRoot.SetActive(visible);
-        Vector3 startPos = player.transform.position + Vector3.up * 0.68f;
-        for (int i = 0; i < arcDots.Length; i++)
-        {
-            float t = (float)(i + 1) / arcDots.Length;
-            Vector3 p = Vector3.Lerp(startPos, targetPos, t);
-            p.y += Mathf.Sin(t * Mathf.PI) * 1.85f;
-            arcDots[i].position = p;
-        }
+    }
+
+    void UpdateLandingMarker(Vector3 position, float radius, float opacity)
+    {
+        landing.transform.position = position + Vector3.up * .012f;
+        landing.transform.localScale = Vector3.one * radius;
+        landing.startColor = landing.endColor = new Color(1f, .80f, .46f, opacity);
+        landing.enabled = true;
+    }
+
+    static Vector3 ThrowArc(Vector3 start, Vector3 end, float t, float height) =>
+        Vector3.Lerp(start, end, t) + Vector3.up * (4f * height * t * (1f - t));
+
+    void ShowLanding(Vector3 position)
+    {
+        if (draggingSlip != null) return;
+        EnsureArcPreview();
+        foreach (var dot in arcDots) dot.gameObject.SetActive(false);
+        aimPreviewRoot.SetActive(true);
+        UpdateLandingMarker(position, .14f, .8f);
+        landingTime = LandingSeconds;
+    }
+
+    void OnDestroy()
+    {
+        if (arcMaterial != null) Destroy(arcMaterial);
+        if (landingMaterial != null) Destroy(landingMaterial);
     }
 
     // ---- 扔出去 ----
@@ -484,14 +588,16 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
-            Vector3 mid = loose ? startPos + new Vector3(Mathf.Sin(lookYaw), 0f, Mathf.Cos(lookYaw)) * (1.2f * Mathf.Sin(t * Mathf.PI)) : Vector3.Lerp(startPos, endPos, t);
-            mid.y += Mathf.Sin(t * Mathf.PI) * (loose ? 1.1f : 2.1f);
+            Vector3 mid = ThrowArc(startPos, endPos, t, loose ? 1.1f : 2.1f);
+            if (loose) mid += new Vector3(Mathf.Sin(lookYaw), 0f, Mathf.Cos(lookYaw)) * (1.2f * Mathf.Sin(t * Mathf.PI));
             flyingSlip.transform.position = mid;
             flyingSlip.transform.rotation = Quaternion.Euler(t * 520f, lookYaw * Mathf.Rad2Deg + t * 180f, Mathf.Sin(t * 14f) * 28f);
             yield return null;
         }
         Destroy(flyingSlip);
+        Destroy(paperMat);
         if (loose) { ShadowAndChimeSystem.PlayProceduralChime(294f, 0.25f); yield break; }
+        ShowLanding(landPos);
 
         Materialize(def, landPos, lookYaw * Mathf.Rad2Deg);
         ShadowAndChimeSystem.PlayProceduralChime(880f, 0.42f);
@@ -696,14 +802,16 @@ public sealed class WordMaterializerSystem : MonoBehaviour
     {
         if (draggedSlipUI != null) Destroy(draggedSlipUI.gameObject);
         draggedSlipUI = null;
+        if (draggedSource != null) draggedSource.alpha = 1f;
+        draggedSource = null;
         draggingSlip = null;
+        restoreLetterCloseAt = Time.frameCount + 1;
         if (aimPreviewRoot != null) aimPreviewRoot.SetActive(false);
     }
 
     void CancelActiveDrag()
     {
         if (draggingSlip == null) return;
-        if (draggedOriginal != null) draggedOriginal.gameObject.SetActive(true);
         CleanupDragVisuals();
     }
 
@@ -712,16 +820,4 @@ public sealed class WordMaterializerSystem : MonoBehaviour
         if (paperCanvasGroup != null) paperCanvasGroup.alpha = 1f;
         if (overlayBackdropImage != null) overlayBackdropImage.color = new Color32(0, 0, 0, 60);
     }
-}
-
-public sealed class WordSlipDragRelay : MonoBehaviour, IPointerDownHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
-{
-    public WordMaterializerSystem system;
-    public WordSlipDef slipDef;
-    public RectTransform cardRect;
-
-    public void OnPointerDown(PointerEventData eventData) { }
-    public void OnBeginDrag(PointerEventData eventData) { if (system != null) system.OnSlipBeginDrag(slipDef, cardRect, eventData); }
-    public void OnDrag(PointerEventData eventData) { if (system != null) system.OnSlipDrag(eventData); }
-    public void OnEndDrag(PointerEventData eventData) { if (system != null) system.OnSlipEndDrag(cardRect, eventData); }
 }

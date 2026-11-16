@@ -38,7 +38,9 @@ public sealed class SafePoints : MonoBehaviour
         if (world == null) world = FindObjectOfType<IslandWorld>();
 
         var p = player.transform.position;
-        if (p.y < WaterLevel.StaticY - 0.05f) { Rescue("water"); return; }
+        // 2026-11-14：沙滩上没过脚不超过 WadeDepth 的浅水可以涉，不算掉水；别处照旧 0.05
+        float wade = world != null && world.IsBeachSurface(p.x, p.z, p.y) ? IslandWorld.WadeDepth + 0.02f : IslandWorld.RoadWadeDepth;
+        if (p.y < WaterLevel.StaticY - wade) { Rescue("water"); return; }
 
         // 卡住 = 一直想走，但离开始卡住的那个点不到 stuckRadius。
         // 以前按“每帧挪动 < 2 cm”判断，帧率一高正常走路每帧也不到 2 cm（60 帧走路约 1.1 cm），
@@ -92,6 +94,9 @@ public sealed class SafePoints : MonoBehaviour
     {
         back = p;
         if (world == null || world.IsBeachSurface(p.x, p.z, p.y)) return false;
+        // 2026-11-16 自由漫游：从台地跳到下一层是正常玩法，不再当成"掉层"送回去。
+        // 跳下去回不来的地方由 RoamAudit（编辑器全岛连通检查）保证没有——回不来的坑要么补路要么划进禁区。
+        if (world.FreeRoam) return false;
         if (routePts == null) LoadRoute();
         if (routePts.Length < 2) return false;
 

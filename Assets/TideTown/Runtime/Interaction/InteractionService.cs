@@ -14,6 +14,13 @@ public interface IInteractable
 public interface IHoldInteraction
 {
     float HoldSeconds(GameState state);
+    string HoldEmote(GameState state);
+}
+
+// 可选接口：辅助机关沿用原 IInteractable，不承担主线目标判断。
+public interface IObjectiveInteractable
+{
+    bool IsObjective(GameState state);
 }
 
 public sealed class InteractionService : MonoBehaviour
@@ -22,6 +29,7 @@ public sealed class InteractionService : MonoBehaviour
 
     IInteractable heldTarget;
     float heldTime;
+    string activeHoldEmote;
     EggboyPlayer player;
     EggboyUI ui;
     ControlGate gate;
@@ -37,13 +45,24 @@ public sealed class InteractionService : MonoBehaviour
     public void Register(IInteractable item) { if (!items.Contains(item)) items.Add(item); }
     public bool IsRegistered(IInteractable item) => items.Contains(item);
 
+    public bool TryGetPosition(string entityId, out Vector3 position)
+    {
+        foreach (var item in items)
+        {
+            if (item.EntityId != entityId) continue;
+            position = item.Position;
+            return true;
+        }
+        position = default;
+        return false;
+    }
+
     static int Priority(IInteractable it, GameState s)
     {
         if (it == null) return -1;
-        // 主线任务可交互物永远优先于周边回忆旧物，避免回忆旧物抢走摊位/柴火/烤炉的 E 键
-        if (!(it is MemoryInteractable))
-            return it.CanInteract(s) ? 3 : 1;
-        return 2;
+        if(!it.CanInteract(s))return 1;
+        if(it is IObjectiveInteractable objective)return objective.IsObjective(s)?4:2;
+        return it is MemoryInteractable?2:3;
     }
 
     IInteractable FindBest(GameState s, bool requireCanInteract)
@@ -72,7 +91,8 @@ public sealed class InteractionService : MonoBehaviour
     void Update()
     {
         if (player == null || ui == null) return;
-        if (ui.Paused || ui.TitleShowing || player.locked || (gate != null && gate.Locked))
+        // 2026-11-16：表情轮盘 / 心愿端详开着时不显示也不响应 [E]（提示条会压在轮盘下沿的说明上）
+        if (ui.Paused || ui.TitleShowing || player.locked || (gate != null && gate.Locked) || EmoteWheel.IsOpen || WishInspectModal.IsOpen)
         { heldTarget = null; ui.SetPrompt(""); return; }
 
         var s = state();
@@ -80,28 +100,47 @@ public sealed class InteractionService : MonoBehaviour
 
         string prompt = best != null ? best.Prompt(s) : "";
         float duration = best is IHoldInteraction action ? action.HoldSeconds(s) : 0f;
-        if (heldTarget != best || !Input.GetKey(KeyCode.E)) heldTarget = null;
+        if (heldTarget != best || !Input.GetKey(KeyCode.E))
+        {
+            if (heldTarget != null && !string.IsNullOrEmpty(activeHoldEmote) && player != null)
+                player.StopEmote(activeHoldEmote);
+            heldTarget = null;
+            activeHoldEmote = null;
+        }
         if (best != null && best.CanInteract(s))
         {
             if (Input.GetKeyDown(KeyCode.E))
             {
+                player.FaceTowards(best.Position);
                 if (duration <= 0f) best.Interact(s, this);
-                else { heldTarget = best; heldTime = 0f; }
+                else
+                {
+                    heldTarget = best;
+                    heldTime = 0f;
+                    activeHoldEmote = best is IHoldInteraction ha ? ha.HoldEmote(s) : null;
+                    if (!string.IsNullOrEmpty(activeHoldEmote))
+                        player.PlayEmote(activeHoldEmote, int.MaxValue);
+                }
             }
 
             if (heldTarget != null && duration > 0f)
             {
+                player.FaceTowards(heldTarget.Position);
+                player.HoldActionLock(0.12f);
                 heldTime += Time.unscaledDeltaTime;
                 if (heldTime >= duration)
                 {
+                    if (!string.IsNullOrEmpty(activeHoldEmote))
+                        player.StopEmote(activeHoldEmote);
                     heldTarget = null;
+                    activeHoldEmote = null;
                     best.Interact(s, this);
                 }
                 else prompt += $"  {Mathf.FloorToInt(100f * heldTime / duration)}%";
             }
             else if (best is MemoryInteractable memory && !ui.ToastVisible) memory.ShowNearby();
         }
-        ui.SetPrompt(prompt);
+        ui.SetPrompt(prompt, best != null && Priority(best,s)>=3);
     }
 
     public bool TryInteractNearest()
@@ -109,6 +148,7 @@ public sealed class InteractionService : MonoBehaviour
         var s = state();
         IInteractable best = FindBest(s, true);
         if (best == null) return false;
+        if (player != null) player.FaceTowards(best.Position);
         best.Interact(s, this);
         return true;
     }
@@ -122,6 +162,7 @@ public sealed class InteractionService : MonoBehaviour
             if (it.EntityId != entityId || !it.CanInteract(s)) continue;
             if (string.IsNullOrEmpty(it.Prompt(s))) continue;
             if (player != null && Vector3.Distance(player.transform.position, it.Position) > range) continue;
+            if (player != null) player.FaceTowards(it.Position);
             it.Interact(s, this);
             return true;
         }
@@ -129,8 +170,9 @@ public sealed class InteractionService : MonoBehaviour
     }
 }
 
-public sealed class MailboxInteractable : IInteractable
+public sealed class MailboxInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s!=null&&!s.flags.Contains("letters_taken");
     public Vector3 Position { get; }
     StoryDirector director;
     public MailboxInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }

@@ -30,6 +30,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
     RectTransform consoleCard;
     Text hardwareTelemetryText;
     Text wishFeedbackText;
+    int lastDeviceState = -1;
     InputField promptInput;
     Text achievementGalleryText;
 
@@ -49,7 +50,8 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
     bool OtherOverlayOpen()
     {
         return ui != null && (ui.Paused || ui.TitleShowing || ui.LetterOpen
-            || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || AvantGardeGameplayHub.AnyModalOpen);
+            || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || AvantGardeGameplayHub.AnyModalOpen
+            || WishInspectModal.IsOpen || EmoteWheel.IsOpen);
     }
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
@@ -75,6 +77,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
             Cursor.visible = true;
             MenuController.NoteScriptUnlock();
             RefreshAchievementGallery();
+            RefreshBagButton();
         }
     }
 
@@ -94,7 +97,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
 
         TideTownStyleUI.CreateText(
             consoleCard,
-            "邮差心愿 3D 造物笺 & 一题多解成就图鉴 (V / 手柄Y)",
+            "邮差的心愿笺与图鉴",
             18,
             TideTownStyleUI.InkDark,
             TextAnchor.MiddleLeft,
@@ -217,20 +220,45 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         TideTownStyleUI.CreateWarmButton(
             consoleCard,
             "开关摄像头 AR 挥手感应",
-            new Vector2(-150f, -228f),
-            new Vector2(240f, 34f),
+            new Vector2(-204f, -228f),
+            new Vector2(194f, 34f),
             false,
             OnClickToggleWebcam);
+
+        // 2026-11-16：邮差包（容量 6）。取出最近收进去的那一件，放在脚前
+        bagOutButton = TideTownStyleUI.CreateWarmButton(
+            consoleCard,
+            "从邮差包取出",
+            new Vector2(0f, -228f),
+            new Vector2(194f, 34f),
+            false,
+            OnClickTakeOutOfBag);
+        bagOutText = bagOutButton.GetComponentInChildren<Text>();
 
         TideTownStyleUI.CreateWarmButton(
             consoleCard,
             "收起心愿笺 (V / 手柄Y)",
-            new Vector2(150f, -228f),
-            new Vector2(240f, 34f),
+            new Vector2(204f, -228f),
+            new Vector2(194f, 34f),
             false,
             () => SetConsoleOpen(false));
 
         consoleCard.gameObject.SetActive(false);
+    }
+
+    Button bagOutButton; Text bagOutText;
+    void RefreshBagButton()
+    {
+        if (bagOutText == null) return;
+        bagOutText.text = "从邮差包取出（" + WishBag.Count + "/" + WishBag.Capacity + "）";
+        bagOutButton.interactable = WishBag.Count > 0;
+    }
+    void OnClickTakeOutOfBag()
+    {
+        var t = WishBag.TakeOutLatest(player);
+        if (wishFeedbackText != null)
+            wishFeedbackText.text = t != null ? "「" + t.description + "」从邮差包里拿出来，放在你脚边了。" : "邮差包里还空着。";
+        RefreshBagButton();
     }
 
     void OnClickToggleWebcam()
@@ -241,8 +269,8 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         if (wishFeedbackText != null)
         {
             wishFeedbackText.text = active
-                ? "已开启内置摄像头 AR 手势感应！登上灯塔顶层时，对着镜头挥手即可闪灯呼唤山那边的人。"
-                : "已关闭摄像头手势感应（你依然可以随时用空格键、E 键或手柄按键挥手闪灯）。";
+                ? "到了塔顶，对着镜头挥挥手，山那边就能看见灯光。"
+                : "镜头歇一歇。到了塔顶，还能按空格挥手。";
         }
     }
 
@@ -252,19 +280,19 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         var sys = TideTownAchievementSystem.Instance;
         if (sys == null)
         {
-            achievementGalleryText.text = "一题多解成就系统准备中...";
+            achievementGalleryText.text = "沿路发生的故事会收在这里。";
             return;
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine($"【一题多解成就图鉴 · 已解锁 {sys.UnlockedCount} / {sys.TotalCount} 项】（尝试不同方案解谜即可触发“嘀嘟！”刷满成就）：");
+        sb.AppendLine($"旅途收下了 {sys.UnlockedCount} / {sys.TotalCount} 段回忆");
 
         var defs = sys.AllDefinitions;
         for (int i = 0; i < defs.Count; i++)
         {
             var d = defs[i];
             bool ok = sys.IsUnlocked(d.id);
-            string mark = ok ? "★ [已达成]" : "☆ [待探索]";
+            string mark = ok ? "●" : "○";
             sb.Append($"  {mark} {d.title}（{d.category}）");
             if (i % 2 == 1 || i == defs.Count - 1) sb.AppendLine();
             else sb.Append("    |  ");
@@ -300,7 +328,8 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
 
         Vector3 channelPos = worldMech != null ? worldMech.GetCrossingChannelCenter() : new Vector3(15.3f, 1.35f, 11.7f);
         Vector3 bowlPos = worldMech != null ? worldMech.GetDogBowlPosition() : new Vector3(17.5f, 3.05f, -5.2f);
-        Vector3 ovenPos = new Vector3(-11.5f, 1.3f, -7.8f);
+        var stove = GameObject.Find("Bakery_stove");
+        Vector3 ovenPos = stove != null ? stove.transform.position : new Vector3(-10.55f, 3f, -5.84f);
         bool nearChannel = Vector3.Distance(pPos, channelPos) < 7.5f;
         bool nearBowl = Vector3.Distance(pPos, bowlPos) < 9.5f && state != null && state.step.StartsWith("S");
         bool nearOven = Vector3.Distance(pPos, ovenPos) < 11f;
@@ -327,9 +356,8 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
 
     string WaitNote(Lux3DSpawn s)
     {
-        if (s.state == "generating") return "信已经寄出去了，真正的样子还在路上（大约几分钟），先用这一件。";
-        if (s.state == "cached") return "这件以前造过，马上就换上。";
-        if (s.state == "capped") return "这一趟能寄的心愿用完了，先用镇上现成的这一件。";
+        if (s.state == "generating") return "心愿已经寄出。先用手边这件吧。";
+        if (s.state == "capped") return "邮包装满了，镇上刚好有一件可用。";
         return "";
     }
 
@@ -344,11 +372,14 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
             isFood ? new Color32(255, 195, 110, 255) : new Color32(130, 230, 255, 255), 3.2f);
 
         // 只有放在狗碗附近才算哄到小黑；在别处造出来就只是一件摆在地上的东西
-        if (director != null && Vector3.Distance(spawnPos, bowlPos) < 3f)
+        bool byBowl = Vector3.Distance(spawnPos, bowlPos) < 3f;
+        MakeToy(s, description, isFood ? "food" : "toy", byBowl || isFood ? "小黑" : "潮汐镇", true, byBowl ? 1.2f : 3f);
+        if (director != null && byBowl)
             director.CompleteSchoolWithCustomGift(description, isFood);
 
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "「" + description + "」放在了小黑的碗旁。" + WaitNote(s);
+            wishFeedbackText.text = byBowl ? "给小黑的「" + description + "」放到碗边了。" + WaitNote(s)
+                : "「" + description + "」就在你脚边。" + WaitNote(s);
     }
 
     void SpawnWishBoat(string description, Vector3 channelPos, WorldMechanismDirector worldMech)
@@ -374,7 +405,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         else TideTownAchievementSystem.Unlock("wish_boat");
 
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "「" + description + "」浮在了渡口的水面上，可以踩着过海。" + WaitNote(s);
+            wishFeedbackText.text = "小船靠在渡口了。踩上去就能过海。" + WaitNote(s);
     }
 
     // 让模型最长的一边顺着父节点的前方（本地 Z）
@@ -395,6 +426,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         Vector3 spawnPos = ovenPos + new Vector3(0.85f, 0f, 0.65f);
         if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, ovenPos.y + 1f);
         var s = SpawnWish(description, "fire", spawnPos, Quaternion.identity, transform, new Color32(255, 175, 90, 255), 4.5f);
+        MakeToy(s, description, "fire", "林阿婆的烤炉", true, 1.5f);
 
         var fx = FindObjectOfType<BakeryEffects>();
         if (state != null && director != null)
@@ -404,7 +436,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         }
         TideTownAchievementSystem.Unlock("word_fire");
         if (wishFeedbackText != null)
-            wishFeedbackText.text = "「" + description + "」落在了烤炉旁，炉膛里有柴了。" + WaitNote(s);
+            wishFeedbackText.text = "柴送到了炉边。屋里很快就暖和了。" + WaitNote(s);
     }
 
     void SpawnWishKeepsake(string description, WorldMechanismDirector worldMech)
@@ -415,6 +447,7 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         if (world != null) spawnPos.y = world.GroundAt(spawnPos.x, spawnPos.z, player.transform.position.y + 1f);
 
         Transform parent = transform;
+        bool onPedestal = false;
         if (worldMech != null)
         {
             var ped = worldMech.GetNearestWishPedestal(player.transform.position, out float pedDist);
@@ -422,12 +455,25 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
             {
                 parent = ped;
                 spawnPos = ped.position + new Vector3(0f, 0.72f, 0f);
+                onPedestal = true;
             }
         }
         var s = SpawnWish(description, "keepsake", spawnPos, Quaternion.LookRotation(-fwd, Vector3.up), parent, new Color32(255, 215, 130, 255), 4.2f);
+        // 展台上的纪念品位置是设计好的，不挪；地上的避开主线
+        MakeToy(s, description, "keepsake", "潮汐镇", !onPedestal, 3.5f);
         TideTownAchievementSystem.Unlock("wish_town");
         if (wishFeedbackText != null)
             wishFeedbackText.text = "「" + description + "」留在了潮汐镇，会一直摆到结局。" + WaitNote(s);
+    }
+
+    // 2026-11-16 用户议题 4：心愿玩具有碰撞、能拿起来端详、能收进邮差包（渡口小船不在内）
+    public WishToy LastWishToy { get; private set; }
+    void MakeToy(Lux3DSpawn s, string description, string category, string recipient, bool autoPlace, float maxShift)
+    {
+        if (s == null || s.root == null) return;
+        var toy = s.root.AddComponent<WishToy>();
+        toy.Init(s, description, category, recipient, forgedCounter, world, player, autoPlace, maxShift);
+        LastWishToy = toy;
     }
 
     static void AttachWarmGlow(Transform parent, Color32 color, float range)
@@ -473,19 +519,12 @@ public sealed class AIAgentCalibrationDirector : MonoBehaviour
         var hub = HardwareAndSensorHub.Instance;
         if (hub != null)
         {
-            string padStr = hub.Gamepad1Connected
-                ? $"已连接单手柄 (左摇杆 {hub.Pad1LeftStick.x:F1},{hub.Pad1LeftStick.y:F1} | 与键鼠无缝共存)"
-                : "当前使用键鼠模式 (随时插入任意 1 个手柄即可无缝切换)";
-            string micStr = hub.MicActive
-                ? $"已就绪 (实时声压 {Mathf.RoundToInt(hub.MicLoudness * 100f)}% · 无麦时可用 F 键/鼠标擦拭/手柄 RB 平替)"
-                : "待启用 (旧物特写中可开启，也可用鼠标擦拭 / F 键 / 手柄 RB)";
-            string camStr = hub.CamOpen
-                ? $"已开启 (挥手速度 {hub.HandWaveSpeed:F2} · 可在灯塔顶对着镜头挥手闪灯)"
-                : "待机中 (可点下方按钮开启摄像头挥手，或直接用空格/E/手柄按键)";
-
-            hardwareTelemetryText.text =
-                "• 操控模式：" + padStr + "\n" +
-                "• 吹气与手势：麦克风 [" + micStr + "]  |  摄像头 [" + camStr + "]";
+            int devices = (hub.Gamepad1Connected ? 1 : 0) + (hub.MicActive ? 2 : 0) + (hub.CamOpen ? 4 : 0);
+            if (devices == lastDeviceState) return;
+            lastDeviceState = devices;
+            string input = hub.Gamepad1Connected ? "键鼠与手柄都可操作" : "键鼠操作";
+            string gestures = hub.CamOpen ? "塔顶可对着镜头挥手" : "塔顶按空格挥手";
+            hardwareTelemetryText.text = input + "　·　" + gestures;
         }
     }
 }

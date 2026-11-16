@@ -23,6 +23,14 @@ Shader "TideTown/Toon"
         _TopAmount ("Moss Amount", Range(0, 1)) = 0
         _WetBand ("Wet Band Above Water (m)", Float) = 0
         _Strata ("Rock Strata", Range(0, 1)) = 0
+        // 2026-11-15 PL-16 民居屋顶换色（TownToon 给每档颜色派生一份材质时才打开，默认 0 = 不动）
+        _RoofTint ("Roof Tint", Color) = (1, 1, 1, 1)
+        _RoofSrc ("Roof Source Color (a = 1 use gamut gate)", Color) = (0.5, 0.5, 0.5, 0)
+        _RoofAmount ("Roof Tint Amount", Range(0, 1)) = 0
+        // 2026-11-15 PL-13 窗灯：跟着路灯的开关（全局 _TideLampOn）亮，默认黑 = 不是窗
+        [HDR] _WindowGlow ("Window Glow", Color) = (0, 0, 0, 1)
+        // 2026-11-15 PL-03 地面不参与"挡住主角就镂空"（TownToon 给 Ground 层的材质设 1）
+        _CamFadeOff ("No Camera Fade", Float) = 0
     }
     SubShader
     {
@@ -48,9 +56,47 @@ Shader "TideTown/Toon"
             half _TopAmount;
             half _WetBand;
             half _Strata;
+            half4 _RoofTint;
+            half4 _RoofSrc;
+            half _RoofAmount;
+            half4 _WindowGlow;
+            half _CamFadeOff;
         CBUFFER_END
 
         float _TideWaterY;   // 全局：现在的海面高度（TownLighting 每帧设）
+
+        // 2026-11-15 PL-03 前景挡住主角时镂空（和 TideFoliage.shader 里的是同一段，改要两边一起改）。
+        //   _TideCamFade：xyz = 相机位置，w = 1 生效（ChaseCamera 每帧设；没人设时全 0，这段不起作用）
+        //   _TidePlayerPos：xyz = 主角脚下，w = 1 有主角（TownLighting 每帧设）
+        // 相机 → 主角胸口（脚下 + 0.45m）这条线周围 0.85m 以内的东西按 4×4 抖动网点裁掉：
+        // 0.45m 以内全裁，0.45–0.85m 渐渐补回来。只在相机和主角之间那一段（t 0.05–0.96）起作用。
+        // 比工程书的契约多两条保护（不加会出毛病）：
+        //   · 视线下方收得更紧（按 1.8 倍算距离）：主角面前的地面、台阶离视线只有几十厘米，不收紧会被挖出洞
+        //   · 离主角胸口 0.55m 以内不裁：手里抱着的柴火、油壶、球就在这个范围里
+        // 另外 TownToon 给地面（Ground 层）和带骨骼的东西（小黑）的材质设 _CamFadeOff = 1，整个不参与。
+        // 用在 Forward / DepthOnly / DepthNormals；ShadowCaster 不调——东西镂空了影子还在。
+        float4 _TideCamFade;
+        float4 _TidePlayerPos;
+
+        float TideBayer2(float2 a) { a = floor(a); return frac(a.x * 0.5 + a.y * a.y * 0.75); }
+        float TideBayer4(float2 a) { return TideBayer2(a * 0.5) * 0.25 + TideBayer2(a); }
+
+        void TideCamFadeClip(float3 positionWS, float2 pixel)
+        {
+            if (_TideCamFade.w < 0.5 || _TidePlayerPos.w < 0.5) return;
+            // 2026-11-15：主角膝盖以下的东西（台阶、路缘、低矮台地边）最多挡住脚，不裁——
+            // 原来视线擦过低台阶时会在前景挖出一片黑点，看着像地上漏洞
+            if (positionWS.y < _TidePlayerPos.y + 0.28) return;
+            float3 a = _TideCamFade.xyz;
+            float3 ab = _TidePlayerPos.xyz + float3(0.0, 0.45, 0.0) - a;
+            float len2 = max(dot(ab, ab), 1e-4);
+            float t = dot(positionWS - a, ab) / len2;
+            if (t < 0.05 || t > 0.96 || (1.0 - t) * sqrt(len2) < 0.55) return;
+            float3 off = positionWS - (a + ab * t);
+            if (off.y < 0.0) off.y *= 1.8;
+            float vis = smoothstep(0.45, 0.85, length(off));
+            clip(vis - TideBayer4(pixel) - 0.03125);
+        }
 
         half4 SampleBase(float2 uv)
         {
@@ -88,6 +134,7 @@ Shader "TideTown/Toon"
             half _ToonHaze;           // 空气感强度
             half _ToonNormal;
             half _ToonDebug;         // 法线贴图参与多少（1 = 全用；小一点画面更干净）
+            half _TideLampOn;        // 路灯 / 窗灯亮多少：白天一点点，黄昏 1（TownLighting 设）
 
             struct Attributes
             {
@@ -128,10 +175,23 @@ Shader "TideTown/Toon"
             half4 frag(Varyings i, half facing : VFACE) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(i);
+                if (_CamFadeOff < 0.5) TideCamFadeClip(i.positionWS, i.positionCS.xy);
                 half4 base = SampleBase(i.uv);
                 half3 albedo = base.rgb;
 
                 half3 N = normalize(i.normalWS) * (facing >= 0 ? 1.0 : -1.0);
+
+                // 2026-11-15 PL-16 民居屋顶换色：只动朝上的面，只动和原屋顶同一路颜色的像素，瓦片的深浅纹理留着
+                if (_RoofAmount > 0.001)
+                {
+                    half roof = smoothstep(0.40, 0.58, N.y);
+                    if (_RoofSrc.a > 0.5)
+                        roof *= smoothstep(0.90, 0.97, dot(normalize(albedo + 1e-4), normalize(_RoofSrc.rgb + 1e-4)));
+                    half lumA = dot(albedo, half3(0.2126, 0.7152, 0.0722));
+                    half lumS = max(dot(_RoofSrc.rgb, half3(0.2126, 0.7152, 0.0722)), 0.02);
+                    albedo = lerp(albedo, _RoofTint.rgb * min(lumA / lumS, 1.8), roof * _RoofAmount);
+                }
+
                 if (_UseNormal > 0.5)
                 {
                     half3 nt = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, i.uv), _BumpScale);
@@ -190,6 +250,10 @@ Shader "TideTown/Toon"
                 half rim = smoothstep(0.58, 0.72, fres) * (0.25 + 0.75 * lit) * _ToonRim;
                 col += rim * sun.color * lerp(albedo, half3(1, 1, 1), 0.35) * 0.5;
 
+                // 2026-11-15 PL-13 白天灯只微微亮：太阳直晒的地方灯光基本看不出来，阴影里才透出暖色。
+                // 黄昏（_TideLampOn = 1）时 dayFade = 1，和原来完全一样。
+                half dayFade = 1.0 - 0.65 * lit * (1.0 - saturate(_TideLampOn));
+
                 // 路灯这类点光：也分块
                 #if defined(_ADDITIONAL_LIGHTS)
                     uint count = GetAdditionalLightsCount();
@@ -197,11 +261,13 @@ Shader "TideTown/Toon"
                     {
                         Light l = GetAdditionalLight(li, i.positionWS);
                         half a = l.distanceAttenuation * l.shadowAttenuation * smoothstep(-0.05, 0.25, dot(N, l.direction));
-                        col += albedo * l.color * (smoothstep(0.01, 0.12, a) * 0.22 + a * 0.6);
+                        col += albedo * l.color * (smoothstep(0.01, 0.12, a) * 0.22 + a * 0.6) * dayFade;
                     }
                 #endif
 
                 col += SAMPLE_TEXTURE2D(_EmissionMap, sampler_EmissionMap, i.uv).rgb * _EmissionColor.rgb;
+                // 窗灯：玻璃材质才有 _WindowGlow（TownToon 设），亮度跟着路灯走；玻璃本身深浅不同的地方亮度也不同
+                col += _WindowGlow.rgb * _TideLampOn * dayFade * (0.55 + 0.9 * dot(albedo, half3(0.2126, 0.7152, 0.0722)));
 
                 // 空气感
                 float dist = distance(_WorldSpaceCameraPos, i.positionWS);
@@ -280,19 +346,22 @@ Shader "TideTown/Toon"
             #pragma multi_compile_instancing
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; float3 positionWS : TEXCOORD1; };
 
             Varyings vert(Attributes v)
             {
                 Varyings o;
                 UNITY_SETUP_INSTANCE_ID(v);
-                o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.positionWS = TransformObjectToWorld(v.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.uv = TRANSFORM_TEX(v.uv, _BaseMap);
                 return o;
             }
 
             half4 frag(Varyings i) : SV_Target
             {
+                // 镂空要和颜色通道裁得一样：不然深度图里还留着被裁掉的墙，后面的海面、环境光遮蔽会算错
+                if (_CamFadeOff < 0.5) TideCamFadeClip(i.positionWS, i.positionCS.xy);
                 SampleBase(i.uv);
                 return i.positionCS.z;
             }
@@ -311,13 +380,14 @@ Shader "TideTown/Toon"
             #pragma multi_compile_instancing
 
             struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; UNITY_VERTEX_INPUT_INSTANCE_ID };
-            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; half3 normalWS : TEXCOORD1; };
+            struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; half3 normalWS : TEXCOORD1; float3 positionWS : TEXCOORD2; };
 
             Varyings vert(Attributes v)
             {
                 Varyings o;
                 UNITY_SETUP_INSTANCE_ID(v);
-                o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.positionWS = TransformObjectToWorld(v.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.uv = TRANSFORM_TEX(v.uv, _BaseMap);
                 o.normalWS = TransformObjectToWorldNormal(v.normalOS);
                 return o;
@@ -325,6 +395,7 @@ Shader "TideTown/Toon"
 
             half4 frag(Varyings i) : SV_Target
             {
+                if (_CamFadeOff < 0.5) TideCamFadeClip(i.positionWS, i.positionCS.xy);
                 SampleBase(i.uv);
                 return half4(normalize(i.normalWS), 0.0);
             }

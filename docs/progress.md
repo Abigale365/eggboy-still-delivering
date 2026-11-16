@@ -212,3 +212,239 @@
 - 2026-11-13 补：用户关掉游戏后正式包 Build\Main 已更新。Windows：剧情 22/22（零救援）、路线 28/28（零离地帧）、水位、地图、创新 162 项通过；审计平均约 165–170 帧（RTX 5070 Ti，改版前约 190–205）。证据 docs/evidence/flora-20261113/audit。通行审计、核显帧率、WebGL 仍未跑。
 
 - 2026-11-13 补：EGGBOY 穿过花丛时枝叶被顶开、走过后回弹晃动（`TideFoliage.shader` 的 PushOffset；TownLighting 每走 0.32 米记一次蹭过，存最近 6 次）。花面片的顶点色 B 改成在花丛里的高度。验证用 `-pushdemo x,y,z`（来回走的假人）+ look.json `{"wind":0}` 截图比对；真人手感没试。剧情 22/22、路线 28/28、创新通过。
+
+
+## 2026-11-14 · 建筑朝向与位置纠正（Windows Main）
+
+- 用户确认以预览图为参照逐栋判断，保留原有分区并保证实际通行。调整 21 栋建筑的朝向或位置，灯塔原有门位与平台对齐，保留。
+- 新增 IslandBuilder.BuildingPlacement.cs 和 Resources/World/building_placement.json，并接入主场景生成流程。新增 21 处门前连接路；打开相应栅栏缺口、清理入口植被，按实际模型重烘轮廓碰撞。面包篮移到门旁，同步互动坐标。地图预览 FOV 20→21，保留后排建筑完整画幅。
+- 指定 Build/Main/TideTown.exe 已更新；148 个运行文件与通过检查的包逐文件一致。level0 SHA256：7723C1B3934DC56A9E89CDC42684F9446C950EF4BF9C98436355FAFAF6BF7F32。
+- 验证：门前双向行走 42/42、实际门位实体阻挡 21/21、路线 28/28（零悬空帧）、剧情 22/22、地图通过。
+- 旧版通行审计 22/27，与部署前最近正式包相同。2 项使用旧集市墙角坐标；树干、沙滩跳跃、涨潮沙滩三项是该包已有的检查失败。本轮未修复这三项，不宣称全套通行审计全部通过。
+- 完整记录、前后对照和备份：C:/Users/IKUN/Documents/ChatGPT/3d黑客松/outputs/building-placement-fix-20261114/建筑调整交付说明.md。PreDeploy-Main 是部署前最近的完整正式包，Backup 是本轮开始时的工程及程序备份。其他运行时代码的已有改动未被本轮还原。
+
+
+## 2026-11-14 · 经过花丛、草地、水面的反应（feel-1，未提交）
+
+- 用户要求优化 EGGBOY 经过花丛和水面的效果，参考《塞尔达》《沙贝》《原神》《风之旅人》；定的方案是"痕迹图 + 沙滩可以涉水"。
+- **痕迹图**：`Runtime/World/TideFeel.cs`（TownLighting.Start 里挂上）+ `Resources/TideTrail.shader`。256×256、盖 25.6 米、首尾相接铺满世界，两张轮换；弹簧通道给花丛（顶着时紧跟身体，松开后晃三四下），慢痕通道给草（几秒才立起来）。EGGBOY 和小黑盖印，跳起来不压、落地往外震一圈。取代 11-13 的"最近 6 次蹭过"数组和 `-pushdemo`。
+- **花丛 / 草**：`TideFoliage.shader`、`TideGrass.shader` 改读痕迹图。枝叶绕根弯下去（不再整片平移），每片叶子有自己的时间差；草顺着走的方向倒，倒下的发亮。穿过花丛带起花瓣和碎叶（`Resources/TideFeelParticle.shader`，颜色取自那一丛）。
+- **水面**：`Water.shader` 加同心涟漪（亮线 + 里侧暗线）和贴着身体的水线；每落一步一圈 + 水珠，站着隔两秒荡一圈，跳进水里一大圈 + 一蓬水花；水里走得慢（`EggboyPlayer.speedScale`，到 0.74）。
+- **涉水只放开沙滩**：`IslandWorld.WadeDepth = 0.18`（沙滩 0.3 在 L1 0.45 没过脚 15 厘米），路面仍是 `RoadWadeDepth = 0.05`；`SafePoints` 同步。先前一度把路面也放到 0.18，渡口缺口（河床 1.03，L2 时深 12 厘米）能直接蹚过去，创新审计 4 项 gap_blocks 不过，已改回。
+- **沙滩入口**没坏：从上层平台（约 z=-12.7，x 从 -0.2 到 4.8）助跑起跳落到沙滩，顶着崖壁走 3 秒由安全点送回岸上。L1 实走：80 个候选起跳点里 9 个能落下去，6 个落地后能走开 2.4–8.1 米，9 个都能回岸；走到边上不跳不会掉下去。`IsDryBeachApproach` 原来水位过 0.05 就不让跳，改成沙滩还涉得过去就能跳。
+- **通行审计**：原 `flooded_beach_closed`（按 0.45 就关闭来验）改成 `flooded_beach_wadable` + `deep_beach_closed`（数沙滩 0.5 米网格上能走的点：L0 = L1 = 580 个，L2 = 0），不依赖写死的起跳点。
+- 验证工具 `Runtime/Test/FeelDemo.cs`：`-feeldemo bush | grass | beach`（真 EGGBOY 自己走，固定机位每 3 帧存 `shots/feel_*.png`）、`beachentry`（沙滩进出实走）、`probe:x,z;…`（打印地面高度和能不能走）；`-nofeel` 整套关掉对比。结果在 `feel-demo-<模式>.json`。
+- Windows 正式包 Build\Main（11-15 00:06）：路线 28/28（零悬空帧）、水位、地图、剧情 22/22 通过。证据 `docs/evidence/feel-20261114`。
+- **没过的，都不是这一轮引起的**（另一个 agent 同一天在重新生成场景）：
+  - 创新审计 156/162。`dog_chest_gives_lighthouse_code`、`dog_code_in_lighthouse_note`：船棚和爪印踏板挪了位置（22.1,-14.5 → 23.2,-15.9），审计传送到木匣旁的落点在水里，被安全点救走。19:07 用旧场景跑时这两项通过。
+  - `print_gap_blocks`、`echo_gap_blocks`、`word_boat_gap_before`、`crossing_gap_blocks_at_L2`：23:55 重新生成的场景里渡口那段路（descent）从 1.03 抬到 1.40，L2（1.15）淹不到，缺口不用补就能走过去。21:48 那版场景下这 4 项通过（160/162）。**渡口过海的玩法现在是失效的，要处理。**
+  - 通行审计 21/28：校园草坪 2 项、集市 2 项、树干、沙滩跳跃 2 项，都是写死坐标在重排后的场景里被挡。
+  - 19:07、19:13 两次创新审计崩在 GLTFast 运行时加载 GLB（0xC0000005），之后的包连跑 4 次没再出现，原因没查。
+- 没做：声音（不在定的方案里）；WebGL、核显没验；草的痕迹肉眼偏淡；花瓣面片的四个角各读各的痕迹，贴近身体时会被拉长。改动没提交（和别的会话没提交的改动在同几个文件里）。
+- 坑：树、花丛、房子的模型没有物理碰撞体，射线看不见，自动机位要拿包围盒挡；花丛是静态合批的，着色器里拿不到每丛的根，高度只能用顶点色 B 估；HLSL 里 `line` 是保留字。
+
+
+## 2026-11-15 · 渡口修复分工（两个 agent 都要看）
+
+- **渡口过海的玩法现在是坏的**：海岸道路重做的下坡路 `descent` 最低 1.34，L2（1.15）淹不到，浮箱被盖在路面底下，缺口不用补就能走过去。
+- 分工、验收数字、文件归属、两边都要守的规矩在 **`docs/handoff-ferry-20261115.md`**。场景 / 道路 / 建筑那边负责把那段路重新做成会被淹的；运行时规则和审计这边负责检查工具和复跑。
+- 改场景后先跑 `Build\Preview\TideTown.exe -resetsave -feeldemo ferry`（约 10 秒，六项，只看地形）。现在 3 项不过。
+- 创新审计新增 `dog_chest_reachable_dry`：L2 时木匣周围要有够得到的干地。木匣那一步的传送改成站到这块干地上。
+
+
+## 2026-11-15 · 打磨工程书 V2 · 轨道 B（画面 / 光影 / 水面 / 抗锯齿）
+
+依据 `docs/POLISH_BOOK_V2_20261115.md`、`docs/POLISH_SPLIT_GPT_CLAUDE_20261115.md`。只动白名单里的 10 个文件，没提交。证据在 `docs/evidence/polish-20261115/trackB/`（`before` 是 11-15 00:34 旧预览包，`after` 是 17:58 合流预览包）。
+
+- **PL-03 前景镂空（着色器端）**：`TideToon.shader`、`TideFoliage.shader`。相机 → 主角胸口连线周围 0.85 米按 4×4 抖动网点裁掉；Forward / DepthOnly / DepthNormals 都裁（深度不跟着裁，洞里的海面会算成白沫），ShadowCaster 不裁。比契约多的保护：地面（Ground 层）和带骨骼的不参与，视线下方半径收紧，胸口 0.55 米内不裁。`-feeldemo camera`：主角可见度不足的帧 0.87%（要求 ≤ 2%），相机进实体 0 帧，68/68 路点；`after/PL-03/feel_camera_school_backyard.png` 能看到秋千横梁、滑梯侧板被镂空，影子还在。
+- **PL-13 白昼暖光 + 窗灯**：`TownLook.Day()` 太阳高度角 51° → 36°、主光加暖、阴影更冷更深，`lampOn` 0 → 0.25；`Dusk()` 没动。路灯白天只微亮（点光、光晕都比按比例再压一档，直晒处再压 65%）。窗灯只有木板房（B7）和各栋挂 "window glass" 材质的小窗会亮；**面包店侧窗和瓦房拱窗不亮**（前者没查清画面上那块深色是哪个部件，后者是木百叶不是玻璃）。黄昏时窗也全亮，是新增的。
+- **PL-14 海水**：浅滩 / 近海 / 外海三档颜色，整体降饱和；推岸浪改成前实后碎、错开的两三道；礁石边白沫只在水深 3–11 厘米内。颜色由 `TownLighting` 运行时设（`TownLookSet.water*`），因为 `IslandBuilder.WaterMat()` 重建场景时会改写材质。另修了远海一圈断续细白线（±48 米处两张海面网格的接缝，顶点浪在接缝处压到 0）。水位审计通过。**L2–L4 涨潮后海面浪线仍偏花，等看样张定。**
+- **PL-15 水下不开花**：`TideFoliage.shader` 四个通道、`TideGrass.shader`（只在顶点里收，不加片元裁切）。花的根泡进水 5 厘米整丛收掉，叶子灌木 30 厘米。`after/water_L2.png`–`water_L4.png` 水下没有花，也没有漂浮的灌木尖。
+- **PL-16 屋顶换色**：17 栋民居（B6 / B7）里 10 栋换色、7 栋原色，砖红 / 雾蓝 / 鼠尾草绿 / 暖灰瓦，相邻不同色；五座地标不动。`-noroof` 对比图 `after/preview_day_noroof.png`。颜色等拍板。
+- **PL-17 树冠**：底部压深偏冷、顶部提亮偏暖，背光再分一层，簇间色差，逆光轮廓透亮。见 `after/meadow_day.png`。
+- **PL-18 分辨率 + 抗锯齿**：默认 1920×1080；`DisplayResolutionGuard.cs` 每次启动按屏幕定窗口（不到 1080p → 1280×720，正好 1080 高 → 1600×900，再大 → 1920×1080；命令行带分辨率或已全屏时不管），主相机加 SMAA High（`-nosmaa` 关）。开了 `_AlphaClip` 的 TideToon 材质全工程只有 4 个不渲染的碰撞代理，没有另开 AlphaToMask 通道。对比图 `after/PL-18/aa_compare_street_4x.png`（左不带、右带 `-shot_aa`）。**窗口守卫只看过日志（带分辨率参数时不干预），没有不带参数实际启动验证过。**
+
+帧率（剧情审计全程平均，`Build\Preview`，RTX 5070 Ti 笔记本；每次约 3 分钟，同一个包重复跑波动约 ±5%）：
+
+| 包 | 分辨率 | SMAA | 平均帧率 | 相对基线 |
+|---|---|---|---|---|
+| 改前（00:34 旧包，1 次） | 1280×720 | 无 | 196.4 | 基线 |
+| 合流包 | 1280×720 | High | 168.2 / 178.0 / 186.2 / 181.7（均值 178.5） | −9.1%（单次 −5% ～ −14%） |
+| 合流包 | 1280×720 | 关 | 183.3 | −6.7% |
+| 合流包 | 1920×1080 | High | 178.3 | −9.2% |
+| 合流包 | 1920×1080 | 关 | 169.7 | −13.6% |
+
+- 第一个 168.2 是刚打完包的第一次运行。四档之间的差别小于同一档重复跑的波动，这台机器上分不出 SMAA 和 1080p 的开销（瓶颈不在显卡）。
+- 合流包比基线慢 7–9%，压着 10% 红线，**不能算干净地达标**：基线只有一次；合流包里还有轨道 A 的改动（镜头视野 44° → 55°、跟距 3.6 → 4.2 米，同屏东西更多），没有拆开量。
+- 没量的：固定机位的帧率（工程里没有这样的工具，现在用的是剧情审计的全程平均）、核显。这台机器有 AMD 610M 核显，1080p + SMAA 在核显上的开销可能大得多。
+- 剧情审计 22/22，水位审计通过（都是 17:58 合流预览包）。`Build\Main` 没有更新。
+
+
+## 2026-11-15 夜 · 地形 / 场景防穿孔六项修复（Claude，未提交）
+
+用户给的六项（前景黑点、小黑陷地、灯塔坡道、北坡道、西山上山道、港湾/操场/浮空花）。渡口红线守住：`-feeldemo ferry` 6/6（连跑两次），浮箱河床 1.00–1.03。`Build\Main` 没更新。
+
+- **黑点**：`CoastalWall` 正反两面共用顶点，`RecalculateNormals` 把法线平均成 0，着色器里变 NaN → 改成正反各一套顶点（`AddTwoSidedQuad`）。`TownToon.IsSolidStructure` 按名字把海堤、护栏、桩基、崖壁、路基、坡道侧墙认成实体（仍是层 0），不参与镂空；`TideToon` / `TideFoliage` 的 `TideCamFadeClip` 主角膝盖以下（+0.28 m）不裁。
+- **小黑陷地**：`DogFollower` 贴着主角、高差不大时用主角脚下 +0.15 做步高参考（3.02 → 3.34 迈得上去）；`PushOutOfBoxes` 不推比脚下 +0.25 还低的圆，推出去不能走就退回原步（码头东北角原来会卡死，创新审计 `dog_steps_on_plate` 等 4 项因此不过）。`CoastalPromenade` 裁掉步道 / 校门坡正下方低 0.12 m 以上的旧台地三角形（边上压 0.18 m），以及港湾段伸出海堤外的悬空草檐（`TrimTierTriangles`）。
+- **灯塔坡道**：住宅台地东南角 (24.43,5.50) → (23.5,6.2)；坡道两侧石墙砌到 -0.2、顶端插进灯塔台 0.45 m（`BuildRampSideWalls`）；两侧续 `CoastalRail`（避开灯塔台和 P_30）；坡下岩块底座。
+- **北坡道**：三条住宅坡道的豁口按路面宽度切（`build_layout.py` 的 `notch_width`）；坡道两侧石墙封到 2.8 m；`SaveDeck` 换成单材质（原来 4 个材质画同一个子网格，拼出斜三角）；`branch_n` 坡脚回缩 1.2 m、喷泉南移 0.4 m（坡度约 36°）。
+- **西山上山道**：`mountain` 改从 B6_house_l4 北侧绕行，3.0 → 5.5 单调爬升（最大约 9°），04/05/06 站点跟着走；路两侧岩块（`FlankRock`）。
+- **港湾**：coast[134]、[135] 外展填掉死水缝；船棚台北沿铺到海堤脚下（西边不动，免得和绞盘台连上绕过渡口缺口）；绞盘台与船棚之间铺礁石岸（石顶 ≤ 0.95，离浮箱通道 1.5 m 外）；淹水段护栏改成 12 cm 低水槛；小船挪到木码头东头外侧。
+- **操场 / 花**：`school.json` 秋千、滑梯、红球、peek 北移 1.7 m；草坪靠步道那侧不再立第二道栅栏（路灯间距照旧累计，位置不变）；`EdgeBush` 内收 0.35 m 且下方 0.45 m 内要有地面，`CliffTuft` 只落在圆石顶，`ShoreBush` 离水线 1.2 m 以上。
+- 布局改法：改 `preview_zones.json`（像素）再跑 `tools/preview/build_layout.py`（重跑和原文件逐字节一致，已验证），不手改 `world_layout.json`。
+- 顺带修的两处测试 / 玩法：`FeelDemo` 渡口检查量浮箱前先 `Physics.SyncTransforms()`（原来高帧率时 L2_crates_stand 时过时不过）；`ShadowSoundPuzzles` 选位置时灯柱也要离路线 1.6 m（路线重排后灯柱立在步道路线上，路线审计卡在 16.2,-9.7）。另加 `-feeldemo spots:<json>`（批量机位截图 + 小黑陷地读数）和 `-feeldemo dogplate`（爪印踏板诊断）。这三个文件按 23:10 的总攻分工归 GPT，已在汇报里说明。
+- 验证（`Build\Preview`）：碰撞贴合 `CollisionFitAudit` 穿模 0、空气墙 0；ferry 6/6；剧情 22/22；创新 163/163；地图通过（23:54，GPT 跑的）。路线 28/28、水位通过是在挪小船和改小黑之前那一版（23:33 / 23:05），最后一版还没重跑；通行审计没自己跑（23:47 有一份 28/28 是 GPT 跑的）。机位截图在 `Build\Preview\shots\spot_*.png`，小黑 9 个机位陷地读数全为 0。
+
+## 2026-11-16 凌晨 · 四向全景地图扩建（Claude，未提交）
+
+依据 `docs/MAP_EXPANSION_BOOK_20261115.md`、`docs/reference/four_views/`。全部程序化网格 + 现有材质 / 模型，没调 Lux3D、没用 ExpandedTownBuilder。新文件 `Editor/IslandBuilder.MapExpansion.cs`（BuildMain 里紧跟 ApplyCoastalPromenade）、`Runtime/World/TideFloat.cs`（渡轮随潮起伏）。
+
+- **崖壁石块包到顶**：高崖（台地 ≥ 2.5 m：主街、住宅、灯塔台）的石块从 55% 加堆到 95%，并在两列之间错开补一列；港湾低台不加（渡口浮箱通道旁不多出石头）。单独随机数，岛上其他摆放不变。
+- **西山顶视线走廊**：spot_14 机位前 16 m 内挡画面的树清掉（22 棵）。
+- **EXP-02 住宅台地**：整圈 2.5 m 墙换成条石砌体（和海堤同一张贴图）+ 顶沿压顶石（138 段）；三条坡道之间留得出通道的 4 段墙脚砌了两级花台（矮条石坎 + 草坡 + 花带，26 段）。喷泉正后方两面窄墙留不出花台（会堵坡道口），只换了砌体。**没做成参考图那样整片缓坡**：广场石板一直铺到墙脚、墙里紧挨着石板环路，要做缓坡得重排广场和院落，这一轮没动。
+- **EXP-04**：喷泉改成八角双层石砌池 + 托盘 + 金色月牙 + 池沿 8 个花盆 + 水花粒子（名字仍是 Fountain_placeholder，外径不变）；中院改成十二边石砌花坛 + 一圈花 + 石座金色月牙日晷；西院大树脚下补八角星地面镶嵌。
+- **EXP-05 西山塌方**：塌方台四周层状扁岩壁、台顶乱石、两堆滚石、上山道那面墙两副 X 型圆木支撑架、南面滚石堆半圈警戒绳 + 白布条（106 块石头）。
+- **EXP-06 港口**：红白顶蒸汽小渡轮（深蓝船底、红腰线、白舱、蓝窗、红白烟囱、黄旗、救生圈），停在低码头南边外侧，随潮水起伏（TideFloat）；低码头东头木箱、麻袋、缆绳卷。
+- **EXP-01 环路**：灯塔台 → 东院崖顶步道（宽 2.2 m，高架段两侧石墙封到海床，两边石柱木栏，灯塔台上和东院环上不立栏）；三座院落北侧后环路（宽 1.5 m，从西院北边绕到东院北边，外侧临崖处立栏，每 9 m 一盏路灯）。两条都是 Ground 层 + walkPolys，能走；挡路的旧栅栏、草、树、花丛清掉。route.json 主线没改。
+- 没做：参考图里学校弧形小径和长椅、沙滩木架 / 船桨 / 海星（工程书 EXP-05/06 里有，用户这次没点）；邮局街沿 / 西海岸条石海堤（工程书 EXP-03，用户没点）；透视拓印白板（在 Runtime/Gameplay，归 GPT）。
+- 验证（`Build\Preview`，00:3x–00:48）：碰撞贴合 穿模 0、空气墙 0；ferry 6/6；路线 28/28；剧情 22/22（平均 164 帧）；创新 163/163；水位、地图通过；通行 28/28。机位图 `Build\Preview\shots\spot_fv01..04*`（四向全景）、`spot_x01..x11*`（扩建近景）。
+
+## 2026-11-16 凌晨 · 全权接管四批任务：真实接触拾取 + 光影布幕 + 景观补全 + 实拍地图（Claude，未提交）
+
+用户宣布不再双 Agent 分工，原 GPT 的运行时 / 审计 / 地图文件也由 Claude 改。证据 `docs/evidence/expansion-20261116/`。`Build\Main` **没更新**：预览包仍有 Unity "trial version" 水印，按用户要求先请用户处理许可。
+
+**第一批 · 真实接触式拾取（docs/PHYSICAL_PICKUP_IK_BOOK_20261116.md）**
+- 新增 `Runtime/Interaction/PickupGrip.cs`（参考源码迁移：`Reach` 的物体直径参数化默认 0.14；`KeepAboveFloor(groundY)` 用角色脚下真实地面）、`PhysicalPickupController.cs`（`[DefaultExecutionOrder(100)]`；状态 Idle → 走位 → 动作；走位阶段每帧 `HoldActionLock`，位移只由它 `PuppetStep`，每步查 `CanTraverse` / `GroundAt` / 碰撞圆；找不到站位就原地做；审计模式和缺片段时 `Active=false` 走原即时路径）。`GameBootstrap` 里在读档恢复持球之前挂上。
+- 接线：玩家按 E 走新的 `...At` 入口（`TakeBallAt`、`InspectSlipperAt`、`TakeMatchesAt`、`TakeWoodAt`、`LoadWoodAt`、`TakeOilAt`、`OilLampAt`），接触那一帧才提交剧情；原来的 `TakeBall` / `TakeOil` 等保留给揭字成物、AI 校准台这类"隔空"调用。红球：接触后弧线托到身侧、持球全程右手 IK；`SchoolBall.Take`（含读档）交给控制器；放狗碗走到侧前方弯腰、0.48 s 松手滚进碗，动作完才唤小黑、开始读信；海风掉球先松手再掉，掉在地上的球按 E 直接走正面接触拾取；`ReturnToSwing` / `RollIntoBowl` / `PlaceInBowl` 都先松手。持球时不叠双臂抱物姿态。
+- 实测发现并修掉的：站位朝向算反（背对物体）；控制器自己每帧还原骨骼（读信 / 端详弹窗时 `PrototypeGame` 不调 `Move`，前倾会一帧帧累积）；动作片段在镜头外不播（`AlwaysAnimate`）；红球原来在秋千架正下方、四周都被秋千外轮廓挡住，`school.json` 红球往南挪到秋千前草地 (16.8, −5.05)；接触门：掌心 ≤ 1.2 cm，或接触时刻后贴到容差内且不再靠近（红球 3 cm、火柴 10 cm——摊台比 EGGBOY 高、拖鞋 8 cm）。
+- 验收 `-feeldemo pickup` 15/15（真人路径，非审计）：红球正面近 / 中、左近 / 远、右、背对共 6 次都先转身直走到 0.35 m，接触误差 2.0–2.4 cm，掌心在身前 0.32 m，外壳间隙 6.2 cm；持球走跑跳掌心误差 ≤ 0.5 cm、外壳间隙 ≥ 5.8 cm；读档持球；放狗碗（球到碗心 0.000）；海风掉球再捡（0.7 cm）；火柴 8.1 cm、柴火 / 塞柴 / 油壶 0、拖鞋 4.2 cm。图 `pickup_*.png`。没动 `EggboyPlayer.Walk` 和步态链。
+
+**第二批 · 光影布幕**：`ShadowLanternPuzzle.Place()` 不再选木栈桥 / 低码头（原来在栈桥正中），灯—架—布幕可朝 8 个方向，瓶子位置也要能走、离路线 ≥ 1.6 m；现在在船棚北侧石台 (20.5, 1.4, −11.7)。外观改成暖米色帆布（只改材质色，RT 不变）+ 浮木四边框 + 顶横木 + 背后斜撑腿。创新审计 shadow 6 项全过，`innov_shadow_key.png`。
+
+**第三批 · 景观补全 + 地图**
+- EXP-05 学校前院：校门到正门的弧形石板小径（路上草叶裁掉）+ 两张木长椅。EXP-06 沙滩西半边：晒网 X 木架 + 网 + 两支船桨 + 四只海星。EXP-03：主街石板路临海崖口那几段（共 47.6 m）砌条石挡墙 + 石柱木栏，替换原细木栅栏和路缘石；上山道临海侧石柱木栏。外海边站在水里的树：按 1 m 圈内有水 / 离岸 3 m 内清理（本版检查后 0 棵，四向俯视图核过）。
+- 中途一个 bug：海堤判断"外面是不是崖"的地面查询上限低于石板面，看不见旁边 3 m 草地，内沿全被当成崖口立了栏杆，通行审计掉到 22/28；改后 28/28。
+- PL-11：用最终预览包 `-resetsave -look day -shot mapbase -shot_aa` 重拍，替换 `Resources/UI/town_preview.png` + `map_bounds.json`（旧图备份在会话暂存目录）。`-feeldemo map-alignment` 四个红点投影误差 ≤ 0.00014 像素（该模式在新存档里地图没打开，所以结果标 failed，打开地图的检查由地图审计覆盖）。
+- 七大创新玩法：只靠创新审计 163/163 和审计截图核对，没逐个手玩看 Toast。
+
+**第四批 · 最终预览包全量验证（04:5x）**：碰撞贴合 穿模 0 / 空气墙 0；ferry 6/6；路线 28/28 零离地帧；剧情 22/22（平均 172 帧）；创新 163/163；水位、地图通过；通行 28/28；拾取 15/15。
+
+## 2026-11-16 · GPT 线合流封版
+
+- 地面引路收敛为玩家前方最多 4 颗贴地微光。切换步骤、H 键、停滞或离开路线会浮现。暂停菜单提供柔和自动、常显、关闭三档。截图模式隐去引路光点。
+- 透视取景框加入岸标和对齐反馈。字签预览与实投共用弧线，落地时有一圈暖光。船棚北岸石台的光影钥匙对齐会亮起帆布。L3 漂流瓶位于绞盘附近可走的干岸，灯光强度已收敛。
+- 窗口与画质自检通过。当前设备实开 1920×1080，另两档 1280×720 与 1600×900 通过计算自检。核显、WebGL 和连续 4 秒低于 48 FPS 的降档条件已加入。
+- 审计覆盖最新合流场景。碰撞贴合穿模 0 m²、空气墙 0 m²，渡口 6/6，路线 28/28 且悬空帧 0，剧情 22/22 且走位恢复 0、炉火可见，创新 163/163，水位 L0–L4 通过，地图四点最大误差 0.00014 像素，通行 28/28，拾取 15/15。初报穿模的北侧树干已用原位置复测，最近距离 0.532 米。 审计汇总
+- Windows 键鼠复测 8/8，包含光影钥匙和八音盒两项。测试从指定站位和任务状态进入交互。 键鼠证据
+- 桌面工程书保留原文，补入 21 张实机图，包含图 3-1 至图 3-13、四向全景、昼夜和地图。 成果报告 新旧对比
+- `Build/Main/TideTown.exe` 已构建并通过地图启动复测。本次交付 Windows 包。 当前 Windows 实机仍显示 Unity `trial version` 水印。
+- 场景 SHA-256 `C1E350D1D0AA89C26FD28A9F3EE1CBF0CFD9839ECB22E46AC1F7CFE09786926E`，Windows 游戏程序集 SHA-256 `AD1A0BAF54C7B3E9DE2E91955BE83ACBA0BBA97A0C0DA055FAC05F3F220838B6`。
+
+## 2026-11-16 上午 · 实机截图 8 张：场景几何、路面衔接、护栏、路灯、植被（Claude，只改场景构建，未提交）
+
+用户给的 8 张截图来自旧 `Build\Main`（trial version 水印那版），本轮只改 IslandBuilder*（+ 浮箱材质、安全点重贴地），打进 `Build\Preview`，没覆盖 `Build\Main`。同机位前后对比：`Build\Preview\shots\before\fix_*.png`（改前）↔ `Build\Preview\shots\fix_*.png`（改后），对比页 `Build\Preview\shots\fix_report.html`（桌面也放了一份）。同时段 Codex 在改 Runtime / Test 并跑审计，漂流瓶那段（WorldMechanismDirector）用的是它的版本。
+
+- **路灯**：`AddLampGlow` 光心改认 S4 的琥珀玻璃件（"Warm amber lantern" / 材质含 glass）的包围盒中心，找不到退回"离灯杆轴心远的灯头点簇"；不再混进灯杆和鹅颈弯。新增 `PlaceLampInsideRail`：按灯杆轴心（不是模型包围盒中心）算净距，灯笼转向路面。海滨步道：护栏线内外 0.6 m 内的灯都收进来，灯杆离石墩内沿 0.40 m（原来只挪"落在步道里且偏低"的灯，压在护栏上的漏掉）。北侧后环路、东步道：灯杆离护栏线 0.42 m（任务给的 0.28 m 会让 0.25 m 半径的灯座压进 0.28 m 宽的石栏底座）。
+- **下港湾坡道绿三角**：`TrimGroundUnderDecks` 补上 descent；另加一道按坡道投影裁台地三角形（不论高低，细分到 0.12 m）——坡道往下走，旧台地 3.0 在中段高过路面，原规则只裁"比路面低"的那种。Tier_main 裁 2281、pad_stone 269、shed 160 个三角形。
+- **灯塔坡道两头**：新 `LighthouseRampDeck`：去掉统一 +0.026，坡脚 = 3.340 与步道齐平，起点再往回伸 0.45 m、低 4 mm 藏到步道下面（盖住两条路端线差 13° 的斜三角缝）；坡顶平台 = 5.000，落在灯塔台多边形里的点低 4 mm 让六角石盖住（原来 4.992 + 4.95→4.96 跳 3 cm）。
+- **灯塔台收口**：旧细木栅栏 `Fence_lighthouse` 整圈换成石柱木栏（`ExpLighthouseJoin`），只在外面 1 m 以上落差处立，让开坡道 / 东步道路口（端柱和路两边护栏端柱对齐成一个转角石墩）、31 号剧情站位前后 1.4 m、塔身旁窄道护栏挪到边线外（不然 30→31 路线绕不过去）；坡道护栏和东步道护栏都立到台地边线。两个路口在台地边线上各压一条过门石（高出台面 4 cm）。东步道起点落在台地里的部分压低 4 mm（原来和六角石共面闪烁）。
+- **悬空断头横杆**：`TrimCoastalMesh` 遇到栅栏改走 `TrimFenceMesh`：按 24 顶点一块整块裁，再把任何一头没立柱托住的横杆整根拿掉，学校园区跟着横杆的隐形挡板一起拆。`CoastalRail` 每段末端补端柱、横杆接到端柱。
+- **上山道**：`ExpMountainRailsAndCurbs`：贴着山体那侧（往外 0.4–1.6 m 有高过路面 0.6 m 的岩块，前后 ±1 m 一起看）不立；立柱位置碰到岩块不立；临空侧落差 ≥ 0.5 m 就立、到坡顶为止。岩块不在 Ground 层，用 Boulder / FlankRock / SlideRock 等的渲染包围盒判断（不能按名字含 Rock，道路自己的 "Rock roadbed" 也含）。Road_mountain 成品路面两边加连续条石路缘（高 6 cm，低于轮廓碰撞 0.25 m 起算线，不挡人）。
+- **北侧后环路护栏原来立反了**：按"哪边离住宅台地边近"选外侧，两边都在台地里面（DistToPoly 都是 0），护栏一直立在房子那侧草坪边。改成直接量落差（外侧 16/16 处有落差、内侧 0）。
+- **花丛 / 草叶**：`ExpTreesInWater` 加查 EdgeBush / ShoreBush / CliffTuft：中心 + 8 点（半径 = 外包盒半宽 55%）往下 0.4 m 找实地或岩块顶，中心没托住或托住 < 6 点的摘掉（7 丛）；只做事后 SetActive，不动 Nature 摆放和随机数。`ExpFinalGroundCleanup`（扩建最后一步）：学校草坪顶面压低 4 mm，和主街石板（同为 3.020）重叠处不再共面锯齿；所有铺装面（Ground 层非草地台地 + 校园小径 + 建筑门前路）栅格化到 0.1 m，草叶按整片（5 顶点）裁：根部 0.25 m 内或叶片任一点落在铺装上就拿掉（15804 个三角形）。
+- **浮箱**：`IslandCrate` 材质换成程序画的木箱面（四块横板 + 边框 + 斜撑 + 钉眼），码头木箱一起受益。
+- **CityGlow / 远景亮点**：`CityGlow`、`FlashlightReply` 都在 Awake 里关掉，只由结局（`ending_done`）或点灯后（`beam_lit`，山那边的手电回应）打开；`-resetsave` 下 15 个机位都没有这排亮点。截图 7（灯塔台看镇子）右上那排亮点，按位置和排布推断是存档里已点过灯（beam_lit）后的手电回应，属于剧情正常状态，没改（没用那份存档复现）。
+- 安全点：铺装改完以后重新贴地（不看浮箱，±0.6 m 内），8 个跟着上到步道面。
+- 验证（`Build\Preview`，09:07–09:4x，最终场景）：碰撞贴合 穿模 0.00 / 空气墙 0.00 m²；ferry 6/6；路线 28/28；剧情 22/22；创新 163/163；水位、地图通过；通行 28/28；拾取 15/15；15 个机位小黑陷地读数全 0。PL-11 地图底图没重拍（只改了护栏、路灯、路缘这类小件，台地轮廓没变）。
+
+## 2026-11-16 上午 · Claude 线最后一轮：光影收口 + 稳帧 + 序章路标 + UI 绘本化（未提交）
+
+**C1 窗灯**（TownToon.cs）：B6 瓦房的木窗扇（拱窗 / 背面方窗 / 侧面圆窗）原来已经按网格坐标拆出来发光，这次发光压到 0.7（前面压着百叶板，从板缝里透光）。面包店"侧窗"那块深色查清了：是侧面拱洞里的木门，B2 的部件**没有合批**（每个部件单独一个渲染器）。三个 `Deep arched opening*` 拱洞发 0.55、门板之间的 `Door plank joint*` 板缝发 0.9，像屋里的灯从门缝透出来。`GlowCopy` 加了强度参数。黄昏图 `Build\Preview\shots\c1_win_*.png`。
+**C2**：`Water.shader` 用全局 `_TideWaterY`，0.8 m 起、1.6 m（L3）满档：浪峰拖尾 0.48→0.30、碎沫门槛抬高、推岸范围 6.5→4 m、水深 0.6 m 以上才画足、强度 0.48→0.30，贴岸碎沫也收 25%。图 `water_L2..L4.png`。`TideGrass.shader` 慢痕 1.7→1.95、踩倒的草提亮 0.14→0.24 并往干草色偏一点。`TideFoliage.shader`：叶片 / 花瓣面片改为在 0.14 m 半径上取四点平均痕迹，同一片四个角读到的一样，不再被拉成长条；离主角 11 m 外直接不采样。
+**C3**：`BuildMailboxTrail` 金色方块换成压扁的小圆石（0.11×0.024×0.11，一半埋地），暖赭底色 + 柔和琥珀自发光 ×0.8，不投影。
+**C4**：`TownLighting.LowTier`（WebGL / Intel / AMD APU 核显如 "Radeon(TM) 610M" / `-lowgfx`；`-highgfx` 强制普通；`LowTierOverride` 给别的脚本手动切）：路灯点光 6→4、阴影距离 ×0.7。本机游戏跑在 RTX 5070 Ti 上，是普通档。`TideGrass.shader` 草叶离镜头 42 m 起往根上缩、58 m 外缩成点（不出片元）。
+**UI 绘本化**（EggboyUI.cs、TideTownStyleUI.cs、MenuController.cs）：`TideTownStyleUI` 新增程序化精灵 RoundedBorder / RoundedFrame / Pill / WaxSeal / PostmarkRing / Keycap / SoftVignette 和 `StyleSettingButton`；`FindLetterOverlay` / `FindLetterPaper` 改按名字（"LetterOverlay" / "LetterPaper"）找，旧办法留作后备（信纸背后多了信封，不再是第 0 个子物体）。开场封面去掉黑块，只剩四周暖褐暗角，左侧铭牌封面卡（火漆印、《记忆邮局 · 潮汐镇》、细金线菱形、带 [Enter] 键帽的呼吸主按钮、点开才展开的音量抽屉、落款）。HUD：路单卡（胡桃木框 + 羊皮纸 + 暖橘竖条 + 眉题）、持物标签卡、教学条双细金线、互动提示拆成立体键帽 + 胶囊（`PromptText` 仍返回整句原文）、邮戳提示上下金线 + 朱砂点、结局字幕宽幅底衬。读信：+2.2° 牛皮纸信封垫底、信笺内框、右上半透明邮戳、页脚条。Esc 暂停：920×580 双页手账，左页路单 + 音量 / 灵敏度 / 默认移动 / 镜头回正 / 引路光点（MenuController 把按钮挂进 `PauseGuideSlot`，文案改成"引路光点：柔和自动"）+ 继续派件 [Esc]；右页三组键帽图鉴。public 接口一个没删没改。截图 `ui_title.png`、`ui_pause.png`、`ui_sheet.jpg`。
+**验证**（`Build\Preview`，10:0x–10:2x）：碰撞贴合 0.00 / 0.00；ferry 6/6；路线 28/28；剧情 22/22，平均帧率 154.5 → 198.0（单次对比，之前量过重复跑有 ±5% 波动）；水位、地图通过；拾取 15/15。之后只改了面包店门缝发光和信封错位两处运行时外观，重打了 Preview、重拍窗灯和 UI 图，没重跑审计。没跑创新、通行审计。Unity / 游戏进程都已退出。
+
+## 2026-11-16 下午 · Claude 全权收官：M 键航海地图册 + 弹窗统调 + UI 展示图 + 九项审计 + 正式包（未提交）
+
+GPT 线剩下的收尾交给 Claude，不再分文件隔离。
+
+- **M 键地图 → 「潮汐镇手绘航海地图册（Postal Atlas）」**（`TownMap.OnGUI` 重写，仍是 IMGUI，所有尺寸和字号按 `min(屏宽/1600, 屏高/900)` 等比缩放，2K/4K 不糊）：去掉 0.94 不透明黑底，改为淡暖褐压暗 + `SoftVignette` 暗角；胡桃木外框 + 羊皮纸内页 + 内缩细线 + 投影；地图画面深褐描边、轻微暖调、内缩细线，右上角航海十字罗盘（新 `TideTownStyleUI.CompassRoseTexture`，北角朱砂，"N" 另写）。顶栏左 `POSTAL ATLAS · 潮汐镇航海投递全图`（前面一枚淡朱砂邮戳环），右侧三枚邮戳槽 ① 面包店 / ② 学校 / ③ 灯塔：已盖章 = 淡朱砂邮戳环 + 朱砂火漆印 + 奶白 ✓，未盖章 = 浅褐虚线空槽；最右 `[Esc] / [M] 合上` 键帽。地标路牌改羊皮纸胶囊 + 深褐描边（已盖章描边换朱砂、名字后朱砂 ✓），"你在这里"朱砂胶囊 + 朱砂航向针，"★ 当前目标"金色胶囊 + 金底 ★ 定位针，推荐步道是外描深褐的金色点串；底栏左"当前任务"小签 + 目标，右图例 ● 你的位置 / ★ 当前目标 / ┅ 推荐步道。`IsOpen`、`ClosedAt`、`CanOpen()`、`Toggle()`、`Close()`、`ProjectUV()`、`MapBounds`、`HasOrthographicMap`、`GuideMode`、`CycleGuideMode()` 都没动；删掉的只有私有的旧画法函数和 `Stamps()`。
+- **PL-11 底图**：用 10:20 那版 Preview（场景和现在同一份）跑 `-resetsave -look day -shot mapbase -shot_aa`，替换 `Resources/UI/town_preview.png` + `map_bounds.json`（边界数值和 09:08 那份一致，只是画面更新；旧图备份在会话暂存目录 `mapbase_backup_1116pm`）。
+- **四个玩法弹窗统调**：都走 `TideTownStyleUI` 的公共构件，所以改构件一处生效——`CreateParchmentCard`（旧物端详卡、木匣邮差笔记、成就 / AI 校准 / 灯塔那几张卡也跟着变）换成内缩双细线羊皮纸 + 胡桃木细外沿 + 柔和投影，够大的卡右上角加一枚淡朱砂邮戳；`CreateWarmButton` 次按钮暖米底 + 内缩细线，主按钮暖橘底 + 胡桃木细外沿。透视取景框底部提示条换成胡桃木底 + 金细线框（和 HUD 教学条同款）；心愿造物笺的字签和拖拽中的字签换成内缩细线纸条；信件页签挪到信纸上沿外面（原来压住信的第一行），字签两行时整片上移一行并让开页脚"收起信"小条。
+- **HUD 两处实机图问题**：路单卡眉题被内缩细线压住（眉题和正文下移 4）；底部按键提示从整屏宽的深色长条收成 720 宽胡桃木小牌 + 金细线 + 投影。
+- **UI 展示图**：新增 `-uishowcase`（`Runtime/Test/UiShowcase.cs`，`GameBootstrap` 只在真实开局时挂）——游戏里按真实流程掐时机截：封面 → 点「启程派件」等开场镜头 → 站到山口邮筒旁（[E] 取信胶囊出现）叫出路单卡 → 真实取信读信 → 地图册（先 0/3，再临时记一枚面包店邮戳截已盖章样式，截完撤掉）→ 暂停手账。1920×1080：`Build\Preview\shots\ui_title / ui_hud / ui_letter / ui_map_start / ui_map / ui_pause.png`，拼图 `ui_sheet.jpg`。
+- **九项审计**（`Build\Preview`，场景 + 程序集指纹审计前后一致）：碰撞贴合 穿模 0.00 / 空气墙 0.00 m²；ferry 6/6；路线 28/28 零离地帧；剧情 22/22 零走位恢复、炉火可见（1920×1080 平均 152.6 帧；上午 198.0 是 1280×720 量的，不能直接比）；创新 163/163；水位通过；地图通过（读信挡地图、来信时地图让位）；通行 28/28（北侧树干最近 0.532 m）；拾取 15/15。
+- **正式包**：`TideBuild.Windows` 重打 `Build\Main`，和审计过的 Preview 的 `Assembly-CSharp.dll`、`level0`、`resources.assets` 哈希完全一致；Main 上地图审计复跑通过。Unity `trial version` 水印仍在（引擎授权问题，不是代码）。
+- **桌面工程书**：照上午 GPT 的组装办法（原文不动，在"4. 共用底座"前插实机画面），图全部换成这次 Preview 实拍；新增"3.2 新版界面"五张 UI 图，场景一节补黄昏面包店 / 瓦房窗灯两张，共 28 张。组装脚本和证据在 `C:/Users/IKUN/Documents/ChatGPT/3d黑客松/outputs/eggboy-final-20261116-pm/`（`assemble-report.py`、`evidence/`、替换前桌面版备份 `desktop-before-1116pm.html`）。 成果报告
+- 没做：Windows 键鼠复测（GPT 上午的 play-input 8 项）这次没重跑；EXP-02 墙顶 / 花台接缝没专门检查。
+## 2026-11-16 傍晚 · 用户四项改造：五张截图的地形 + 自由漫游 + 中键表情轮盘 + 心愿玩具（Claude，未提交）
+
+**议题 1 · 五张截图**（场景构建，先用新写的只读诊断 `Editor/TerrainProbe.cs`（5 cm 网格扫可见面 + 物理地面，找同高闪烁 / 隐形地板）和 `Editor/EditorShot.cs`（编辑器里直接拍几何图）定位）
+- 图 5 砖阶三角翘起：`descent` 坡头比 `upper` 步道高（步道在 x 8–10 还在 3.21→3.34 爬坡）。新 `FitBelowDeck`：坡道压在步道下的顶点一律低 8 mm，出了步道边从边的高度渐变 1.2 m 回原坡度；下港湾坡道的护栏 / 侧墙高度改按坡道面取。
+- 图 1 / 图 5 `school_west_gate` 叠扑克牌：三条校门坡道都改成"步道那头在前"，起点压在步道下、出步道边后直线斜到草坪、草坪那头压到 2.995 再伸 0.25 m 埋进草坪；两侧新加 `*_skirt` 石砌侧面一直砌到草坪下（侧面不悬空、不漏黑缝），原 `gate_plinth` 去掉。
+- 图 1 转角双柱：所有护栏共用一张立柱表 `railPosts`，0.45 m 内不再立第二根（段首 / 段尾放宽到 0.8 m），每段护栏开头补起始柱；海堤护栏豁口只让开坡道本身（1.45），西边 0.3 m 的残段不立；海堤墙和坡道侧墙互相伸进对方一点；"ledge" 草檐裁剪往西延到 x 9.9。
+- 图 2 夹缝：真正的"悬空走路"原因是坡道碰撞网格两边各多出 0.93 m 的隐形路肩（`RoadFinishes.ShoulderWidth`），人从草坪踩上去顺着它悬空走到乱石堆上 → 收到 4 cm（所有坡道一起）。新 `ExpLighthouseWedge`：夹角里和两侧 1.6 m 的花丛 23 丛全清、穿进住宅东墙的岩块 25 块拿掉、学校草坪旧木栅栏在这里的一截拆掉。
+- 图 3 校门：护栏 / 矮墙豁口按每条坡道自己的半宽开（`GateGap`，护栏 +0.17、矮墙 +0.13），两边都立端柱；旁边那盏路灯离护栏再让 0.15 m，并顺着步道挪到离任何校门豁口 ≥ 0.9 m。
+- 图 4 三层闪烁：门前直的六角石板带（`Entrance_B3_school`）和弯小径是同一条路的两份，整块关掉；弯小径换成同款六角石板材质、抬到草坪上 2.2 cm、自带地面碰撞。步道起点 3.024→3.036（和运行时压平的旧石板台地同高）。
+
+**议题 2 · 自由漫游**（`IslandWorld.RoamStep`，`Features.freeRoam`，`-whitelist` 退回旧规则）
+- 白名单多边形不再挡主角：从脚 + 1.3 m 往下打 Ground 射线，落点高出脚 0.23 m（空中 0.28 m）就是墙 / 崖面；走路只下 0.6 m 以内的坎，更高的边要按跳（最多 3 m，用户定）；深水照旧挡（渡口缺口靠这条）；`Resources/World/roam_blocks.json` 禁区。`walkPolys` 只剩"铺装路面"语义，`Walkable()` 等摆放 / 审计用的旧接口不变。`SafePoints` 自由漫游下不再做"掉层救援"。
+- 轮廓碰撞扩到整座岛（`ContourGrid.Build(..., wholeIsland)`，海岸线多边形以内都生成，圆 2.0 万 → 3.7 万）。
+- 新审计 `Editor/RoamAudit.cs`（`-executeMethod RoamAudit.Run`）：0.2 m 格全岛连通，正向能到 / 反向能回出生点，场景 L0 / L1 / L2 有桥 / L2 缺口 / L3；查陷阱（能跳进去回不来）和缺口绕路（L2 缺口时到不了油壶）。`RoamAudit.BakeTrapBlocks` 把陷阱自动写成禁区（现 18 块，多是住宅墙前"草坡"装饰底下 2.85 m 深的沟）。结果 Build/roam/roam-audit.json：五个场景陷阱 0、缺口时油壶不可达。
+
+**小黑**：只在学校周边活动（`DogFollower.StayNearSchool`）。主角离开学校草坪 + 3 m 就回学校溜达，回来再迎上；F 指挥 / 嗅线索 / 卡住提示只在学校有效；爪印踏板挪到学校草坪（木匣从土里拱出来）；上塔不再藏小黑；剧情审计结局那项改成"在学校里也算"。
+
+**议题 3 · 中键表情动作轮盘**（`Runtime/UI/EmoteWheel.cs`）：按住中键，单页双圈（内圈 8 动作：挥手 / 欢跳 / 点头 / 摇头 / 张望 / 递礼 / 摸小黑 / 招呼；外圈 16 表情，图标用面屏同一套画法），虚拟指针、死区取消、松开执行；摸小黑要小黑在 2 m 内。轮盘开着人站住、镜头冻结、[E] 提示隐藏。
+
+**议题 4 · 心愿玩具**（`Runtime/Gameplay/WishToys.cs`、`Runtime/Interaction/WishInspectModal.cs`）：除小船外的心愿物件挂 `WishToy`：按网格扫外轮廓注册碰撞圆（< 0.22 m 的小东西不挡、会被踢开）；生成时避开路线走廊 1 m + 半径和别的碰撞；[E] 拿起走真实接触拾取 → 抱在胸前 → 3D 端详（360° 转、滚轮、双击回正、自转；黄铜心愿铭牌 + 温情描述，描述默认本地模板，走 Lux3D relay 时会请转发服务 `/wish-blurb` 现写一句）→ 放回原处 / 收进邮差包（容量 6，满了按钮变灰）；V 心愿笺底部"从邮差包取出"。
+
+**验收**（`Build\Verify`，新加的 `TideBuild.WindowsVerify`；用户当时开着 `Build\Preview` 在玩，没覆盖它）：ferry 6/6、拾取 15/15、新 `-feeldemo wishwheel` 13/13、路线 28/28、剧情 22/22、创新全过（狗那组改成学校版）、水位（掉层项改为"自由漫游下救援关闭、无误报"）、地图、通行 28/28；碰撞贴合 穿模 0.03 / 空气墙 0.03 m²（住宅台地石板台边，未处理）。实机图 `Build\Verify\shots\spot_u*.png`、`wish_*.png`。
+
+## 2026-11-16 傍晚（二）· 持物联动 + 炉膛火 + 门铃上墙 + 道具普查（Claude，未提交）
+
+修改前后图：`Build\Preview\shots\before_props\prop_fix_*.png`（改前，旧 Preview 实拍）↔ `Build\Preview\shots\prop_fix_scene_*.png`（改后同机位），拼图 `prop_fix_before_after.jpg`；动作关键帧 `prop_fix_01..16_*.png`，拼图 `prop_fix_actions.jpg`。普查工具 `Editor/PropSurvey.cs`（道具离地 / 压墙、B1/B2 门窗部件包围盒、A1 炉膛射线探测）。
+
+- **油壶提手**：`Runtime/Interaction/HandCarry.cs`：壶顶 14% 那圈顶点算提手，每帧对准右手掌心（`PickupGrip.PalmPosition`），壶身竖直挂在身体右外侧、随手移动钟摆式摆（实测最大倾 18°），离蛋壳不足就立刻往外让，壶底托在离地 ≥ 2 cm（前 12 帧按掌心高度定缩放，留 12 cm）。`CarryPose.Oil` 改成右臂自然下垂微外张（armR0 −12 / armR1 14，手腕回正），只盖 80% 让步态摆臂留两成，手指按跑步握拳的弯法扣到 85%（`EggboyGait.Grip` 只补差额）。塔顶倒油：接触后壶往前倾到 75°（实测 79°）再收起（`PourThenRemove`）。
+- **抱柴**：柴捆挂在 body 骨头下的 `CarryAnchor`，在锚点自己的坐标系里摆（拿起那一刻身体前倾 / 侧转，按世界坐标摆会歪 27 cm），左右居中（实测 x 0.005），按蛋壳实际前沿（`PickupGrip.ShellFrontAt`）往前让 2 cm。
+- **原件同步**：`SyncWorldProps`（StoryDirector.Update 每帧，只开关渲染不关物体）：拿柴 / 柴已入炉时 `Bakery_wood` 藏起，湿柴待换或被风吹落要回去重拿时恢复；`LH_oil` 拿走后藏起；海风掉在地上的那份显示期间原件不显示。
+- **炉膛里的柴**：`BakeryEffects.SetLoadedWood`：塞柴后在炉膛底板上放一份 A2 柴捆（`OvenLoadedWood`，按开口 80% 缩放、顺进深方向），湿柴偏暗偏冷色，换干柴时替换。
+- **炉火进炉膛**：`IslandBuilder.MeasureOven` 量 A1：从炉前平射，穿到后壁的格子 = 炉门开口（铁门开在左半边，开口在右半边 x 0.27、0.42×0.74 m），炉身前表面 −0.534。火焰发射点 = 炉膛底板上 7 cm、前表面往里 0.14 m（原来在炉门外 5 cm 的半空）；火舌速度按到开口顶的高度算；湿柴白烟从炉膛里冒、朝炉门外上 60°；点光放在开口外 0.18 m 让暖光溢到门前路面。烟囱顶按最高 4 cm 顶点中心（−0.41, 1.77, 0.12），和原写死值一致。剧情审计炉火可见 true。
+- **门铃**：`Bakery_bell` 从橱窗前的街上（−15.26, −8.1，离地 1.22）挪到面包店正门拱券右边墙上（−12.58, −6.66），铸铁挂臂伸出墙 0.19 m + 墙板 + 挂钩，铃口离地 0.72 m。新 `BellInteractable`：按 E 走过去伸手碰铃口（`inspect_memory` + 右手 IK），碰到那一帧铃身绕挂钩摆（`BellSwing`）、叮当两声，再端详。
+- **道具普查**：面包店——摊位挪到橱窗下贴墙（−15.15, −6.95，三块台面板 + 桌布 + 后挡板，火柴 / 菜谱在台上），面包篮挪到橱窗左下墙角，台秤挪到门左边，面粉袋靠到烤炉右侧，柴火捆从路中间挪到烤炉右前方（离 12 号站 1.35 m，审计照样够得着）。灯塔顶三件回忆原来悬空 4 cm（`SyncLighthouseData` +0.04 → +0.003）。学校（狗窝 / 狗碗 / 拖鞋 / 黑板 / 课桌 / 秋千 / 滑梯 / 红球）、船棚油壶、邮局门口（邮筒、结局课桌）实测都落地不悬空、不压墙，没动。
+- **碰撞贴合审计**：`CollisionFitAudit` 改成和建碰撞一样整岛扫（原来只扫白名单可走区外 1 m，和全岛轮廓碰撞对不上，多出 0.03 / 0.03 m² 的零星格子），走得到的格子按高差 ≤ 一步从出生点灌水。
+- 新验收 `-feeldemo props`（`Runtime/Test/PropsTest.cs`）22/22。
+- **九项审计**（`Build\Preview`，16:3x–16:5x）：碰撞贴合 穿模 0.00 / 空气墙 0.00 m²；ferry 6/6；路线 28/28 零离地帧；剧情 22/22 走位恢复 0、炉火可见、平均 189 帧（1280×720）；创新 164/164；水位、地图通过；通行 28/28；拾取 15/15；另 心愿 / 轮盘 13/13、全岛连通（RoamAudit）五个水位陷阱 0。`TideBuild.Windows` 打 `Build\Main`，`Assembly-CSharp.dll` 和审计过的 Preview 哈希一致，Main 上地图审计复跑通过；trial version 水印仍在。
+- 没拍好：`prop_fix_16_oil_pour.png` 看不到主角（倒油时主角站进灯笼间里，灯笼顶挡住俯拍），倒油动作只有数字（倾 79° 后收起）。
+
+## 2026-11-16 傍晚 · 最终合流与 Windows 封版（Codex）
+
+- 对照 16:22 的场景生成、碰撞轮廓与安全点日志，以及随后生成的漫游禁区，沿用已烘场景。将地图目标接到实际的互动位置，新增门铃图钉，并从最终场景刷新 PL-11 正交底图。
+- 炉内柴捆恢复独立渲染，按炉口尺寸调整，并留出 3.1 cm 的炉门内侧余量。道具验收检查渲染开启及柴捆前端位置。
+
+| 验收 | 最终 Preview |
+| --- | --- |
+| 碰撞贴合 | 穿模 0 m²，空气墙 0 m² |
+| 渡口 | 6/6，L2 缺口三处漫游判定拒绝，角色实走停在缺口前 |
+| 路线 | 28/28，悬空帧 0 |
+| 剧情 | 22/22，走位恢复 0，从炉口能看见火焰 |
+| 创新 | 164/164 |
+| 水位 | L0～L4 全通过 |
+| 地图 | 5 处定位、8 个任务目标、读信互斥通过，4 点最大投影误差 0.00014 像素 |
+| 通行 | 28/28 |
+| 拾取 | 15/15 |
+| 自由漫游 | 5/5 水位场景，陷阱 0，L2 缺口时对岸油壶不可达 |
+| 心愿玩具与中键轮盘 | 13/13 |
+| 持物、炉膛、门铃和地形 | 道具 22/22，五处六机位实拍复核通过 |
+
+- L2 实走及水深测量。L1_road_dry=ok 10/10 个箱位能走 | L2_bed_flooded=ok 箱位地面 1.03 1.02 1.02 1.01 1.00* 1.00* 1.01* 1.01 1.02 1.03 （* 是缺口）最高 1.03 来自 descent，要低于 1.10；箱子记的河床 1.03 | L2_gap_blocks=ok 缺口 3/3，漫游判定 3/3，实走 0.39m/首个缺失箱位 0.45m，最低支撑面 1.36m/涉水线 1.10m，gapActive=True | L2_crates_stand=ok 7/7 只箱子浮在水面上能踩 | L2_banks_dry=ok 来路岸 (10.88,-13.84) 高 1.79，对岸 (16.87,-16.71) 高 1.40 | L2_winch_dry=ok 绞盘 (13.40,-13.10) 地面 1.40
+- 全岛连通网格。L0 可达 40457 格，陷阱 0。L1 可达 40457 格，陷阱 0。L2_bridge 可达 40165 格，陷阱 0。L2_gap 可达 39145 格，陷阱 0。L3 可达 39116 格，陷阱 0。
+- 玩法专项。13/13 toy_spawned=ok 毛绒熊玩偶 | toy_off_route=ok routeDist=1.95 radius=0.21 | toy_colliders=ok height=0.34 circles=11 | toy_blocks_body=ok closest=0.300（身体撞台子半径 0.30） | pick_opens_inspect=ok open=True held=True event=contact pickup_drop error=0.0000 forward=0.338 | put_back=ok moved=0.000 circles=11/11 | store_in_bag=ok bag=1 | take_out=ok circles=11 | bag_full=ok bag=6 | bag_refuses_when_full=ok  | wheel_actions=ok 7/7  | wheel_pet_dog_needs_dog=ok  | wheel_expressions=ok 16/16
+- 道具专项。22/22 wood_pile_visible_before=ok  | wood_taken=ok carry=wood | wood_pile_hidden=ok  | wood_centered=ok x=0.007 | wood_clear_of_shell=ok back=0.262 shellFront=0.244 | wood_follows_body=ok parent=CarryAnchor | wood_loaded=ok step=B4_light event=contact load_wood error=0.0000 forward=0.286 | oven_has_wood_inside=ok renderer=True inset=0.031 | wood_pile_still_hidden=ok  | oven_wet_wood_swaps=ok  | fire_inside_chamber=ok fireLocal=(0.267, 0.680, -0.394) mouthZ=-0.501 | fire_visible_from_front=ok count=21 | oil_can_visible_before=ok  | oil_taken=ok carry=oil | oil_can_hidden=ok  | oil_handle_in_palm=ok err=0.011 | oil_walk_handle_stays=ok maxErr=0.029 | oil_walk_no_shell_clip=ok minShellGap=0.020 | oil_walk_off_ground=ok minGroundGap=0.020 | oil_swings=ok maxTilt=17.531 | oil_pours_then_removed=ok maxPour=79.006 | bell_rings_on_touch=ok event=contact inspect_memory error=0.0515 forward=0.286 rings=1
+- 现场图沿用五个穿模问题的六个机位，另重拍油壶、柴捆、炉膛、触碰门铃与心愿玩具。
+- 工程书刷新图 3-1 至图 3-13 与五张界面配图，增补最终合流画面和全量数据。
+- 正式包复跑启动与地图审计通过。与最终 Preview 对照的 148 个播放器文件中，147 个 SHA-256 一致，差异为 boot.config 中 Unity 自动生成的 build-guid。Windows 实机仍显示 Unity trial version 水印。
+- 无屏幕参数启动，1280×720、1600×900、1920×1080 三档计算与本机窗口应用自检通过。
+- 场景 SHA-256 F6553B9CC0E31F95B8E54BF8D3B597E6458A75321E4AF5A62F7BA24199DF83C7。游戏程序集 SHA-256 5C98D148F1C06803A109CE370DEE66A01C88C0993D016CB763DA1052352C13D5。
+- [全量审计](evidence/windows-2026-11-16/acceptance.json) · [包哈希对照](evidence/windows-2026-11-16/package-hash-comparison.json) · [界面实拍](evidence/windows-2026-11-16/interface.jpg) · [Windows 发布页](https://github.com/forkseek/eggboy-still-delivering/releases/tag/windows-2026-11-16)

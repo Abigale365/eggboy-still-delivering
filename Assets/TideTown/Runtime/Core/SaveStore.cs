@@ -9,17 +9,17 @@ public sealed class SaveStore
 
     static bool IsAudit(string arg)
     {
+        if (GameBootstrap.IsRouteAuditFlag(arg)) return true;
         switch (arg)
         {
             case "-storyaudit":
-            case "-routeaudit":
-            case "-routeaudit2":
             case "-traversalaudit":
             case "-mapaudit":
             case "-wateraudit":
             case "-innovaudit":
             case "-scanaudit":
             case "-shot":
+            case "-feeldemo":
                 return true;
             default:
                 return false;
@@ -34,6 +34,7 @@ public sealed class SaveStore
         {
             var s = JsonUtility.FromJson<GameState>(json);
             if (s == null || s.schemaVersion != 1) return null;
+            if(s.seenTutorials==null)s.seenTutorials=new System.Collections.Generic.List<string>();
             return s;
         }
         catch
@@ -44,6 +45,7 @@ public sealed class SaveStore
 
     public void Save(GameState s)
     {
+        if(s.seenTutorials==null)s.seenTutorials=new System.Collections.Generic.List<string>();
         PlayerPrefs.SetString(Key, JsonUtility.ToJson(s));
         PlayerPrefs.Save();
     }

@@ -12,6 +12,8 @@ public class MapAudit : MonoBehaviour
     GameBootstrap boot;
     string status = "passed", error = "";
     readonly StringBuilder items = new StringBuilder();
+    int targetsMatched;
+    const int TargetCount = 8;
 
     public void Begin(GameBootstrap b) { boot = b; StartCoroutine(Run()); }
 
@@ -22,11 +24,12 @@ public class MapAudit : MonoBehaviour
         var p = boot.player;
         var map = FindObjectOfType<TownMap>();
         if (map == null) { status = "no_map"; error = "TownMap 没挂上"; Finish(); yield break; }
+        CheckInteractionTargets(map);
 
         var asset = Resources.Load<TextAsset>("World/route");
         var route = JsonUtility.FromJson<RouteList>(asset.text).route;
         string[] ids = { "03", "07", "11", "20", "31" };
-        bool ok = true;
+        bool ok = targetsMatched == TargetCount;
 
         foreach (var id in ids)
         {
@@ -104,6 +107,28 @@ public class MapAudit : MonoBehaviour
         yield break;
     }
 
+    void CheckInteractionTargets(TownMap map)
+    {
+        var targets = new[]
+        {
+            (step: "B1_matches", entity: "stall"), (step: "B2_wood", entity: "wood"),
+            (step: "B3_load", entity: "stove"), (step: "S1_slipper", entity: "slipper"),
+            (step: "S2_ball", entity: "ball"), (step: "L1_shed", entity: "oil"),
+            (step: "L2_door", entity: "lighthouse_door"), (step: "L3_oil", entity: "lamp_head")
+        };
+        string originalStep = boot.state.step;
+        foreach (var target in targets)
+        {
+            boot.state.step = target.step;
+            if (boot.service.TryGetPosition(target.entity, out Vector3 actual) &&
+                map.TryGetStepTarget(out Vector3 pin, out _) && (pin - actual).sqrMagnitude < 0.000001f)
+                targetsMatched++;
+            else
+                error += "target_" + target.entity + ";";
+        }
+        boot.state.step = originalStep;
+    }
+
     IEnumerator Capture(string file)
     {
         string dir = Path.Combine(Application.dataPath, "..", "shots");
@@ -119,6 +144,8 @@ public class MapAudit : MonoBehaviour
         sb.AppendLine("{");
         sb.AppendLine("  \"status\": \"" + status + "\",");
         sb.AppendLine("  \"points\": [" + items + "],");
+        sb.AppendLine("  \"interaction_targets_matched\": " + targetsMatched + ",");
+        sb.AppendLine("  \"interaction_targets_total\": " + TargetCount + ",");
         sb.AppendLine("  \"letter_blocks_map\": " + (letterBlocks ? "true" : "false") + ",");
         sb.AppendLine("  \"map_closes_on_letter\": " + (mapCloses ? "true" : "false") + ",");
         sb.AppendLine("  \"errors\": \"" + error + "\"");

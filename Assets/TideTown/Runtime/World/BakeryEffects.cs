@@ -5,7 +5,12 @@ using UnityEngine;
 public sealed class BakeryEffects : MonoBehaviour
 {
     public Vector3 chimneyLocalPosition = new Vector3(0.22f, 3.7f, 0f);
+    // 2026-11-16：火、湿柴白烟、装进去的柴都在炉膛里面。下面三个由 IslandBuilder 量 A1 网格写入：
+    //   mouthLocal = 炉门开口中心（开口那一面上）；chamberFloorLocal = 炉膛底板（开口下沿往里 0.14 m）；mouthSize = 开口宽高
     public Vector3 fireLocalPosition = new Vector3(0f, 0.80f, -0.56f);
+    public Vector3 mouthLocal = new Vector3(0f, 0.75f, -0.62f);
+    public Vector3 chamberFloorLocal = new Vector3(0f, 0.58f, -0.40f);
+    public Vector2 mouthSize = new Vector2(0.40f, 0.35f);
     // 由 IslandBuilder 指到烘焙好的粒子材质；运行时 Shader.Find 在打包后可能找不到
     public Material ParticleMaterial;
 
@@ -14,11 +19,75 @@ public sealed class BakeryEffects : MonoBehaviour
     public bool HasSmoke => smoke != null && smoke.isPlaying;
     public int FireCount => fire != null ? fire.particleCount : 0;
     public int SmokeCount => smoke != null ? smoke.particleCount : 0;
-    public bool FireVisible => fire != null && fire.GetComponent<ParticleSystemRenderer>().isVisible;
     public bool SmokeVisible => smoke != null && smoke.GetComponent<ParticleSystemRenderer>().isVisible;
+    // 火焰发射点：炉膛里、柴捆上（原来在炉门外 5 cm 的半空中）
+    public Vector3 FireMouth => transform.TransformPoint(fireLocalPosition);
+    // 往炉膛里塞柴时手伸到的点：炉门开口中心
+    public Vector3 LoadPoint => transform.TransformPoint(mouthLocal);
+
+    // ---------- 炉膛里的柴捆（OvenLoadedWood）----------
+    GameObject loadedWood;
+    bool loadedWet;
+    public bool HasLoadedWood => loadedWood != null && loadedWood.activeSelf;
+    public bool LoadedWoodWet => HasLoadedWood && loadedWet;
+
+    public void SetLoadedWood(bool loaded, bool wet)
+    {
+        if (!loaded) { if (loadedWood != null) loadedWood.SetActive(false); return; }
+        if (loadedWood == null || loadedWet != wet)
+        {
+            if (loadedWood != null) Destroy(loadedWood);
+            loadedWood = BuildLoadedWood(wet);
+            loadedWet = wet;
+        }
+        if (loadedWood != null) loadedWood.SetActive(true);
+    }
+
+    GameObject BuildLoadedWood(bool wet)
+    {
+        var world = FindObjectOfType<IslandWorld>();
+        var src = world != null ? world.woodModel : null;
+        if (src == null) return null;
+        var go = Instantiate(src, transform, false);
+        go.name = "OvenLoadedWood";
+        go.SetActive(true);
+        foreach (var c in go.GetComponentsInChildren<Collider>(true)) Destroy(c);
+        // 抱起柴捆后，院里的原件会隐藏。炉内副本需要恢复自己的渲染。
+        foreach (var renderer in go.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
+        go.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.Euler(0f, 90f, 0f));
+        go.transform.localScale = Vector3.one;
+        var bounds = HandCarry.LocalBounds(go, transform);
+        float widthFit = mouthSize.x * 0.60f / Mathf.Max(0.01f, bounds.size.x);
+        float heightFit = mouthSize.y * 0.55f / Mathf.Max(0.01f, bounds.size.y);
+        float depthFit = mouthSize.x * 0.95f / Mathf.Max(0.01f, bounds.size.z);
+        float fit = Mathf.Min(1f, Mathf.Min(widthFit, Mathf.Min(heightFit, depthFit)));
+        // 让柴捆靠前的一端也越过炉门，另一端顺着炉膛进深方向放进去。
+        var front = chamberFloorLocal + Vector3.up * 0.008f;
+        front.z = mouthLocal.z + Mathf.Clamp(mouthSize.x * 0.07f, 0.015f, 0.035f);
+        go.transform.localScale = Vector3.one * fit;
+        go.transform.localPosition = front - new Vector3(bounds.center.x, bounds.min.y, bounds.min.z) * fit;
+        if (wet)
+            foreach (var r in go.GetComponentsInChildren<Renderer>())
+            {
+                var mats = r.materials;
+                foreach (var m in mats)
+                    foreach (var p in new[] { "_BaseColor", "_Color" })
+                        if (m.HasProperty(p)) m.SetColor(p, m.GetColor(p) * new Color(0.48f, 0.50f, 0.56f, 1f));   // 湿柴：发暗、偏冷
+                r.materials = mats;
+            }
+        return go;
+    }
+
+    public bool FireVisibleFrom(Camera camera)
+    {
+        if (!Lit || FireCount == 0 || !fireRenderer.isVisible) return false;
+        var point = camera.WorldToViewportPoint(FireMouth);
+        return point.z > camera.nearClipPlane && point.x > 0f && point.x < 1f && point.y > 0f && point.y < 1f;
+    }
 
     Light fireLight;
     ParticleSystem fire, smoke;
+    ParticleSystemRenderer fireRenderer;
     float t;
     float boostPulse;
 
@@ -65,7 +134,9 @@ public sealed class BakeryEffects : MonoBehaviour
         {
             var go = new GameObject("OvenWetPuff");
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = fireLocalPosition + new Vector3(0f, 0.05f, -0.1f);
+            // 白烟从炉膛里的湿柴上冒出来，再从炉门飘出去
+            go.transform.localPosition = fireLocalPosition + new Vector3(0f, 0.04f, 0f);
+            go.transform.localRotation = Quaternion.Euler(60f, 0f, 0f) * Quaternion.LookRotation(Vector3.back);   // 朝炉门外、往上 60°
             wetPuff = go.AddComponent<ParticleSystem>();
             var main = wetPuff.main;
             main.loop = false;
@@ -101,13 +172,15 @@ public sealed class BakeryEffects : MonoBehaviour
     {
         var go = new GameObject("OvenFire");
         go.transform.SetParent(transform, false);
-        go.transform.localPosition = fireLocalPosition;
+        // 2026-11-16：发射口在炉膛里的柴捆上（不再在炉门外），火舌往上舔到炉膛顶；从炉门开口看得见
+        go.transform.position = FireMouth;
         fire = go.AddComponent<ParticleSystem>();
         var main = fire.main;
         main.loop = true;
-        main.startLifetime = 0.6f;
-        main.startSpeed = 0.4f;
-        main.startSize = new ParticleSystem.MinMaxCurve(0.18f, 0.42f);
+        float roof = Mathf.Max(0.12f, mouthLocal.y + mouthSize.y * 0.5f - fireLocalPosition.y);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.30f, 0.50f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(roof * 0.9f, roof * 1.5f);
+        main.startSize = new ParticleSystem.MinMaxCurve(mouthSize.x * 0.35f, mouthSize.x * 0.6f);
         main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.88f, 0.45f), new Color(1f, 0.42f, 0.10f));
         main.maxParticles = 90;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
@@ -115,8 +188,9 @@ public sealed class BakeryEffects : MonoBehaviour
         em.rateOverTime = 55f;
         var shape = fire.shape;
         shape.shapeType = ParticleSystemShapeType.Cone;
-        shape.radius = 0.12f;
-        shape.angle = 12f;
+        shape.radius = Mathf.Min(0.10f, mouthSize.x * 0.28f);
+        shape.angle = 10f;
+        shape.rotation = new Vector3(-90f, 0f, 0f);
         var col = fire.colorOverLifetime;
         col.enabled = true;
         var grad = new Gradient();
@@ -124,11 +198,13 @@ public sealed class BakeryEffects : MonoBehaviour
             new[] { new GradientColorKey(new Color(1f, 0.90f, 0.60f), 0f), new GradientColorKey(new Color(1f, 0.35f, 0.08f), 1f) },
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.85f, 0.6f), new GradientAlphaKey(0f, 1f) });
         col.color = grad;
-        go.GetComponent<ParticleSystemRenderer>().sharedMaterial = SoftMat(ParticleMaterial);
+        fireRenderer = go.GetComponent<ParticleSystemRenderer>();
+        fireRenderer.sharedMaterial = SoftMat(ParticleMaterial);
 
         var lightGo = new GameObject("OvenLight");
         lightGo.transform.SetParent(transform, false);
-        lightGo.transform.localPosition = fireLocalPosition + Vector3.up * 0.18f;
+        // 点光放在炉门开口外一点：暖光从开口溢到门前的路面上（不投影，放在炉膛里也会穿墙照到外面，放门口更像从门里漏出来）
+        lightGo.transform.localPosition = mouthLocal + Vector3.back * 0.18f;
         fireLight = lightGo.AddComponent<Light>();
         fireLight.type = LightType.Point;
         fireLight.color = new Color(1f, 0.62f, 0.28f);

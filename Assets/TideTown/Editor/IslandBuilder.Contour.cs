@@ -42,6 +42,7 @@ public sealed class ContourGrid
                 || n == "MailboxTrail" || n == "FlashlightReply" || n == "CityGlow" || n == "EndingDesk"          // 结局才出现
                 || n == "A2_GLB" || n == "D1_GLB" || n == "C1_GLB" || n == "C2_GLB" || n == "C3_GLB" || n == "A3_GLB"   // 捡得起来的小件
                 || n.Contains("Beam") || n.Contains("Glow") || n.Contains("Foam") || n.StartsWith("COL", StringComparison.OrdinalIgnoreCase)
+                || n.EndsWith("_skirt", StringComparison.Ordinal)   // 2026-11-16 校门坡道的侧面石砌：坡道自己的侧面，高低由地形判定管，不再生成碰撞圆（不然坡道上能走的宽度被两边各吃掉 0.45 m）
                 || n.IndexOf("invisible", StringComparison.OrdinalIgnoreCase) >= 0)
                 return true;
             if (excludeFoliage && n == "Bushes") return true;
@@ -76,7 +77,8 @@ public sealed class ContourGrid
     }
 
     [Serializable] class TierDef { public string id; public float y; public float[] x, z; }
-    [Serializable] class LayoutTierDoc { public TierDef[] tiers; }
+    [Serializable] class CoastDef { public float[] x, z; }
+    [Serializable] class LayoutTierDoc { public TierDef[] tiers; public CoastDef coast; }
 
     static bool Contains(Vector2[] poly, float x, float z)
     {
@@ -111,14 +113,21 @@ public sealed class ContourGrid
         return poly != null && poly.Length >= 3 && Contains(poly, x, z) && (inset <= 0f || DistToEdge(poly, x, z) >= inset);
     }
 
-    public static ContourGrid Build(List<(Vector2[] pts, float y)> polys, float cell, float margin, bool excludeFoliage)
+    // wholeIsland（2026-11-16 自由漫游）：整座岛（海岸线 coast 多边形以内）都算"可能有人走"，
+    // 山顶、海岸、灯塔台、船棚这些原来白名单以外的地方的树干、岩块、栏杆也生成轮廓碰撞
+    public static ContourGrid Build(List<(Vector2[] pts, float y)> polys, float cell, float margin, bool excludeFoliage, bool wholeIsland = false)
     {
-        Vector2[] mainPoly = null, housesPoly = null, hillWestPoly = null, hillTopPoly = null, lighthousePoly = null, beachPoly = null;
+        Vector2[] mainPoly = null, housesPoly = null, hillWestPoly = null, hillTopPoly = null, lighthousePoly = null, beachPoly = null, coastPoly = null;
         float beachHeight = 0f;
         var layoutAsset = Resources.Load<TextAsset>("World/world_layout");
         if (layoutAsset != null)
         {
             var doc = JsonUtility.FromJson<LayoutTierDoc>(layoutAsset.text);
+            if (wholeIsland && doc?.coast?.x != null && doc.coast.x.Length >= 3)
+            {
+                coastPoly = new Vector2[doc.coast.x.Length];
+                for (int i = 0; i < coastPoly.Length; i++) coastPoly[i] = new Vector2(doc.coast.x[i], doc.coast.z[i]);
+            }
             if (doc != null && doc.tiers != null)
             {
                 foreach (var t in doc.tiers)
@@ -139,7 +148,7 @@ public sealed class ContourGrid
         var g = new ContourGrid { cell = cell };
         float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
         foreach (var p in polys) foreach (var q in p.pts) { x0 = Mathf.Min(x0, q.x); x1 = Mathf.Max(x1, q.x); z0 = Mathf.Min(z0, q.y); z1 = Mathf.Max(z1, q.y); }
-        foreach (var tp in new[] { mainPoly, housesPoly, beachPoly })
+        foreach (var tp in new[] { mainPoly, housesPoly, beachPoly, coastPoly })
             if (tp != null)
                 foreach (var q in tp) { x0 = Mathf.Min(x0, q.x); x1 = Mathf.Max(x1, q.x); z0 = Mathf.Min(z0, q.y); z1 = Mathf.Max(z1, q.y); }
         x0 -= margin + 0.5f; z0 -= margin + 0.5f; x1 += margin + 0.5f; z1 += margin + 0.5f;
@@ -149,18 +158,49 @@ public sealed class ContourGrid
         g.walk = new bool[N]; g.relevant = new bool[N]; g.ground = new float[N]; g.maxTop = new float[N]; g.solidOwner = new int[N];
         var walkY = new float[N];
         var isRoadPoly = new bool[N];
+        bool[] coastRow = coastPoly != null ? new bool[nx] : null;
+        var polyBox = new Vector4[polys.Count];   // minX, minZ, maxX, maxZ
+        for (int pi = 0; pi < polys.Count; pi++)
+        {
+            var b = new Vector4(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
+            foreach (var q in polys[pi].pts) { b.x = Mathf.Min(b.x, q.x); b.y = Mathf.Min(b.y, q.y); b.z = Mathf.Max(b.z, q.x); b.w = Mathf.Max(b.w, q.y); }
+            polyBox[pi] = b;
+        }
         for (int iz = 0; iz < nz; iz++)
+        {
+            if (coastRow != null)
+            {
+                // 扫描线：这一行在海岸线多边形里的格子
+                System.Array.Clear(coastRow, 0, nx);
+                float zr = z0 + (iz + 0.5f) * cell;
+                var xs = new List<float>();
+                for (int i = 0, j = coastPoly.Length - 1; i < coastPoly.Length; j = i++)
+                {
+                    var a = coastPoly[i]; var b = coastPoly[j];
+                    if ((a.y > zr) != (b.y > zr)) xs.Add((b.x - a.x) * (zr - a.y) / (b.y - a.y) + a.x);
+                }
+                xs.Sort();
+                for (int k = 0; k + 1 < xs.Count; k += 2)
+                {
+                    int i0 = Mathf.Max(0, Mathf.CeilToInt((xs[k] - x0) / cell - 0.5f)), i1 = Mathf.Min(nx - 1, Mathf.FloorToInt((xs[k + 1] - x0) / cell - 0.5f));
+                    for (int ix = i0; ix <= i1; ix++) coastRow[ix] = true;
+                }
+            }
             for (int ix = 0; ix < nx; ix++)
             {
                 float x = x0 + (ix + 0.5f) * cell, z = z0 + (iz + 0.5f) * cell;
                 float py = float.NaN;
                 bool fromRoad = false;
-                foreach (var p in polys)
+                for (int pi = 0; pi < polys.Count; pi++)
+                {
+                    var p = polys[pi]; var pb = polyBox[pi];
+                    if (x < pb.x || x > pb.z || z < pb.y || z > pb.w) continue;
                     if (Contains(p.pts, x, z))
                     {
                         py = float.IsNaN(py) ? p.y : Mathf.Max(py, p.y);
                         fromRoad = true;
                     }
+                }
                 if (!fromRoad)
                 {
                     if (InPolyInset(housesPoly, x, z, 0f))
@@ -177,8 +217,11 @@ public sealed class ContourGrid
                 }
                 int id = iz * nx + ix;
                 g.walk[id] = !float.IsNaN(py); walkY[id] = py; isRoadPoly[id] = fromRoad;
+                // 白名单以外、海岸线以内的格子：地面高度由下面的射线从 40 m 往下取最高面
+                if (!g.walk[id] && coastRow != null && coastRow[ix]) g.walk[id] = true;
                 g.solidOwner[id] = -1; g.maxTop[id] = float.NegativeInfinity;
             }
+        }
         // 可走区往外 margin 以内才管
         int m = Mathf.CeilToInt(margin / cell);
         var rowNear = new bool[N];
@@ -295,7 +338,8 @@ public static partial class IslandBuilder
             for (int i = 0; i < pts.Length; i++) pts[i] = new Vector2(a.x[i], a.z[i]);
             polys.Add((pts, a.y));
         }
-        var g = ContourGrid.Build(polys, ContourCell, 0.7f, true);
+        // 2026-11-16 自由漫游：整座岛都生成轮廓碰撞（原来只有白名单可走区外 0.7 m 以内）
+        var g = ContourGrid.Build(polys, ContourCell, 0.7f, true, true);
         int nx = g.nx, nz = g.nz;
 
         // 3. 外沿：实心格，四邻里有空格（空格离可走区 0.7 m 以内）

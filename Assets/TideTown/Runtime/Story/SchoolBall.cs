@@ -11,6 +11,9 @@ public sealed class SchoolBall : MonoBehaviour
 
     public bool InBowl => inBowl;
 
+    // 2026-11-16：真实接触式拾取时球不经过 Take() 就被手拿走，开场先记住秋千下的原位（ReturnToSwing 要用）
+    void Awake() => CaptureInitial();
+
     void CaptureInitial()
     {
         if (capturedInitial) return;
@@ -23,14 +26,24 @@ public sealed class SchoolBall : MonoBehaviour
     {
         CaptureInitial();
         inBowl = false;
+        // 真人游玩：交给 PhysicalPickupController，每帧托在右手掌心（读档恢复持球也走这里）
+        var pk = PhysicalPickupController.Instance;
+        if (pk != null && pk.Active(null)) { pk.AttachCarryBall(this); return; }
         transform.SetParent(player, false);
         transform.localPosition = new Vector3(0.26f, 0.86f, 0.20f);
         transform.localRotation = Quaternion.identity;
     }
 
+    static void ReleaseFromHand(SchoolBall ball)
+    {
+        var pk = PhysicalPickupController.Instance;
+        if (pk != null) pk.ReleaseCarryBall(ball);
+    }
+
     public void ReturnToSwing()
     {
         CaptureInitial();
+        ReleaseFromHand(this);
         inBowl = false;
         transform.SetParent(null, true);
         transform.position = initialPos;
@@ -39,6 +52,7 @@ public sealed class SchoolBall : MonoBehaviour
 
     public void RollIntoBowl()
     {
+        ReleaseFromHand(this);
         transform.SetParent(null, true);
         inBowl = true;
         StartCoroutine(Roll());
@@ -66,6 +80,7 @@ public sealed class SchoolBall : MonoBehaviour
 
     public void PlaceInBowl()
     {
+        ReleaseFromHand(this);
         transform.SetParent(null, true);
         transform.position = BowlPoint;
         transform.localRotation = Quaternion.identity;

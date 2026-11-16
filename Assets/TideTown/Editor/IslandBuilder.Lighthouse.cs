@@ -153,9 +153,10 @@ public static partial class IslandBuilder
         {
             switch (it.id)
             {
-                case "log": it.x = cx; it.y = deckY + 0.04f; it.z = cz + 1.0f; break;
-                case "hat": it.x = cx + 1.0f; it.y = deckY + 0.04f; it.z = cz; break;
-                case "scope": it.x = cx - 1.0f; it.y = deckY + 0.04f; it.z = cz; break;
+                // 2026-11-16：原来 +0.04，三件东西都悬在平台上 4 cm（实测平台面 = deckY）；改成贴着台面 3 mm
+                case "log": it.x = cx; it.y = deckY + 0.003f; it.z = cz + 1.0f; break;
+                case "hat": it.x = cx + 1.0f; it.y = deckY + 0.003f; it.z = cz; break;
+                case "scope": it.x = cx - 1.0f; it.y = deckY + 0.003f; it.z = cz; break;
             }
         }
         const string path = "Assets/TideTown/Data/Resources/Story/lighthouse.json";

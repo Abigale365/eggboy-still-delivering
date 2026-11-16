@@ -2,8 +2,9 @@
 // 支持在 L3_oil / L4_light 解谜未完成时也可从塔顶南侧旋梯口（或按 B 键）随时下塔回地面，绝不困住玩家。
 using UnityEngine;
 
-public sealed class EndingDeskInteractable : IInteractable
+public sealed class EndingDeskInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "E1_read" && !s.flags.Contains("ending_letter_read"));
     public Vector3 Position { get; }
     StoryDirector director;
     public EndingDeskInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
@@ -14,8 +15,9 @@ public sealed class EndingDeskInteractable : IInteractable
     public void Interact(GameState s, InteractionService svc) => director.ReadEndingLetter();
 }
 
-public sealed class LighthouseDownInteractable : IInteractable
+public sealed class LighthouseDownInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "L5_reply" || s.step == "E0_back");
     readonly Vector3 basePos;
     readonly StoryDirector director;
 

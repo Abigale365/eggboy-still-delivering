@@ -28,6 +28,7 @@ public sealed class TidalWindChallenge : MonoBehaviour
     public static bool Suppress; // 创新审计测别的方向时先关掉风
     public string Phase => warnTimer > 0f ? "warn" : gustTimer > 0f ? "gust" : boostTimer > 0f ? "boost" : "calm";
     public bool InWindZone => currentZone != null;
+    public bool IsGustActive => !Suppress && !Features.classicAudit && currentZone != null && (warnTimer > 0f || gustTimer > 0f);
     public Vector3 WindDir { get; private set; } = Vector3.right;
     public int Failures { get; private set; }
     public int Survived { get; private set; }

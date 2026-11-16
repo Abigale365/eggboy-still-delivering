@@ -1,4 +1,8 @@
 # Regenerate the main scene without the "player is running" check in build.ps1 (scene generation does not touch the player build).
+# During shared work use tools/build.ps1 -Method IslandBuilder.BuildMain to acquire the project lock.
+# After layout or tier changes, recapture mapbase and update the map image and bounds after joined visual acceptance (PL-11).
+# Under the shared lock, use the joined Build/Preview player with -resetsave -look day -shot mapbase -shot_aa.
+# Import shots/mapbase.png as UI/town_preview.png together with shots/map_bounds.json. Keep mapbase_points.json for alignment checks.
 param([string]$ProjectPath = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
 $unity = 'C:\Program Files\Unity 2022.3.62f2c1\Editor\Unity.exe'

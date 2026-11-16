@@ -11,6 +11,7 @@ public class GameState
     public List<string> stamps = new List<string>();
     public List<string> flags = new List<string>();
     public List<string> seenMemories = new List<string>();
+    public List<string> seenTutorials = new List<string>();
     public float waterLevel;
     public string playerItemId;
 }

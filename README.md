@@ -4,6 +4,10 @@
 
 参加 Aholo 3D AI 黑客松的作品。场景里的建筑、道具和角色都用 Aholo Lux3D 生成，用 Unity 2022.3（URP）搭成可以玩的小镇。
 
+**Windows 试玩版** · [下载 TideTown-Windows.zip](https://github.com/forkseek/eggboy-still-delivering/releases/download/windows-2026-11-16/TideTown-Windows.zip)
+
+解压整个 ZIP 后，双击 `TideTown.exe` 开始。 [更新说明](https://github.com/forkseek/eggboy-still-delivering/releases/tag/windows-2026-11-16) · [实机画面](docs/evidence/windows-2026-11-16/interface.jpg)
+
 **在线试玩：** https://forkseek.github.io/eggboy-still-delivering/
 
 建议用电脑上的 Chrome 或 Edge 打开。第一次加载要下载约 195 MB。
@@ -15,7 +19,7 @@
   - `WASD` 或方向键 / 手柄左摇杆：走路；按住 `Shift`：跑（逆海风时压低重心）
   - `空格`：跳；`E` / 手柄 `A` 或 `X`：互动（取信、拿东西、端详 3D 旧物、拨动 3D 机关）
   - 点一下画面锁定鼠标，移动鼠标转镜头；`Esc` 释放鼠标、打开菜单；滚轮：拉远拉近
-  - `M`：地图
+  - `M`：航海投递地图册；按住鼠标中键：选择动作或表情
 - **密室逃脱 & 一题多解核心能力**：
   - `V` 键 / 手柄 `Y` 键：呼出 **【邮差心愿 3D 造物笺 & 15 项一题多解成就图鉴】**（支持自由打字或一键点选灵感词牌，按个人喜好为小黑造美食/新玩具、在涨潮渡口造大黄鸭浮船/海龟浮台过海、或在三站心愿展台留下永久 3D 纪念摆件）
   - `Tab` 或 `L` 键：翻阅当前信件，用鼠标按住信纸底部的字签拖出信纸抛向 3D 空中，直接化为真实 Lux3D 物件

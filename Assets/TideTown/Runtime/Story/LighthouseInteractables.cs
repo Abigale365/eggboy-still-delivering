@@ -2,8 +2,9 @@
 // 允许玩家在 L2_door / L3_oil / L4_light 任意阶段随时上下灯塔，绝不把玩家困在塔顶。
 using UnityEngine;
 
-public sealed class OilCanInteractable : IInteractable
+public sealed class OilCanInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "L1_shed" && !s.flags.Contains("oil_taken"));
     public Vector3 Position { get; }
     StoryDirector director;
     public OilCanInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
@@ -11,11 +12,12 @@ public sealed class OilCanInteractable : IInteractable
     public string Prompt(GameState s) =>
         s.step == "L1_shed" && !s.flags.Contains("oil_taken") ? "E　拿起油壶" : "";
     public bool CanInteract(GameState s) => s.step == "L1_shed" && !s.flags.Contains("oil_taken");
-    public void Interact(GameState s, InteractionService svc) => director.TakeOil();
+    public void Interact(GameState s, InteractionService svc) => director.TakeOilAt(Position);
 }
 
-public sealed class LighthouseDoorInteractable : IInteractable
+public sealed class LighthouseDoorInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "L2_door");
     public Vector3 Position { get; }
     StoryDirector director;
     public LighthouseDoorInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
@@ -27,9 +29,11 @@ public sealed class LighthouseDoorInteractable : IInteractable
     public void Interact(GameState s, InteractionService svc) => director.ClimbTower();
 }
 
-public sealed class LampHeadInteractable : IInteractable, IHoldInteraction
+public sealed class LampHeadInteractable : IInteractable, IHoldInteraction, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "L3_oil" || s.step == "L4_light");
     public float HoldSeconds(GameState state) => state.step == "L4_light" ? 1.0f : 0f;
+    public string HoldEmote(GameState state) => "hold_pour_oil";
 
     public Vector3 Position { get; }
     StoryDirector director;
@@ -46,7 +50,7 @@ public sealed class LampHeadInteractable : IInteractable, IHoldInteraction
         (s.step == "L4_light" && !s.flags.Contains("beam_lit"));
     public void Interact(GameState s, InteractionService svc)
     {
-        if (s.step == "L3_oil") director.OilLamp();
+        if (s.step == "L3_oil") director.OilLampAt(Position);
         else director.LightLamp();
     }
 }

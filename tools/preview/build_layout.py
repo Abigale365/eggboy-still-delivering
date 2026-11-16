@@ -168,19 +168,43 @@ def notch_tiers(tiers, roads):
                     nodes = nodes + [ext(nodes[-1], nodes[-2])]
             # 可走的石板平台只切"坡道比平台低 0.18 m 以上"那一截：坡顶和平台接得上（剩下的台阶比一步 0.22 m 矮）；
             # 不可走的台地整段切
+            from shapely.geometry import LineString
             thr = 0.18 if t.get("walk") else 0.25
             lim = t["y"] - thr
+            # 2026-11-15：住宅坡道的豁口按铺好的路面宽度切（notch_width，比路窄 0.2 m：路面两边各压进石墙），
+            # 原来路宽 + 0.3 m，路面和石墙之间各空出 0.2 m 竖缝，从缝里能看到底下
+            half_w = r.get("notch_width", r["width"] + 0.3) * 0.5
+            chain = []
+
+            def flush_chain():
+                if len(chain) >= 2:
+                    q = LineString([(p[0], p[2]) for p in chain]).buffer(
+                        half_w, cap_style=2, join_style=2, mitre_limit=2.0
+                    )
+                    if q.intersects(P) and q.intersection(P).area > 0.05:
+                        cuts.append(q)
+                chain.clear()
+
             for a_, b_ in zip(nodes, nodes[1:]):
                 if min(a_[1], b_[1]) >= lim:
+                    flush_chain()
                     continue
                 if t.get("walk") and max(a_[1], b_[1]) > lim:
                     s = (lim - a_[1]) / (b_[1] - a_[1])
                     mid_ = (a_[0] + (b_[0] - a_[0]) * s, lim, a_[2] + (b_[2] - a_[2]) * s)
-                    a_, b_ = (a_, mid_) if a_[1] < lim else (mid_, b_)
-                for (p0, p1, quad) in ribbon([a_, b_], r["width"] + 0.3):
-                    q = Polygon(quad)
-                    if q.intersects(P) and q.intersection(P).area > 0.05:
-                        cuts.append(q)
+                    if a_[1] < lim:
+                        if not chain:
+                            chain.append(a_)
+                        chain.append(mid_)
+                        flush_chain()
+                    else:
+                        flush_chain()
+                        chain.extend([mid_, b_])
+                    continue
+                if not chain:
+                    chain.append(a_)
+                chain.append(b_)
+            flush_chain()
         if not cuts:
             out.append(t)
             continue

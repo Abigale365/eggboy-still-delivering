@@ -60,9 +60,10 @@ public sealed class TraversalAudit : MonoBehaviour
         yield return BothWays("housing_north", 1.39f, 24.22f, 0.33f, 23.16f);
         yield return BothWays("housing_east", 19.60f, 20.08f, 21.10f, 20.08f);
         yield return BothWays("dock_seafront", 22.75f, -17.85f, 24.90f, -17.65f, true);
-        yield return Motion("market_wall", 3.8f, 0.15f, 3.8f, 1.75f, true, block: true, record: true);
+        // B7_market_r2 南墙的实测墙身和外侧拐角。原墙点压在西侧圆角，会滑进通道。
+        yield return Motion("market_wall", 4.45f, 0.15f, 4.45f, 2.10f, true, block: true, record: true);
         yield return Motion("market_fence", 1.3f, -1.75f, 3.1f, -1.75f, true, block: true, record: true);
-        yield return Motion("market_corner_slide", 2.22f, .46f, 5.10f, .98f, true, record: true);
+        yield return Motion("market_corner_slide", 2.22f, .46f, 5.10f, .64f, true, record: true, slide: true);
         yield return Motion("housing_cliff", -3.95f, 10.41f, -3.95f, 11.66f, true, block: true, record: true);
         yield return TreeTrunk();
         yield return LowStep();
@@ -81,7 +82,8 @@ public sealed class TraversalAudit : MonoBehaviour
         yield return Motion(name + "_run_back", x1, z1, x0, z0, true, record: record);
     }
 
-    IEnumerator Motion(string name, float x0, float z0, float x1, float z1, bool run, bool block = false, bool jump = false, bool record = false)
+    IEnumerator Motion(string name, float x0, float z0, float x1, float z1, bool run, bool block = false,
+        bool jump = false, bool record = false, bool slide = false)
     {
         int firstFrame = record ? frameNumber : -1;
         var start = Ground(x0, z0);
@@ -107,15 +109,21 @@ public sealed class TraversalAudit : MonoBehaviour
         }
         if (record) Record(direction);
         bool passed = validStart && (block ? progress > 0.12f && progress < distance - 0.24f :
-            progress >= distance - 0.09f && side < 0.38f && (!jump || yMax - start.y >= 0.27f));
+            progress >= distance - 0.09f && side < 0.38f && (!slide || side > 0.05f) &&
+            (!jump || yMax - start.y >= 0.27f));
         Add(name, passed, start, target, progress, yMax, firstFrame);
     }
 
     IEnumerator TreeTrunk()
     {
-        foreach (var tree in FindObjectsOfType<MeshRenderer>())
+        // Revisit the lawn trunk that was missed at the stacked-terrace boundary.
+        var terraceTree = new Vector2(10.4985f, 8.7201f);
+        var trunks = FindObjectsOfType<MeshRenderer>().Where(tree => tree.enabled &&
+            tree.sharedMaterials.Any(material => material != null &&
+                material.name.StartsWith("NatureTrunk", StringComparison.Ordinal)))
+            .OrderBy(tree => (new Vector2(tree.transform.position.x, tree.transform.position.z) - terraceTree).sqrMagnitude);
+        foreach (var tree in trunks)
         {
-            if (!tree.sharedMaterials.Any(material => material != null && material.name == "NatureTrunk")) continue;
             Vector3 p = tree.transform.position;
             if (p.y < 2.9f || p.y > 5.6f || !boot.world.InLawnArea(p.x, p.z)) continue;
             Vector3 start = Ground(p.x + 1.2f, p.z);
@@ -165,8 +173,11 @@ public sealed class TraversalAudit : MonoBehaviour
 
     IEnumerator Beach()
     {
+        // L1 的浅滩仍可跳入。从海堤西侧实际入口起跳，避开旧坐标前的礁石。
+        boot.water.SetInstant(WaterLevel.LevelYs[1]);
         Vector3 direction = Vector3.back;
-        Vector3 start = Ground(5.28f, -11.62f);
+        Vector3 start = Ground(4.8f, -12.7f);
+        bool validStart = boot.world.Walkable(start.x, start.z) && start.y > 2.8f;
         Position(start, direction);
         float farthest = start.z;
         for (int i = 0; i < 90; i++)
@@ -174,25 +185,43 @@ public sealed class TraversalAudit : MonoBehaviour
             boot.player.Move(Dt, 0f, -1f, true, false);
             farthest = Mathf.Min(farthest, boot.player.transform.position.z);
         }
-        Add("beach_walk_edge_holds", boot.player.transform.position.y > 2.8f, start, Ground(5.28f, -15f), start.z - farthest, start.y);
+        Add("beach_walk_edge_holds", validStart && boot.player.transform.position.y > 2.8f,
+            start, Ground(start.x, -14.5f), start.z - farthest, start.y);
 
         Position(start, direction);
         int jumpFrames = frameNumber;
         bool landed = false;
-        float landingZ = 0f;
-        for (int i = 0; i < 240; i++)
+        float maxY = start.y;
+        for (int i = 0; i < 180; i++)
         {
-            // Aim for the open sand on the right of the boulder below the launch point.
-            float steer = i >= 12 && !landed && boot.player.transform.position.z <= -12.55f ? 0.42f : 0f;
-            boot.player.Move(Dt, steer, -1f, true, i == 12);
+            boot.player.Move(Dt, 0f, -1f, true, i == 24);
             var p = boot.player.transform.position;
-            if (!landed && boot.player.grounded && boot.world.IsBeachSurface(p.x, p.z, p.y)) { landed = true; landingZ = p.z; }
+            maxY = Mathf.Max(maxY, p.y);
             if (i % 8 == 0) Record(direction);
-            if (landed && p.z < landingZ - 1.0f) break;
+            if (boot.player.grounded && boot.world.IsBeachSurface(p.x, p.z, p.y))
+            {
+                landed = true;
+                break;
+            }
+            if (i % 5 == 0) yield return null;
+        }
+        var landing = boot.player.transform.position;
+        var openSand = new Vector2(-3.8f, -16.6f);
+        float walked = 0f;
+        for (int i = 0; landed && i < 300; i++)
+        {
+            var p = boot.player.transform.position;
+            var heading = (openSand - new Vector2(p.x, p.z)).normalized;
+            boot.player.Move(Dt, heading.x, heading.y, true, false);
+            p = boot.player.transform.position;
+            if (i % 8 == 0) Record(new Vector3(heading.x, 0f, heading.y));
+            walked = Vector2.Distance(new Vector2(p.x, p.z), new Vector2(landing.x, landing.z));
+            if (walked > 1f) break;
             if (i % 5 == 0) yield return null;
         }
         var sand = boot.player.transform.position;
-        Add("beach_jump_land_and_walk", landed && sand.z < landingZ - 0.9f, start, Ground(6.18f, -15f), start.z - sand.z, sand.y, jumpFrames);
+        Add("beach_jump_land_and_walk", validStart && landed && maxY > start.y + .27f && walked > 1f &&
+            boot.world.IsBeachSurface(sand.x, sand.z, sand.y), start, landing, walked, maxY, jumpFrames);
         if (landed && rescue != null)
         {
             int rescueFrames = frameNumber;
@@ -202,7 +231,9 @@ public sealed class TraversalAudit : MonoBehaviour
             float nextFrame = Time.realtimeSinceStartup;
             while (rescue.RescueCount == count && Time.realtimeSinceStartup < deadline)
             {
-                boot.player.Move(Mathf.Min(Time.deltaTime, .05f), 0f, 1f, true, false);
+                var p = boot.player.transform.position;
+                var heading = new Vector2(start.x - p.x, start.z - p.z).normalized;
+                boot.player.Move(Mathf.Min(Time.deltaTime, .05f), heading.x, heading.y, true, false);
                 if (Time.realtimeSinceStartup >= nextFrame)
                 {
                     Record(Vector3.forward);
@@ -211,16 +242,38 @@ public sealed class TraversalAudit : MonoBehaviour
                 yield return null;
             }
             Record(Vector3.forward);
-            Add("beach_return_rescue", rescue.RescueCount == count + 1 && rescue.LastReason == "beach" && boot.player.transform.position.y > .9f,
-                sand, rescue.LastTarget, 0f, boot.player.transform.position.y, rescueFrames);
+            var shore = boot.player.transform.position;
+            Add("beach_return_rescue", rescue.RescueCount == count + 1 && rescue.LastReason == "beach" &&
+                shore.y >= WaterLevel.StaticY && boot.world.Walkable(shore.x, shore.z) &&
+                !boot.world.IsBeachSurface(shore.x, shore.z, shore.y), sand, rescue.LastTarget, 0f, shore.y, rescueFrames);
             rescue.Enabled = false;
         }
         else Add("beach_return_rescue", false, sand, start, 0f, sand.y);
+        // 2026-11-14 用户定：浅水可以涉（IslandWorld.WadeDepth = 0.18）。L1（0.45）时沙滩没过脚 15 厘米，照样跳得下去、踩水走；
+        // 到 L2（1.15）沙滩在水下 85 厘米，才是关闭的。原来这里只有一项 flooded_beach_closed，按 0.45 就关闭来验。
+        // 这两项只验"规则"，不依赖上面写死的起跳点（场景重新生成后那个点可能被挡住）：数沙滩里 0.5 米网格上能走的点。
+        // 真跳下去、走开、再被送回岸上的实走验证在 FeelDemo 的 -feeldemo beachentry。
+        int SandCells()
+        {
+            var poly = boot.world.beachPoly;
+            if (poly == null || poly.points == null) return 0;
+            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
+            foreach (var v in poly.points) { x0 = Mathf.Min(x0, v.x); x1 = Mathf.Max(x1, v.x); z0 = Mathf.Min(z0, v.y); z1 = Mathf.Max(z1, v.y); }
+            int n = 0;
+            for (float x = x0; x <= x1; x += 0.5f)
+                for (float z = z0; z <= z1; z += 0.5f)
+                    if (boot.world.Walkable(x, z) && boot.world.IsBeachSurface(x, z, boot.world.GroundAt(x, z))) n++;
+            return n;
+        }
+        boot.water.SetInstant(0f);
+        int dry = SandCells();
         boot.water.SetInstant(.45f);
-        Position(start, direction);
-        for (int i = 0; i < 120; i++) boot.player.Move(Dt, 0f, -1f, true, i == 12);
-        Add("flooded_beach_closed", !boot.world.Walkable(5.28f, -15f) && boot.player.transform.position.y > 2.8f,
-            start, Ground(5.28f, -15f), 0f, boot.player.transform.position.y);
+        int wet = SandCells();
+        Add("flooded_beach_wadable", dry > 0 && wet == dry, start, start, wet, .45f);
+        boot.water.SetInstant(1.15f);
+        int deep = SandCells();
+        Add("deep_beach_closed", deep == 0, start, start, deep, 1.15f);
+        yield return null;
     }
 
     Vector3 Ground(float x, float z) => new Vector3(x, boot.world.GroundAt(x, z), z);
@@ -233,6 +286,7 @@ public sealed class TraversalAudit : MonoBehaviour
         boot.player.locked = false;
         boot.player.grounded = true;
         boot.player.jump = new JumpState();
+        boot.player.ResetJumpInput();
     }
 
     void Add(string name, bool passed, Vector3 start, Vector3 target, float progress, float height, int firstFrame = -1)

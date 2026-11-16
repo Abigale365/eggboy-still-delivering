@@ -1,0 +1,130 @@
+{
+  "passed": 12,
+  "scene_sha256": "F6553B9CC0E31F95B8E54BF8D3B597E6458A75321E4AF5A62F7BA24199DF83C7",
+  "roam_blocks_sha256": "5F131375455688A42AA177E28BE1CF2A64BB4EEFF4BEB9C131CCE9CB78AAC94D",
+  "player_assembly": "5C98D148F1C06803A109CE370DEE66A01C88C0993D016CB763DA1052352C13D5",
+  "results": {
+    "碰撞贴合": "穿模 0 m²，空气墙 0 m²",
+    "渡口": "6/6，L2 缺口三处漫游判定拒绝，角色实走停在缺口前",
+    "路线": "28/28，悬空帧 0",
+    "剧情": "22/22，走位恢复 0，从炉口能看见火焰",
+    "创新": "164/164",
+    "水位": "L0～L4 全通过",
+    "地图": "5 处定位、8 个任务目标、读信互斥通过，4 点最大投影误差 0.00014 像素",
+    "通行": "28/28",
+    "拾取": "15/15",
+    "自由漫游": "5/5 水位场景，陷阱 0，L2 缺口时对岸油壶不可达",
+    "心愿玩具与中键轮盘": "13/13",
+    "持物、炉膛、门铃和地形": "道具 22/22，五处六机位实拍复核通过"
+  },
+  "ferry_measurement": "L1_road_dry=ok 10/10 个箱位能走 | L2_bed_flooded=ok 箱位地面 1.03 1.02 1.02 1.01 1.00* 1.00* 1.01* 1.01 1.02 1.03 （* 是缺口）最高 1.03 来自 descent，要低于 1.10；箱子记的河床 1.03 | L2_gap_blocks=ok 缺口 3/3，漫游判定 3/3，实走 0.39m/首个缺失箱位 0.45m，最低支撑面 1.36m/涉水线 1.10m，gapActive=True | L2_crates_stand=ok 7/7 只箱子浮在水面上能踩 | L2_banks_dry=ok 来路岸 (10.88,-13.84) 高 1.79，对岸 (16.87,-16.71) 高 1.40 | L2_winch_dry=ok 绞盘 (13.40,-13.10) 地面 1.40 | ",
+  "roam_scenarios": [
+    {
+      "name": "L0",
+      "water": 0.0,
+      "gap": false,
+      "nodes": 227676,
+      "reach": 40457,
+      "traps": 0,
+      "routeMissing": [],
+      "oilReachable": true,
+      "ok": true,
+      "trapClusters": []
+    },
+    {
+      "name": "L1",
+      "water": 0.45,
+      "gap": false,
+      "nodes": 227676,
+      "reach": 40457,
+      "traps": 0,
+      "routeMissing": [],
+      "oilReachable": true,
+      "ok": true,
+      "trapClusters": []
+    },
+    {
+      "name": "L2_bridge",
+      "water": 1.15,
+      "gap": false,
+      "nodes": 227676,
+      "reach": 40165,
+      "traps": 0,
+      "routeMissing": [],
+      "oilReachable": true,
+      "ok": true,
+      "trapClusters": []
+    },
+    {
+      "name": "L2_gap",
+      "water": 1.15,
+      "gap": true,
+      "nodes": 227676,
+      "reach": 39145,
+      "traps": 0,
+      "routeMissing": [],
+      "oilReachable": false,
+      "ok": true,
+      "trapClusters": []
+    },
+    {
+      "name": "L3",
+      "water": 1.6,
+      "gap": false,
+      "nodes": 227676,
+      "reach": 39116,
+      "traps": 0,
+      "routeMissing": [
+        "LOW",
+        "via",
+        "via",
+        "24",
+        "via",
+        "via",
+        "via",
+        "via",
+        "via",
+        "via",
+        "25",
+        "via",
+        "via",
+        "via",
+        "via",
+        "via",
+        "via",
+        "24",
+        "via",
+        "via",
+        "LOW"
+      ],
+      "oilReachable": false,
+      "ok": true,
+      "trapClusters": []
+    }
+  ],
+  "map_max_error_pixels": 0.00013647876039613038,
+  "wishwheel_measurement": "13/13 toy_spawned=ok 毛绒熊玩偶 | toy_off_route=ok routeDist=1.95 radius=0.21 | toy_colliders=ok height=0.34 circles=11 | toy_blocks_body=ok closest=0.300（身体撞台子半径 0.30） | pick_opens_inspect=ok open=True held=True event=contact pickup_drop error=0.0000 forward=0.338 | put_back=ok moved=0.000 circles=11/11 | store_in_bag=ok bag=1 | take_out=ok circles=11 | bag_full=ok bag=6 | bag_refuses_when_full=ok  | wheel_actions=ok 7/7  | wheel_pet_dog_needs_dog=ok  | wheel_expressions=ok 16/16 | ",
+  "props_measurement": "22/22 wood_pile_visible_before=ok  | wood_taken=ok carry=wood | wood_pile_hidden=ok  | wood_centered=ok x=0.007 | wood_clear_of_shell=ok back=0.262 shellFront=0.244 | wood_follows_body=ok parent=CarryAnchor | wood_loaded=ok step=B4_light event=contact load_wood error=0.0000 forward=0.286 | oven_has_wood_inside=ok renderer=True inset=0.031 | wood_pile_still_hidden=ok  | oven_wet_wood_swaps=ok  | fire_inside_chamber=ok fireLocal=(0.267, 0.680, -0.394) mouthZ=-0.501 | fire_visible_from_front=ok count=21 | oil_can_visible_before=ok  | oil_taken=ok carry=oil | oil_can_hidden=ok  | oil_handle_in_palm=ok err=0.011 | oil_walk_handle_stays=ok maxErr=0.029 | oil_walk_no_shell_clip=ok minShellGap=0.020 | oil_walk_off_ground=ok minGroundGap=0.020 | oil_swings=ok maxTilt=17.531 | oil_pours_then_removed=ok maxPour=79.006 | bell_rings_on_touch=ok event=contact inspect_memory error=0.0515 forward=0.286 rings=1 | ",
+  "visual_review": {
+    "player_assembly": "5C98D148F1C06803A109CE370DEE66A01C88C0993D016CB763DA1052352C13D5",
+    "terrain": {
+      "spot_release_u1_corner.png": true,
+      "spot_release_u2_wedge.png": true,
+      "spot_release_u3_school_gate.png": true,
+      "spot_release_u4_gate_top.png": true,
+      "spot_release_u5_descent_top.png": true,
+      "spot_release_u6_corner_harbor.png": true
+    },
+    "props": {
+      "prop_fix_01_bell_on_door.png": true,
+      "prop_fix_02_bell_ring.png": true,
+      "prop_fix_06_wood_carry_walk.png": true,
+      "prop_fix_07_wood_into_oven.png": true,
+      "prop_fix_08_oven_loaded_wood.png": true,
+      "prop_fix_10_oven_fire_inside.png": true,
+      "prop_fix_14_oil_walk.png": true,
+      "wish_toy_world.png": true,
+      "wish_inspect.png": true
+    }
+  }
+}

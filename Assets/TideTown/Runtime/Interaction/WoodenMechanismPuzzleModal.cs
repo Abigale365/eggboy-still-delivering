@@ -573,7 +573,7 @@ public sealed class WoodenMechanismPuzzleModal : MonoBehaviour
         if (noteCard == null || currentSpec == null) return;
         string dots = "";
         for (int i = 0; i < 3; i++) dots += i < attemptsLeft ? "●" : "○";
-        noteTitle.text = "邮差笔记　" + dots + (AssistReady ? "　·　H 鲁班巧思" : "");
+        noteTitle.text = "邮差笔记　" + dots + (AssistReady ? "　·　按 H 搭把手" : "");
         bool deskShortcut = currentSpec.id == "school_lock" && gameState != null && gameState.seenMemories.Contains("desk_detail");
         string[] ringNames = { "外环", "中环", "内环" };
         string body = "";

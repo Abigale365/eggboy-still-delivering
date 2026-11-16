@@ -233,15 +233,21 @@ public class StoryAudit : MonoBehaviour
                 else if (loadOk) { status = "stove_failed"; error = "second E did nothing"; }
                 else { status = "load_failed"; error = "step=" + boot.state.step + " carry=" + boot.state.carrying; }
             }
-            if (status == "passed") yield return SnapFrom("story_oven.png", new Vector3(0.5f, 6.2f, -11.5f), new Vector3(-2.2f, 4.8f, -1.5f));
-            // 火苗/烟的可见性必须在对准烤炉的镜头下采样；放到结尾采样时相机已离开，isVisible 恒为 false
-            if (fx != null) { fireVisibleOven = fx.FireVisible; smokeVisibleOven = fx.SmokeVisible; }
+            if (status == "passed" && fx != null)
+            {
+                var from = fx.transform.TransformPoint(new Vector3(0.7f, 1.6f, -3.7f));
+                yield return SnapFrom("story_oven.png", from, fx.FireMouth + Vector3.up * 0.67f, cam =>
+                {
+                    fireVisibleOven = fx.FireVisibleFrom(cam);
+                    smokeVisibleOven = fx.SmokeVisible;
+                });
+            }
         }
 
-        if (status == "passed" && !(litOk && stampOk && waterOk && smokeOk))
+        if (status == "passed" && !(litOk && stampOk && waterOk && smokeOk && fireVisibleOven))
         {
             status = "fire_failed";
-            error = $"lit={litOk} stamp={stampOk} water={waterOk} smoke={smokeOk}";
+            error = $"lit={litOk} stamp={stampOk} water={waterOk} smoke={smokeOk} fire_visible={fireVisibleOven}";
         }
 
         float bakerySecs = Time.realtimeSinceStartup - bakeryAt;
@@ -626,7 +632,8 @@ public class StoryAudit : MonoBehaviour
             if (status == "passed")
             {
                 if (!(ended && subtitleOk && cityShown)) { status = "e3_failed"; error = $"ended={ended} subtitle={subtitleText} city={cityShown} dbg={boot.director.EndingDebug}"; }
-                else if (dog == null || !dog.Following || !dog.Visible || dogFinal > 5.0f) { status = "e3_dog_failed"; error = $"dog={dogFinal:F2}"; }
+                // 2026-11-16：小黑只在学校周边活动，结局时它在学校里（不在主角身边）也对
+                else if (dog == null || !dog.Following || !dog.Visible || (dogFinal > 5.0f && !(DogFollower.StayNearSchool && dog.InSchoolArea))) { status = "e3_dog_failed"; error = $"dog={dogFinal:F2} school={dog != null && dog.InSchoolArea}"; }
                 else yield return Snap("story_ending_city.png");
             }
         }
@@ -848,7 +855,7 @@ public class StoryAudit : MonoBehaviour
     }
 
     // 固定机位拍证据，拍完把镜头还给 ChaseCamera
-    IEnumerator SnapFrom(string file, Vector3 from, Vector3 look)
+    IEnumerator SnapFrom(string file, Vector3 from, Vector3 look, Action<Camera> onFrame = null)
     {
         string dir = Path.Combine(Application.dataPath, "..", "shots");
         Directory.CreateDirectory(dir);
@@ -864,6 +871,7 @@ public class StoryAudit : MonoBehaviour
         cam.fieldOfView = 42f;
         yield return null;
         yield return null;
+        onFrame?.Invoke(cam);
         ScreenCapture.CaptureScreenshot(Path.Combine(dir, file), 1);
         yield return new WaitForSecondsRealtime(0.6f);
         cam.transform.SetPositionAndRotation(p0, r0);

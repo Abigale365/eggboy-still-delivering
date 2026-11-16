@@ -65,7 +65,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         var letter = FindLetter("zhou_eggboy");
         letterLock = gate != null ? gate.Acquire("endingletter") : null;
         if (letterLock != null && player != null) player.locked = true;
-        if (game != null) game.SetExpression(ExprId.surprised);
+        PlayAction("ending_desk", ExprId.surprised, 1.00f, 0.40f);
         if (letter != null) ui.ShowLetterDetail(letter.title, letter.body, letter.signature);
         else ui.ShowLetter();
         StartCoroutine(EndingLetterMood());
@@ -136,7 +136,7 @@ public sealed partial class StoryDirector : MonoBehaviour
         yield return MoveCamera(top3 + new Vector3(3.2f, 3.0f, 4.7f), cityPos, 2.2f);
         Mark("E3cam");
         yield return new WaitForSecondsRealtime(1.6f);
-        if (player != null) player.PlayEmote("wave", 3);
+        if (player != null) player.PlayEmote(player.HasClip("signal_wave") ? "signal_wave" : "wave", 3);
         if (!State.flags.Contains("ending_done"))
         {
             State.flags.Add("ending_done");

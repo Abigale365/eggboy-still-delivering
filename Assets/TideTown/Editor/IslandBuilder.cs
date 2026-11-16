@@ -96,6 +96,7 @@ public static partial class IslandBuilder
         var leaves = Mat("IslandLeaves", new Color32(0x5f, 0x7f, 0x45, 255));
         var trunk = Mat("IslandTrunk", new Color32(0x6b, 0x4d, 0x31, 255));
         var crate = Mat("IslandCrate", new Color32(0x8a, 0x66, 0x42, 255));
+        CrateWoodLook(crate);
         var greybox = Mat("IslandBuildingGrey", new Color32(0xb4, 0xb4, 0xb4, 255));
         var scanMat = Mat("IslandScan", new Color32(0xd8, 0xd2, 0xc4, 255));
         var dogFur = Mat("DogFur", new Color32(0x24, 0x20, 0x1e, 255));
@@ -116,7 +117,11 @@ public static partial class IslandBuilder
             BuildTier(t, generated.transform, top, t.id == "houses" ? wall : cliff);
         }
         if (layout.roads != null)
+        {
             foreach (var r in layout.roads) BuildRoad(r, generated.transform, road);
+            ApplyRoadFinishes(layout, cobble, cliff);
+            Physics.SyncTransforms();
+        }
 
         // WP-08：海面、安全点、浮箱。顺序有讲究：安全点要在浮箱之前取地面，否则射线会打到箱顶
         AlwaysIncludeWaterShader();
@@ -150,6 +155,26 @@ public static partial class IslandBuilder
 
         // 2026-11-07 旧的圆球石头 + 棒棒糖树（ScatterRocksAndTrees）换成 BuildNature
         BuildNature(layout, generated.transform);
+        ApplyBuildingPlacement(layout, generated.transform);
+        ApplyCoastalPromenade(layout, generated.transform);
+        // 2026-11-16 四向全景扩建 EXP-01/02/05/06（IslandBuilder.MapExpansion.cs）；EXP-04 喷泉、日晷、星纹在 Nature2 里
+        ApplyMapExpansion(layout, generated.transform);
+        // 2026-11-16：安全点是在海滨步道、灯塔坡道、扩建步道铺好之前取的地面高度；铺装改完以后重新贴一遍地面
+        // （不看浮箱；只在 ±0.6 m 内跟着走，不会跳到屋顶上去）
+        Physics.SyncTransforms();
+        {
+            var safe = generated.GetComponentInChildren<SafePoints>();
+            int moved = 0;
+            if (safe != null)
+                for (int i = 0; i < safe.points.Count; i++)
+                {
+                    var p = safe.points[i]; float best = float.NegativeInfinity;
+                    foreach (var hit in Physics.RaycastAll(new Vector3(p.x, p.y + 0.6f, p.z), Vector3.down, 1.2f, LayerMask.GetMask("Ground"), QueryTriggerInteraction.Ignore))
+                        if (hit.collider.GetComponentInParent<FloatingCrate>() == null) best = Mathf.Max(best, hit.point.y);
+                    if (!float.IsNegativeInfinity(best) && Mathf.Abs(best - p.y) > 0.001f) { safe.points[i] = new Vector3(p.x, best, p.z); moved++; }
+                }
+            Debug.Log("SAFEPOINTS regrounded=" + moved);
+        }
         // 2026-11-08 第四轮：所有东西摆完以后，按模型外轮廓统一生成碰撞（IslandBuilder.Contour.cs）
         Physics.SyncTransforms();
         BuildContourCollision(layout, generated.transform);
@@ -585,35 +610,9 @@ public static partial class IslandBuilder
     static Material WaterMat()
     {
         string path = MatRoot + "/IslandWater.mat";
-        var shader = Shader.Find("TideTown/Water");
-        if (shader == null) throw new Exception("找不到 TideTown/Water 着色器（Assets/TideTown/Art/Shaders/Water.shader）");
         var m = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (m == null)
-        {
-            m = new Material(shader);
-            AssetDatabase.CreateAsset(m, path);
-        }
-        else if (m.shader != shader)
-        {
-            m.shader = shader;
-        }
-        // 2026-11-08：按目标图调亮——深处饱和的蓝，近岸青绿，礁石边一圈白浪
-        m.SetColor("_ShallowColor", new Color(0.15f, 0.62f, 0.74f, 1f));
-        m.SetColor("_DeepColor", new Color(0.05f, 0.26f, 0.62f, 1f));
-        // 2026-11-12 美术改版：海面映出黄昏的天色
-        m.SetColor("_SkyColor", new Color(1.0f, 0.70f, 0.62f, 1f));
-        m.SetFloat("_SkyReflect", 0.32f);
-        m.SetColor("_FoamColor", new Color(0.96f, 0.99f, 0.98f, 1f));
-        m.SetFloat("_ShoreRange", 9f);
-        m.SetFloat("_FoamWidth", 2.0f);
-        m.SetFloat("_DepthRange", 2.4f);
-        m.SetFloat("_FoamDepth", 0.16f);   // 2026-11-13：1.2 时礁石泡在水里的整面都发白，像冰块
-        m.SetFloat("_Alpha", 0.97f);   // 2026-11-12：深水几乎不透。外海底下没有海床，透出来的是天空盒的粉橙色，整片海会发紫
-        m.SetFloat("_WaveSpeed", 1f);
-        m.SetFloat("_WaveStrength", 0.6f);
-        m.SetFloat("_SpecStrength", 0.5f);
-        m.SetFloat("_VertWave", 0.06f);
-        EditorUtility.SetDirty(m);
+        // 水材质由画面轨道维护；重建场景时只引用，避免把合流后的参数刷回旧默认值。
+        if (m == null) throw new Exception("缺少场景引用的水材质：" + path);
         return m;
     }
 
@@ -670,6 +669,45 @@ public static partial class IslandBuilder
             sp.points.Add(new Vector3(p.x, y, p.z));
         }
         Debug.Log("SAFEPOINTS n=" + sp.points.Count);
+    }
+
+    // 2026-11-16：浮箱原来是纯色深褐方块，涨潮时水面上露出一排没有细节的直角盒子。
+    // 画一张木箱面贴图（四块横木板 + 一圈边框 + 一根斜撑 + 钉眼），立方体每个面的 UV 正好是 0–1，每面都是一张箱板。
+    static void CrateWoodLook(Material mat)
+    {
+        string path = TexRoot + "/CrateWood.png";
+        const int N = 256;
+        var px = new Color[N * N];
+        var wood = new Color(0.66f, 0.47f, 0.28f); var frame = new Color(0.53f, 0.36f, 0.20f); var seam = new Color(0.30f, 0.20f, 0.11f);
+        for (int y = 0; y < N; y++)
+            for (int x = 0; x < N; x++)
+            {
+                float u = x / (float)N, v = y / (float)N;
+                float grain = Mathf.PerlinNoise(x * 0.02f, y * 0.45f) * 0.10f - 0.05f + Mathf.PerlinNoise(x * 0.3f, y * 0.3f) * 0.03f;
+                int board = Mathf.FloorToInt(v * 4f);
+                Color c = wood * (1f + ((board * 37) % 7 - 3) * 0.025f);
+                float fv = v * 4f - board;
+                if (fv < 0.035f || fv > 0.965f) c = seam;                                    // 木板缝
+                float edge = Mathf.Min(Mathf.Min(u, 1f - u), Mathf.Min(v, 1f - v));
+                bool inFrame = edge < 0.11f;
+                bool inBrace = Mathf.Abs(u - v) < 0.075f && !inFrame;                       // 斜撑
+                if (inFrame || inBrace) c = frame * (1f + Mathf.PerlinNoise(x * 0.4f, y * 0.05f) * 0.08f);
+                if ((inFrame && Mathf.Abs(edge - 0.11f) < 0.012f) || (!inFrame && Mathf.Abs(Mathf.Abs(u - v) - 0.075f) < 0.01f)) c = seam;   // 边框和斜撑的描边
+                if (edge < 0.012f) c = seam * 0.9f;
+                // 钉眼：边框四角
+                foreach (var (nu, nv) in new[] { (0.055f, 0.055f), (0.945f, 0.055f), (0.055f, 0.945f), (0.945f, 0.945f) })
+                    if ((u - nu) * (u - nu) + (v - nv) * (v - nv) < 0.00045f) c = new Color(0.22f, 0.20f, 0.19f);
+                c.r += grain; c.g += grain * 0.8f; c.b += grain * 0.5f; c.a = 1f;
+                px[y * N + x] = c;
+            }
+        var tex = new Texture2D(N, N, TextureFormat.RGB24, false); tex.SetPixels(px); tex.Apply();
+        File.WriteAllBytes(path, tex.EncodeToPNG()); UnityEngine.Object.DestroyImmediate(tex);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+        imp.wrapMode = TextureWrapMode.Clamp; imp.filterMode = FilterMode.Trilinear; imp.anisoLevel = 4; imp.SaveAndReimport();
+        mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(path));
+        mat.SetColor("_BaseColor", Color.white);
+        EditorUtility.SetDirty(mat);
     }
 
     static void BuildCrates(Transform parent, Material mat)

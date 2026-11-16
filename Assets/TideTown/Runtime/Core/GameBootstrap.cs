@@ -1,5 +1,6 @@
 // WP-07 启动：把状态、存档、互动、剧情挂到现有 PrototypeGame 上，保留旧场景入口。
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [Serializable] class RouteStop { public string id; public bool stop; public float x, z; }
@@ -21,10 +22,13 @@ public sealed class GameBootstrap : MonoBehaviour
     // 这些模式测的是别的系统，或需要固定机位，开场镜头会添乱
     static readonly string[] SkipIntroArgs =
     {
-        "-noIntro", "-traversalaudit", "-routeaudit", "-routeaudit2", "-wateraudit", "-scanaudit", "-innovaudit", "-lux3dlive",
-        "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture", "-mapaudit",
+        "-noIntro", "-traversalaudit", "-wateraudit", "-scanaudit", "-innovaudit", "-lux3dlive",
+        "-autotest", "-townrun", "-docktest", "-shot", "-overview", "-dockview", "-capture", "-mapaudit", "-showcase",
     };
 
+    internal static bool IsRouteAuditFlag(string arg) =>
+        string.Equals(arg, "-routeaudit", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(arg, "-routeaudit2", StringComparison.OrdinalIgnoreCase);
 
     bool initialized;
 
@@ -46,6 +50,7 @@ public sealed class GameBootstrap : MonoBehaviour
         ui = FindObjectOfType<EggboyUI>();
         world = FindObjectOfType<IslandWorld>();
         if (player == null || ui == null) return;
+        if (world != null) RegisterLawnTreeTrunks();
 
         if (Array.Exists(Environment.GetCommandLineArgs(), a => a == "-resetsave")) new SaveStore().Clear();
         store = new SaveStore();
@@ -65,6 +70,8 @@ public sealed class GameBootstrap : MonoBehaviour
         service.Init(player, ui, gate, () => state);
         director = gameObject.AddComponent<StoryDirector>();
         director.Init(player, ui, state, store, gate, water);
+        // 2026-11-16 真实接触式拾取（docs/PHYSICAL_PICKUP_IK_BOOK_20261116.md）：读档恢复持球前就要有
+        player.gameObject.AddComponent<PhysicalPickupController>().Init(player, world, director);
         ui.legacyPrompt = false;
 
         var asset = Resources.Load<TextAsset>("World/route");
@@ -91,6 +98,7 @@ public sealed class GameBootstrap : MonoBehaviour
                 case "stall": service.Register(new StallInteractable(pos, director)); break;
                 case "wood": service.Register(new WoodInteractable(pos, director)); break;
                 case "stove": service.Register(new StoveInteractable(pos, director, effects)); break;
+                case "bell": service.Register(new BellInteractable(pos, director, item.label, item.text)); break;
                 default:
                     if (!string.IsNullOrEmpty(item.text))
                         service.Register(new MemoryInteractable(pos, director, item.id, item.label, item.text));
@@ -193,10 +201,13 @@ public sealed class GameBootstrap : MonoBehaviour
         gameObject.AddComponent<TidalWindChallenge>().Init(player, ui, world, state);
         // 创新方向 D / E / F / G：拆字成物、透视拓印、潮汐回声分身、光影成形与八音盒
         gameObject.AddComponent<AvantGardeGameplayHub>().Init(player, ui, world, director, state);
+        // 2026-11-16 用户议题 3：按住中键的表情与动作轮盘
+        gameObject.AddComponent<EmoteWheel>().Init(player, ui);
 
         // WP-10：序章只在真实开局时演，自动测试或固定机位模式跳过；WP-16 真实开局先给标题画面
         var args = Environment.GetCommandLineArgs();
-        bool introMode = state.step == "P0_boot" && !Array.Exists(args, a => Array.IndexOf(SkipIntroArgs, a) >= 0);
+        bool introMode = state.step == "P0_boot" &&
+            !Array.Exists(args, a => IsRouteAuditFlag(a) || Array.IndexOf(SkipIntroArgs, a) >= 0);
         if (introMode)
         {
             if (Array.Exists(args, a => a == "-storyaudit") || Array.Exists(args, a => a == "-notitle"))
@@ -229,6 +240,37 @@ public sealed class GameBootstrap : MonoBehaviour
             gameObject.AddComponent<InnovationAudit>().Begin(this);
         if (Array.Exists(args, a => a == "-lux3dlive"))
             gameObject.AddComponent<LiveLux3DCheck>().Begin(this);
+        // 2026-11-16 UI 展示图（封面 / HUD / 信 / 地图册 / 暂停手账）
+        if (Array.Exists(args, a => a == "-uishowcase") && introMode)
+            gameObject.AddComponent<UiShowcase>().Begin(this);
         initialized = true;
+    }
+
+    void RegisterLawnTreeTrunks()
+    {
+        // TreeMesh uses a 17 cm trunk base before scaling. In the player the static batch may share its mesh with other trees.
+        const float localTrunkRadius = .17f;
+        var pending = new List<EggboyCollider>();
+        var nearby = new List<EggboyCollider>();
+        foreach (var tree in FindObjectsOfType<MeshRenderer>())
+        {
+            if (!tree.enabled || !tree.name.EndsWith("LawnTree", StringComparison.Ordinal)) continue;
+            Vector3 center = tree.transform.position;
+            if (!world.InLawnArea(center.x, center.z) ||
+                Mathf.Abs(world.GroundAt(center.x, center.z) - center.y) > .20f) continue;
+            if (!Array.Exists(tree.sharedMaterials, material => material != null &&
+                material.name.StartsWith("NatureTrunk", StringComparison.Ordinal))) continue;
+            var scale = tree.transform.lossyScale;
+            float radius = localTrunkRadius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            world.QueryColliders(center.x, center.z, nearby);
+            // On stacked terraces, the contours at these XZ coordinates may belong to the lower lawn.
+            float trunkReach = radius + .06f;
+            if (nearby.Exists(c => c.r.HasValue && c.top.HasValue && c.top.Value > center.y + .25f &&
+                (new Vector2(c.x - center.x, c.z - center.z)).sqrMagnitude <= trunkReach * trunkReach)) continue;
+
+            pending.Add(new EggboyCollider { x = center.x, z = center.z, r = radius, minY = center.y - .15f });
+        }
+        foreach (var trunk in pending) world.AddCollider(trunk);
+        if (pending.Count > 0) Debug.Log($"LAWN_TRUNKS runtime={pending.Count}");
     }
 }

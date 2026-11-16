@@ -195,8 +195,14 @@ public class EggboyGait
         bones.RotateRaw("hand" + s, elbowAxis, bend * k);
     }
 
+    // 2026-11-16：手提东西时手指扣住（EggboyPlayer.ApplyCarryOverlay 调）
+    // 这一帧步态 / 跳跃已经握到多少，只补差额，跑步时不会弯过头
+    public void Grip(LegSide s, float k) { float extra = k - fistApplied[(int)s]; if (extra > 0f) Fist(s, extra); }
+    readonly float[] fistApplied = new float[2];
+
     void Fist(LegSide s, float k)
     {
+        fistApplied[(int)s] += k;
         // 手指轴是从 Unity 骨骼位置量出来的，已经带镜像方向，直接转即可
         bones.RotateRaw("finger1" + s, curl[(int)s], D(FIST[0]) * k);
         bones.RotateRaw("finger2" + s, curl[(int)s], D(FIST[1]) * k);
@@ -302,6 +308,7 @@ public class EggboyGait
 
     public void Update(float dt, GaitContext ctx)
     {
+        fistApplied[0] = fistApplied[1] = 0f;
         if (!Ok || dt <= 0f) return;
         float v = ctx.speed / scale;
         bool moving = ctx.speed > 0.05f;

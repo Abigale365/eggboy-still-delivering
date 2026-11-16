@@ -15,14 +15,26 @@ public sealed partial class StoryDirector : MonoBehaviour
     RectTransform signalCard;
     Text signalAlignLabel, signalFlashLabel, signalReplyLabel;
 
-    public void TakeOil()
+    // 船棚拿油壶：走到油壶正面，右手伸到提手那一帧（0.45 s）提起来
+    public void TakeOilAt(Vector3 pos)
+    {
+        if (!ready || State.step != "L1_shed" || State.flags.Contains("oil_taken")) return;
+        if (BeginPhysical(new PhysicalPickupController.Job
+            { clip = "pickup_oil", target = () => pos + Vector3.up * 0.25f, diameter = 0.18f, standDistance = 0.42f,
+              contactTime = 0.45f, lockSeconds = 0.95f, onContact = () => TakeOilCommit(false) })) return;
+        TakeOil();
+    }
+
+    public void TakeOil() => TakeOilCommit(true);
+
+    void TakeOilCommit(bool animate)
     {
         if (!ready || State.step != "L1_shed" || State.flags.Contains("oil_taken")) return;
         State.flags.Add("oil_taken");
         State.carrying = "oil";
-        ShowCarriedModel("oil");
         store.Save(State);
-        if (player != null) player.PlayEmote("give");
+        if (animate) PlayAction("pickup_oil", ExprId.happy, 0.95f, 0.45f, () => ShowCarriedModel("oil"));
+        else ShowCarriedModel("oil");
         ui.SetCarried(CarryLabel());
         ui.ShowToast("油壶里还剩小半壶。");
         AdvanceTo("L2_door");
@@ -32,6 +44,7 @@ public sealed partial class StoryDirector : MonoBehaviour
     {
         if (!ready || climbing) return;
         if (State.step != "L2_door" && State.step != "L3_oil" && State.step != "L4_light") return;
+        if (player != null && player.HasClip("open_lighthouse_door")) player.PlayEmote("open_lighthouse_door");
         StartCoroutine(ClimbTowerRoutine());
     }
 
@@ -39,8 +52,9 @@ public sealed partial class StoryDirector : MonoBehaviour
     {
         climbing = true;
         if (player != null) player.locked = true;
+        // 2026-11-16：小黑只在学校周边活动，上塔时它本来就在学校，不再藏起来
         var dog = FindObjectOfType<DogFollower>();
-        if (dog != null) dog.Hide();
+        if (dog != null && !DogFollower.StayNearSchool) dog.Hide();
         yield return FadeTo(1f, FadeSeconds);
 
         var data = LighthouseData.Load();
@@ -67,15 +81,41 @@ public sealed partial class StoryDirector : MonoBehaviour
         climbing = false;
     }
 
-    public void OilLamp()
+    // 塔顶给灯头加油：走到灯头前，壶嘴伸到灯头那一帧（0.40 s）才倒油、开信
+    public void OilLampAt(Vector3 pos)
+    {
+        if (!ready || State.step != "L3_oil" || State.flags.Contains("lamp_oiled")) return;
+        if (BeginPhysical(new PhysicalPickupController.Job
+            { clip = "hold_pour_oil", target = () => pos, diameter = 0.20f, standDistance = 0.55f,
+              contactTime = 0.40f, lockSeconds = 0.80f, onContact = () => OilLampCommit(false) })) return;
+        OilLamp();
+    }
+
+    public void OilLamp() => OilLampCommit(true);
+
+    // 2026-11-16：壶嘴碰到灯头那一刻起，手里的油壶往前倾倒（0.45 s 倾到 75°，停 0.3 s），倒完才收起来
+    System.Collections.IEnumerator PourThenRemove()
+    {
+        var hc = carriedVisual != null ? carriedVisual.GetComponent<HandCarry>() : null;
+        if (hc != null)
+        {
+            hc.pourTarget = 75f;
+            yield return new WaitForSeconds(0.75f);
+            hc.pourTarget = 0f;
+            yield return new WaitForSeconds(0.15f);
+        }
+        if (State != null && State.carrying != "oil") ShowCarriedModel(null);
+    }
+
+    void OilLampCommit(bool animate)
     {
         if (!ready || State.step != "L3_oil" || State.flags.Contains("lamp_oiled")) return;
         State.flags.Add("lamp_oiled");
         State.carrying = "";
-        ShowCarriedModel(null);
         store.Save(State);
         ui.SetCarried("");
-        if (game != null) game.SetExpression(ExprId.thinking);
+        if (animate) PlayAction("hold_pour_oil", ExprId.thinking, 0.80f, 0.40f, () => ShowCarriedModel(null));
+        else StartCoroutine(PourThenRemove());
         var st = Step("L3_oil");
         var letter = FindLetter(st != null ? st.letter : "");
         letterLock = gate != null ? gate.Acquire("lighthouse") : null;
@@ -256,7 +296,7 @@ public sealed partial class StoryDirector : MonoBehaviour
             beacon.ManualMode = false;
         }
         yield return new WaitForSecondsRealtime(1.5f);
-        if (player != null) player.PlayEmote("wave", 2);
+        if (player != null) player.PlayEmote(player.HasClip("signal_wave") ? "signal_wave" : "wave", 2);
         FinishLighthouseNow();
     }
 
@@ -269,7 +309,11 @@ public sealed partial class StoryDirector : MonoBehaviour
             activeBeacon.Face(EndingCityPos());
             activeBeacon.PulseFlash();
         }
-        if (player != null) player.PlayEmote(signalFlashes >= 3 ? "wave" : "hop");
+        if (player != null)
+        {
+            string waveClip = player.HasClip("signal_wave") ? "signal_wave" : "wave";
+            player.PlayEmote(signalFlashes >= 3 ? waveClip : "hop");
+        }
         if (game != null) game.SetExpression(signalFlashes >= 3 ? ExprId.happy : ExprId.excited);
 
         int total = activeReply != null && activeReply.Total > 0 ? activeReply.Total : 40;

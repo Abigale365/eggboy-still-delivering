@@ -46,6 +46,8 @@ public sealed class Lux3DService : MonoBehaviour
     public string Mode { get; private set; } = "offline";
     public int GeneratedThisSession { get; private set; }
     public int MaxPerSession => cfg.maxPerSession;
+    // 2026-11-16 心愿玩具的温情描述：只有走 relay（密钥在转发服务上，不进安装包）时才请转发服务现写一句，否则用本地模板
+    public string RelayUrl => Mode == "relay" ? cfg.relayUrl : "";
     public IReadOnlyList<Lux3DLibraryEntry> Library => library;
 
     Lux3DConfigFile cfg = new Lux3DConfigFile();

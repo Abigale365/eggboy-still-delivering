@@ -125,7 +125,8 @@ public sealed class InnovationAudit : MonoBehaviour
         // 关弹窗的同一帧：谁先跑都不能让这一下 Esc 打开暂停
         Check("pause_guard_" + tag + "_closing_esc_does_not_pause", !menu.WouldTogglePause(true) && !menu.WouldAutoPause(true, false, true));
         yield return new WaitForSecondsRealtime(0.8f);
-        Check("pause_guard_" + tag + "_esc_works_again", menu.WouldTogglePause(true));
+        Check("pause_guard_" + tag + "_esc_works_again", menu.WouldTogglePause(true),
+            $"letterOpen={ui.LetterOpen} overlayOpen={MenuController.OverlayOpen} overlayBusy={menu.OverlayBusy} blocked={menu.Blocked}");
         Check("pause_guard_" + tag + "_never_paused", !ui.Paused);
     }
 
@@ -262,12 +263,16 @@ public sealed class InnovationAudit : MonoBehaviour
             boot.player.idle = 0f;
             game.SetExpression(ExprId.curious);
             Teleport(mid);
-            yield return new WaitForSeconds(0.2f);
+            float enterDeadline = Time.realtimeSinceStartup + 2f;
+            while (!wind.InWindZone && Time.realtimeSinceStartup < enterDeadline) yield return null;
             wind.DebugBrace = true;
             wind.DebugStartGust();
-            yield return new WaitForSeconds(2.0f);
+            // Wind uses Time.deltaTime; the pose blend is clamped separately. Wait for both on slow frames.
+            float braceDeadline = Time.realtimeSinceStartup + 5f;
+            while ((wind.Phase != "gust" || !boot.player.IsStoryCrouched) && Time.realtimeSinceStartup < braceDeadline) yield return null;
             Check("wind_exit_setup", wind.Phase == "gust" && boot.player.IsStoryCrouched
-                && boot.player.pose.expr == ExprId.nervous);
+                && boot.player.pose.expr == ExprId.nervous,
+                $"zone={wind.InWindZone} phase={wind.Phase} crouched={boot.player.IsStoryCrouched} expr={boot.player.pose.expr}");
             Teleport(FindWalkableNear(stove, 1.5f, 4f));
             yield return new WaitForSeconds(0.45f);
             Check("wind_exit_restores_pose", wind.Phase == "calm" && !boot.player.IsStoryCrouched
@@ -286,7 +291,10 @@ public sealed class InnovationAudit : MonoBehaviour
         Check("shadow_present", sp != null && sp.enabled && snd != null);
         if (sp == null || !sp.enabled || snd == null) yield break;
         var st = boot.state;
-        Check("shadow_off_route", true, "turntable=" + sp.TurntablePos.ToString("F1"));
+        var bank = sp.TurntablePos;
+        bool northBank = Vector2.Distance(new Vector2(bank.x, bank.z), new Vector2(20.5f, -11.7f)) <= 1f
+            && bank.y >= WaterLevel.LevelYs[2] + .1f && boot.world.InWalkArea(bank.x, bank.z);
+        Check("shadow_off_route", northBank, "turntable=" + bank.ToString("F2"));
         Teleport(FindWalkableNear(sp.TurntablePos, 1.2f, 1.8f));
         yield return new WaitForSeconds(0.3f);
 
@@ -482,10 +490,10 @@ public sealed class InnovationAudit : MonoBehaviour
         if (dog == null || plate == null) yield break;
         var st = boot.state;
 
-        // 1) 面包店：小黑跑到最近的旧物旁嗅，地上留粉笔爪印
-        st.step = "B1_matches";
+        // 1) 学校（2026-11-16 起小黑只在学校周边活动）：小黑跑到最近的旧物旁嗅，地上留粉笔爪印
+        st.step = "S2_ball";
         Vector3 recipe = Vector3.zero;
-        foreach (var it in BakeryData.Load()) if (it.id == "recipe") recipe = new Vector3(it.x, it.y, it.z);
+        foreach (var it in SchoolData.Load().items) if (it.id == "blackboard") recipe = new Vector3(it.x, it.y, it.z);
         Teleport(FindWalkableNear(recipe, 1.5f, 3.5f));
         dog.Follow();
         yield return new WaitForSeconds(0.6f);
@@ -503,14 +511,20 @@ public sealed class InnovationAudit : MonoBehaviour
         Check("dog_mark_shows_ring_number", tm != null && tm.text.Contains("环"), tm != null ? tm.text : "null");
         if (mark != null) yield return Snap("innov_dog_sniff.png", mark.transform.position, 2.4f, 200f);
 
-        // 2) 附近没东西：就是摸摸
+        // 2) 主角走远（山口邮筒）：小黑不跟出学校，留在学校里溜达；F 叫不动它
         yield return new WaitForSeconds(2.5f);
         Vector3 far = Vector3.zero;
         var asset = Resources.Load<TextAsset>("World/route");
         var list = asset != null ? JsonUtility.FromJson<RouteList>(asset.text) : null;
         if (list != null) foreach (var r in list.route) if (r.stop && r.id == "03") far = new Vector3(r.x, 0f, r.z);
         Teleport(FindWalkableNear(far, 0f, 3f));
-        yield return new WaitForSeconds(0.6f);
+        yield return new WaitForSeconds(4.0f);
+        Check("dog_stays_at_school", dog.HomeMode && dog.InSchoolArea && dog.Visible, $"home={dog.HomeMode} inSchool={dog.InSchoolArea} at={dog.transform.position.ToString("F1")}");
+        // 回到学校、附近的线索都嗅过了：按 F 就是摸摸
+        foreach (var x in new[] { "slipper", "doghouse", "blackboard" }) if (!st.flags.Contains("dog_sniff_" + x)) st.flags.Add("dog_sniff_" + x);
+        Teleport(FindWalkableNear(recipe, 1.5f, 3.5f));
+        float tBack = Time.realtimeSinceStartup;
+        while ((dog.HomeMode || Vector3.Distance(dog.transform.position, boot.player.transform.position) > 2.5f) && Time.realtimeSinceStartup - tBack < 8f) yield return null;
         dog.CommandOrPet();
         Check("dog_pet_when_nothing_near", dog.LastCommand == "pet", dog.LastCommand);
         yield return new WaitForSeconds(1.0f);
@@ -533,7 +547,12 @@ public sealed class InnovationAudit : MonoBehaviour
         while (!plate.ChestReady && Time.realtimeSinceStartup - t0 < 5f) yield return null;
         Check("dog_chest_rises", plate.ChestReady && boot.world.Walkable(plate.ChestRest.x, plate.ChestRest.z));
         yield return Snap("innov_dog_chest.png", (plate.Center + plate.ChestRest) * 0.5f, 3.2f, 200f);
-        Teleport(plate.ChestRest + (boot.player.transform.position - plate.ChestRest).normalized * 0.8f);
+        // 2026-11-15：原来是"朝人原来站的方向退 0.8 米"，船棚挪位置以后那个点落在水里，人被安全点救走，木匣就开不了。
+        // 改成像玩家一样：在木匣周围找一块 L2 时还干着、够得到（互动距离 1.6 米）的地面走过去。找不到就是真问题：玩家也拿不到。
+        Vector3 chestStand = FindWalkableNear(plate.ChestRest, 0.6f, 1.5f);
+        bool chestReachable = chestStand != plate.ChestRest;
+        Check("dog_chest_reachable_dry", chestReachable, $"chest={plate.ChestRest.ToString("F2")} stand={chestStand.ToString("F2")} water={WaterLevel.StaticY:F2}");
+        Teleport(chestReachable ? chestStand : plate.ChestRest + (boot.player.transform.position - plate.ChestRest).normalized * 0.8f);
         yield return null;
         bool opened = boot.service.TryInteract("paw_chest");
         yield return new WaitForSecondsRealtime(0.3f);
@@ -630,6 +649,7 @@ public sealed class InnovationAudit : MonoBehaviour
         Check("wood_aligned", WoodenMechanismPuzzleModal.DebugRing(0) == 3 && WoodenMechanismPuzzleModal.DebugRing(1) == 5 && WoodenMechanismPuzzleModal.DebugRing(2) == 2);
         WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
         Check("wood_solves", WoodenMechanismPuzzleModal.DebugSolved);
+        yield return SnapScreen("innov_wood_unlocked.png");
         float t0 = Time.realtimeSinceStartup;
         while (!solvedCb && Time.realtimeSinceStartup - t0 < 3f) yield return null;
         Check("wood_callback_and_closes", solvedCb && !WoodenMechanismPuzzleModal.IsOpen && st.flags.Contains("puzzle_bakery_lock") && !boot.player.locked);

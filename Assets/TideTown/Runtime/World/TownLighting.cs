@@ -6,7 +6,7 @@
 // 灯塔点灯和天亮（LighthouseFX）改的是 RenderSettings 的环境光颜色，这里每帧检测到变化就重算。
 //
 // 2026-11-12 美术改版：气氛照目标图（docs/reference/preview.png）做成"绘本"感，分两套——
-//   白天（TownLook.Day）：开局到学校那封信读完。晴朗蓝天、白云、暖白的太阳，路灯不亮。
+//   白天（TownLook.Day）：开局到学校那封信读完。晴朗蓝天、白云、偏低的暖黄太阳，路灯和窗灯微亮（2026-11-15 PL-13 改过，见 Day() 上面的说明）。
 //   黄昏（TownLook.Dusk）：学校的邮戳盖完以后慢慢过渡过去，去灯塔和结局都在黄昏里。
 //                        低角度的金橙色太阳、粉紫色天空、偏紫的阴影、路灯亮起、月亮升上来。
 //   面包店的邮戳盖完先往黄昏走三成（午后，光线开始变暖）。
@@ -63,23 +63,32 @@ public sealed class TownLook
     // 卡通材质（TideTown/Toon）：阴影的颜色、远处空气的颜色
     public Color toonShadow, toonHaze;
 
+    // 2026-11-15 PL-13（工程书 D3）：白天也压低太阳、加暖。
+    //   · 太阳高度角从 51° 压到 36°（sunFrom.y 0.95 → 0.56），房子、树、栅栏拖出斜长的影子；天上画的太阳跟着降
+    //   · 主光往暖黄走一档，阴影色再冷一点、深一点：向阳面暖金，背光面是通透的冷蓝，不是灰
+    //   · 路灯和窗灯微亮（lampOn 0 → 0.25）：太阳直晒的地方基本看不出，屋檐下、树荫里透出一点暖光
+    //     （直晒处怎么压掉的见 TideToon.shader 的 dayFade、TideGlow.shader 的 GlowDim）
+    //   · 色温只加了 1：石板和礁石的底色偏橙，暖光再叠后期色温会发红发脏（11-12 踩过）
+    // 改之前的数：sunFrom.y 0.95、skySunY 0.80、sunColor (255,241,216)、shadowStrength 0.72、ambientSky (196,216,246)、
+    //   skyHorizon (226,236,238)、skySun (255,246,220)、contrast 13、temperature 3、splitShadows (0.48,0.49,0.53)、
+    //   splitHighlights (0.52,0.51,0.48)、lampOn 0、toonShadow (0.80,0.86,1.06)。黄昏那套（Dusk）没动。
     public static TownLook Day()
     {
         return new TownLook
         {
-            sunFrom = new Vector3(0.50f, 0.95f, -0.60f),
-            skySunY = 0.80f,
-            sunColor = new Color32(255, 241, 216, 255),
+            sunFrom = new Vector3(0.50f, 0.56f, -0.60f),
+            skySunY = 0.60f,
+            sunColor = new Color32(255, 234, 198, 255),
             sunIntensity = 2.0f,
-            shadowStrength = 0.72f,
-            ambientSky = new Color32(196, 216, 246, 255),
+            shadowStrength = 0.82f,
+            ambientSky = new Color32(188, 212, 250, 255),
             ambientEquator = new Color32(234, 224, 208, 255),
             ambientGround = new Color32(132, 114, 94, 255),
             ambientIntensity = 0.62f,
             skyTop = new Color32(64, 134, 224, 255),
             skyMid = new Color32(130, 190, 240, 255),
-            skyHorizon = new Color32(226, 236, 238, 255),
-            skySun = new Color32(255, 246, 220, 255),
+            skyHorizon = new Color32(234, 236, 230, 255),
+            skySun = new Color32(255, 244, 214, 255),
             cloudLight = new Color32(255, 255, 250, 255),
             cloudShade = new Color32(188, 200, 226, 255),
             cloudCover = 0.42f,
@@ -91,20 +100,20 @@ public sealed class TownLook
             waterSky = new Color32(206, 230, 244, 255),
             waterSkyReflect = 0.28f,
             exposure = 0.05f,
-            contrast = 13f,
+            contrast = 14f,
             saturation = 15f,
-            temperature = 3f,
+            temperature = 4f,
             tint = 0f,
-            splitShadows = new Color(0.48f, 0.49f, 0.53f, 1f),
-            splitHighlights = new Color(0.52f, 0.51f, 0.48f, 1f),
+            splitShadows = new Color(0.47f, 0.49f, 0.55f, 1f),
+            splitHighlights = new Color(0.53f, 0.51f, 0.47f, 1f),
             splitBalance = 0f,
             bloomThreshold = 1.0f,
             bloomIntensity = 0.25f,
             bloomScatter = 0.68f,
             bloomTint = Color.white,
             vignette = 0.15f,
-            lampOn = 0f,
-            toonShadow = new Color(0.80f, 0.86f, 1.06f, 1f),
+            lampOn = 0.25f,
+            toonShadow = new Color(0.76f, 0.83f, 1.08f, 1f),
             toonHaze = new Color32(176, 208, 236, 255),
         };
     }
@@ -190,6 +199,18 @@ public sealed class TownLookSet
     public float duskSeconds = 45f;      // 从白天完整走到黄昏要多久
     public float afternoon = 0.3f;       // 面包店送完以后往黄昏走多少
 
+    // 2026-11-15 PL-13 窗灯：窗玻璃跟着路灯一起亮的颜色和强度（白天乘 lampOn 0.25，黄昏全亮；0 = 窗不亮）
+    public Color windowGlow = new Color(1.0f, 0.74f, 0.40f, 1f);
+    public float windowGlowStrength = 1.5f;
+    // 2026-11-15 PL-16 民居屋顶换色的力度（0 = 全镇保持原色，1 = 完全换成调色板的颜色）；-noroof 启动等于 0
+    public float roofVariety = 1f;
+    // 2026-11-15 PL-14 海水三档颜色：浅滩（看得到底，清透青绿）、近海、外海（偏灰的深蓝）。
+    // 放在这里运行时设：IslandBuilder.WaterMat() 每次重建场景都会把 IslandWater.mat 的浅 / 深两个颜色写回旧值。
+    public Color waterShallow = new Color(0.27f, 0.66f, 0.66f, 1f);
+    public Color waterDeep = new Color(0.09f, 0.30f, 0.53f, 1f);
+    public Color waterFar = new Color(0.15f, 0.29f, 0.43f, 1f);
+    public float waterDepthRange = 3.2f;
+
     public static TownLookSet Load()
     {
         var set = new TownLookSet();
@@ -211,6 +232,35 @@ public sealed class TownLighting : MonoBehaviour
 {
     static TownLighting instance;
     static bool duskRequested;     // SkyDimmer 在这里装好之前就要求过黄昏（读档）
+
+    // 2026-11-16 C4 渲染轻量档：WebGL、Intel 核显、AMD APU 核显（"Radeon(TM) 610M/660M/680M/780M"、"AMD Radeon(TM) Graphics" 这类）
+    // 或命令行 -lowgfx 时为 true；-highgfx 强制普通档。轻量档：同时亮的路灯点光 6 → 4，阴影距离收到七成。
+    // 别的脚本（画质守卫、菜单）只读这个值，想手动切换就在 TownLighting 启动前设 LowTierOverride。
+    public static bool? LowTierOverride;
+    static bool? lowTier;
+    public static bool LowTier
+    {
+        get
+        {
+            if (LowTierOverride.HasValue) return LowTierOverride.Value;
+            if (lowTier.HasValue) return lowTier.Value;
+            var args = Environment.GetCommandLineArgs();
+            bool low;
+            if (Array.IndexOf(args, "-highgfx") >= 0) low = false;
+            else if (Array.IndexOf(args, "-lowgfx") >= 0 || Application.platform == RuntimePlatform.WebGLPlayer) low = true;
+            else
+            {
+                string gpu = SystemInfo.graphicsDeviceName ?? "";
+                bool intel = gpu.IndexOf("Intel", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool apu = gpu.IndexOf("Radeon(TM) Graphics", StringComparison.OrdinalIgnoreCase) >= 0
+                    || System.Text.RegularExpressions.Regex.IsMatch(gpu, @"Radeon\(TM\)\s*\d{3}M", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                    || gpu.IndexOf("Vega", StringComparison.OrdinalIgnoreCase) >= 0 && gpu.IndexOf("Graphics", StringComparison.OrdinalIgnoreCase) >= 0;
+                low = intel || apu;
+            }
+            lowTier = low;
+            return low;
+        }
+    }
 
     TownLookSet set;
     readonly TownLook current = new TownLook();
@@ -291,10 +341,18 @@ public sealed class TownLighting : MonoBehaviour
             sun.shadowBias = 0.6f;
             sun.shadowNormalBias = 0.6f;
         }
-        ApplyShadowRange(set.shadowDistance, set.shadowCascades);
+        // 2026-11-16 C4：核显 / WebGL 轻量档（LowTier 说明见下面）阴影距离收到七成
+        ApplyShadowRange(LowTier ? set.shadowDistance * 0.7f : set.shadowDistance, set.shadowCascades);
 
         var sea = GameObject.Find("Sea");
         if (sea != null && sea.GetComponent<Renderer>() != null) water = sea.GetComponent<Renderer>().material;
+        if (water != null)
+        {
+            water.SetColor("_ShallowColor", set.waterShallow);
+            water.SetColor("_DeepColor", set.waterDeep);
+            water.SetColor("_FarColor", set.waterFar);
+            water.SetFloat("_DepthRange", set.waterDepthRange);
+        }
 
         // 反射：整镇一个实时探针，开局渲一次
         var pgo = new GameObject("TownReflection");
@@ -330,27 +388,17 @@ public sealed class TownLighting : MonoBehaviour
         Shader.SetGlobalFloat("_ToonRim", set.toonRim);
         Shader.SetGlobalFloat("_ToonHaze", set.toonHazeStrength);
         Shader.SetGlobalFloat("_ToonNormal", set.toonNormal);
+        TownToon.WindowGlow = set.windowGlow * Mathf.Max(0f, set.windowGlowStrength);
+        TownToon.RoofVariety = Mathf.Clamp01(set.roofVariety);
         if (TownToon.Enabled) gameObject.AddComponent<TownToon>();
 
-        for (int k = 0; k < pushPos.Length; k++) pushPos[k] = new Vector4(0f, -999f, 0f, -999f);
-        Shader.SetGlobalVectorArray("_TidePushPos", pushPos);
-        Shader.SetGlobalVectorArray("_TidePushDir", pushDir);
-        {
-            var a = Environment.GetCommandLineArgs();
-            int di = Array.IndexOf(a, "-pushdemo");
-            if (di >= 0 && di + 1 < a.Length)
-            {
-                var parts = a[di + 1].Split(',');
-                if (parts.Length == 3
-                    && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dx)
-                    && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dy)
-                    && float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dz))
-                { demoPush = true; demoCenter = new Vector3(dx, dy, dz); }
-            }
-        }
+        // 2026-11-14：经过花丛、草地、水面的反应（痕迹图、涟漪、水花、花瓣）搬到 TideFeel.cs，
+        // 取代 11-13 这里的"最近 6 次蹭过"数组和 -pushdemo 假人（验证改用 -feeldemo，见 FeelDemo.cs）
+        gameObject.AddComponent<TideFeel>();
 
         lamps = gameObject.AddComponent<LampGlowDirector>();
-        lamps.maxLights = set.lampLights;
+        lamps.maxLights = LowTier ? Mathf.Min(4, set.lampLights) : set.lampLights;
+        Debug.Log($"TOWNLOOK gfxTier={(LowTier ? "low" : "normal")} gpu=\"{SystemInfo.graphicsDeviceName}\" lampLights={lamps.maxLights}");
 
         // 命令行 -look day / dusk：截图和调色用，固定在一档不跟进度走
         var args = Environment.GetCommandLineArgs();
@@ -464,7 +512,8 @@ public sealed class TownLighting : MonoBehaviour
         Shader.SetGlobalColor("_ToonShadowTint", look.toonShadow);
         Shader.SetGlobalColor("_ToonHazeColor", look.toonHaze);
         Shader.SetGlobalFloat("_TideLampOn", look.lampOn);
-        if (lamps != null) lamps.lightIntensity = set.lampIntensity * look.lampOn;
+        // 白天的点光比按比例算的再压一档（0.25 → 0.14 倍）：有的灯紧贴着浅色石墙，按比例算会在墙上打出一块白斑。黄昏（1）不变。
+        if (lamps != null) lamps.lightIntensity = set.lampIntensity * look.lampOn * Mathf.Lerp(0.4f, 1f, look.lampOn);
     }
 
     // 阴影范围：URP 资产上的设置，运行时改的是内存里的副本，不动工程文件
@@ -479,13 +528,6 @@ public sealed class TownLighting : MonoBehaviour
 
     Transform hero;
     float heroLookAt;
-    readonly Vector4[] pushPos = new Vector4[6];
-    readonly Vector4[] pushDir = new Vector4[6];
-    int pushNext;
-    bool pushStarted;
-    Vector3 lastPushPos, lastHeroPos;
-    bool demoPush;
-    Vector3 demoCenter;
 
     void LateUpdate()
     {
@@ -500,33 +542,7 @@ public sealed class TownLighting : MonoBehaviour
         }
         Vector3 heroPos = hero != null ? hero.position : Vector3.zero;
         bool heroOn = hero != null;
-        if (demoPush)
-        {
-            // 命令行 -pushdemo x,y,z：没有人操作时，用一个来回走的"假人"验证花丛的反应
-            heroOn = true;
-            heroPos = demoCenter + new Vector3(Mathf.PingPong(Time.time * 1.6f, 2.4f) - 1.2f, 0f, 0f);
-        }
         Shader.SetGlobalVector("_TidePlayerPos", heroOn ? new Vector4(heroPos.x, heroPos.y, heroPos.z, 1f) : Vector4.zero);
-        Shader.SetGlobalFloat("_TideTime", Time.time);
-        // 每走出一小段记一次"蹭过"：位置、时刻、前进方向、力度（跑比走更猛）。着色器拿它算枝叶的回弹。
-        if (heroOn)
-        {
-            if (!pushStarted) { pushStarted = true; lastPushPos = heroPos; lastHeroPos = heroPos; }
-            Vector3 v = (heroPos - lastHeroPos) / Mathf.Max(Time.deltaTime, 0.0001f);
-            lastHeroPos = heroPos;
-            Vector3 moved = heroPos - lastPushPos; moved.y = 0f;
-            if (moved.magnitude > 0.32f)
-            {
-                var dir = moved.normalized;
-                float speed = new Vector2(v.x, v.z).magnitude;
-                pushPos[pushNext] = new Vector4(lastPushPos.x + moved.x * 0.5f, heroPos.y, lastPushPos.z + moved.z * 0.5f, Time.time);
-                pushDir[pushNext] = new Vector4(dir.x, dir.z, Mathf.Clamp(speed / 1.4f, 0.5f, 1.5f), 0f);
-                pushNext = (pushNext + 1) % pushPos.Length;
-                lastPushPos = heroPos;
-                Shader.SetGlobalVectorArray("_TidePushPos", pushPos);
-                Shader.SetGlobalVectorArray("_TidePushDir", pushDir);
-            }
-        }
 
         RefreshAmbient(false);
         if (!heroDone) ExcludeHeroFromReflections();

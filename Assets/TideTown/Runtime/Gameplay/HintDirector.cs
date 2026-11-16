@@ -158,6 +158,7 @@ public sealed class HintDirector : MonoBehaviour
 
     void Tick(float dt, bool playerFree)
     {
+        if(ui!=null&&ui.FirstTutorialActive)return;
         Node node = null;
         if (Rate != 2)
             foreach (var n in nodes)

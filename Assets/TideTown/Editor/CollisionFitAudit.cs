@@ -62,17 +62,18 @@ public static class CollisionFitAudit
         float bodyR = BodyRadius();
         var world = Object.FindObjectOfType<IslandWorld>();
         var polys = world.walkPolys.Select(p => (p.points, p.y)).ToList();
-        var g = ContourGrid.Build(polys, Cell, 1.0f, true);
+        // 2026-11-16 自由漫游：和建碰撞一样按整座岛扫（原来只扫白名单可走区外 1 m，和场景里的轮廓碰撞对不上，
+        // 外沿格子判定不同会多出零星的"穿模 / 空气墙"）。走得到的格子改成从出生点按高低连通灌水（相邻格高差 ≤ 一步）
+        var g = ContourGrid.Build(polys, Cell, 1.0f, true, true);
         int nx = g.nx, nz = g.nz, N = nx * nz;
 
-        // 只算走得到的格子：从出生点在可走、非实心格里灌水
         var reach = new bool[N];
         var sp = world.SpawnPos;
         int sx = Mathf.FloorToInt((sp.x - g.x0) / Cell), sz = Mathf.FloorToInt((sp.z - g.z0) / Cell);
         var q = new Queue<int>();
-        void Seed(int ix, int iz) { if (ix < 0 || iz < 0 || ix >= nx || iz >= nz) return; int id = iz * nx + ix; if (reach[id] || !g.walk[id] || g.solidOwner[id] >= 0) return; reach[id] = true; q.Enqueue(id); }
-        for (int dz = -6; dz <= 6; dz++) for (int dx = -6; dx <= 6; dx++) Seed(sx + dx, sz + dz);
-        while (q.Count > 0) { int id = q.Dequeue(); int ix = id % nx, iz = id / nx; Seed(ix - 1, iz); Seed(ix + 1, iz); Seed(ix, iz - 1); Seed(ix, iz + 1); }
+        void Seed(int ix, int iz, float fromY) { if (ix < 0 || iz < 0 || ix >= nx || iz >= nz) return; int id = iz * nx + ix; if (reach[id] || !g.walk[id] || g.solidOwner[id] >= 0) return; if (!float.IsNaN(fromY) && Mathf.Abs(g.ground[id] - fromY) > StepH) return; reach[id] = true; q.Enqueue(id); }
+        for (int dz = -6; dz <= 6; dz++) for (int dx = -6; dx <= 6; dx++) Seed(sx + dx, sz + dz, float.NaN);
+        while (q.Count > 0) { int id = q.Dequeue(); int ix = id % nx, iz = id / nx; float y = g.ground[id]; Seed(ix - 1, iz, y); Seed(ix + 1, iz, y); Seed(ix, iz - 1, y); Seed(ix, iz + 1, y); }
 
         // 到最近实心格的距离 + 那格的物件
         var nearX = new int[N]; var nearZ = new int[N]; var dist = new float[N];

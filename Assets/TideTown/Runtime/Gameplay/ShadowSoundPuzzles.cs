@@ -33,7 +33,7 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
     public bool BottleTaken => state != null && state.flags.Contains("has_sound_bottle");
     public bool DebugHold;
     GameObject bottle;
-    float glow;
+    float glow, turnRate, turnRateVelocity, alignmentLight;
 
     static readonly Color Lit = new Color(1f, 0.93f, 0.78f, 1f);
     static readonly Color Shade = new Color(0.22f, 0.15f, 0.1f, 1f);
@@ -62,34 +62,61 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
             if (list != null) foreach (var r in list.route) route.Add(new Vector3(r.x, 0f, r.z));
         }
         float best = float.MaxValue; bool ok = false;
-        for (float r = 2.5f; r <= 12f; r += 0.5f)
-            for (int a = 0; a < 24; a++)
-            {
-                float ang = a * Mathf.PI / 12f;
-                Vector3 pt = c + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
-                Vector3 d = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)); // 布幕在外侧，灯靠船棚
-                Vector3 lamp = pt - d * 1.4f, scr = pt + d * 1.6f;
-                bool fits = true; float gy = 0f;
-                foreach (var q in new[] { pt, lamp, scr, pt + new Vector3(-d.z, 0, d.x) * 1.2f })
+        // 2026-11-16：不放在木栈桥 / 低码头上（原来选在了栈桥正中，挡住港口观景）。木板区 = 码头两块 + 船棚台 x > 22 的那半
+        var planks = new List<Vector2[]>();
+        foreach (var wp in world.walkPolys) if (wp.id == "pier" || wp.id == "dock") planks.Add(wp.points);
+        bool OnPlanks(Vector3 q)
+        {
+            if (q.x > 22.0f && q.z < -8f && q.z > -20f) return true;
+            foreach (var poly in planks) if (InPoly(poly, q.x, q.z)) return true;
+            return false;
+        }
+        var passes = new (float maxDelta, float rayOffset)[] { (0.65f, 1.2f), (2.5f, 3f) };
+        foreach (var pass in passes)
+        {
+            for (float r = 2.5f; r <= 12f; r += 0.5f)
+                for (int a = 0; a < 24; a++)
+                for (int k = 0; k < 8; k++)   // 2026-11-16：灯—架子—布幕这条线可以朝 8 个方向（原来只能沿离船棚的径向，船棚背后那条窄石台上摆不下）
                 {
-                    if (!world.Walkable(q.x, q.z)) { fits = false; break; }
-                    float g = world.GroundAt(q.x, q.z, c.y + 3f);
-                    if (q == pt) gy = g;
-                    if (Mathf.Abs(g - gy) > 0.25f || g < WaterLevel.LevelYs[2] + 0.12f) { fits = false; break; }
+                    float ang = a * Mathf.PI / 12f;
+                    Vector3 pt = c + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+                    float axAng = ang + k * Mathf.PI / 4f;
+                    Vector3 d = new Vector3(Mathf.Cos(axAng), 0f, Mathf.Sin(axAng)); // k = 0：布幕在外侧，灯靠船棚
+                    Vector3 lamp = pt - d * 1.4f, scr = pt + d * 1.6f;
+                    bool fits = true; float gy = 0f;
+                    Vector3 bottleAt = pt + new Vector3(-d.z, 0f, d.x) * 0.45f;
+                    foreach (var q in new[] { pt, lamp, scr, pt + new Vector3(-d.z, 0, d.x) * 1.2f, bottleAt })
+                    {
+                        if (Vector3.Distance(q, c) < 2.65f || !world.Walkable(q.x, q.z) || OnPlanks(q)) { fits = false; break; }
+                        float g = world.GroundAt(q.x, q.z, c.y + pass.rayOffset);
+                        if (q == pt) gy = g;
+                        if (Mathf.Abs(g - gy) > 0.25f || Mathf.Abs(g - c.y) > pass.maxDelta || g < WaterLevel.LevelYs[2] + 0.12f)
+                        { fits = false; break; }
+                    }
+                    if (!fits) continue;
+                    // 离路线（停靠点之间的连线）至少 2 m
+                    float minRoute = float.MaxValue;
+                    // 2026-11-15：灯柱（lamp）原来不算，路线一重排，灯柱就可能正好立在路线上把人挡住
+                    for (int i = 0; i + 1 < route.Count; i++) minRoute = Mathf.Min(minRoute, Mathf.Min(DistToSeg(pt, route[i], route[i + 1]), DistToSeg(scr, route[i], route[i + 1])), Mathf.Min(DistToSeg(lamp, route[i], route[i + 1]), DistToSeg(bottleAt, route[i], route[i + 1])));
+                    if (minRoute < 1.6f) continue;
+                    if (DogPawPlate.Instance != null && Vector3.Distance(pt, DogPawPlate.Instance.Center) < 3f) continue;
+                    float score = r + Mathf.Max(0f, 3f - minRoute) * 2f + (k == 0 ? 0f : 0.3f);
+                    if (score < best) { best = score; ok = true; TurntablePos = new Vector3(pt.x, gy, pt.z); axis = d; }
                 }
-                if (!fits) continue;
-                // 离路线（停靠点之间的连线）至少 2 m
-                float minRoute = float.MaxValue;
-                for (int i = 0; i + 1 < route.Count; i++) minRoute = Mathf.Min(minRoute, DistToSeg(pt, route[i], route[i + 1]), DistToSeg(scr, route[i], route[i + 1]));
-                if (minRoute < 1.6f) continue;
-                if (DogPawPlate.Instance != null && Vector3.Distance(pt, DogPawPlate.Instance.Center) < 3f) continue;
-                float score = r + Mathf.Max(0f, 3f - minRoute) * 2f;
-                if (score < best) { best = score; ok = true; TurntablePos = new Vector3(pt.x, gy, pt.z); axis = d; }
-            }
+            if (ok) break;
+        }
         if (!ok) { Debug.LogWarning("SHADOW 船棚附近找不到合适的位置"); return false; }
         side = new Vector3(-axis.z, 0f, axis.x);
         ScreenCenter = TurntablePos + axis * 1.6f + Vector3.up * 0.85f;
         return true;
+    }
+
+    static bool InPoly(Vector2[] poly, float x, float z)
+    {
+        bool inside = false;
+        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
+            if ((poly[i].y > z) != (poly[j].y > z) && x < (poly[j].x - poly[i].x) * (z - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x) inside = !inside;
+        return inside;
     }
 
     static float DistToSeg(Vector3 p, Vector3 a, Vector3 b)
@@ -178,32 +205,42 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
         scr.transform.SetPositionAndRotation(ScreenCenter, face);
         scr.transform.localScale = new Vector3(1.5f, 1.5f, 1f);
         rt = new RenderTexture(512, 512, 16, RenderTextureFormat.ARGB32) { name = "ShadowScreenRT" };
+        // 2026-11-16：原来是一块亮白平板 + 纯色背板，从港口和俯视看像一块广告牌。改成海边木框暖色帆布立架：
+        // 帆布偏米黄（只调材质颜色；布幕上的影子照样来自 RT，审计读的是 RT，不受影响），四边浮木框，后面一条斜撑腿。
         screenMat = ParticleBase();
-        SetColorTex(screenMat, Color.white, rt);
+        SetColorTex(screenMat, CanvasTint, rt);
         scr.GetComponent<Renderer>().sharedMaterial = screenMat;
-        // 背面也要有点东西，别从后面看是透明的
+        // 背面：帆布背面的粗麻色，别从后面看是透明的
         var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
         Destroy(back.GetComponent<Collider>());
         back.transform.SetParent(scr.transform, false);
         back.transform.localPosition = new Vector3(0f, 0f, 0.002f);
         back.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-        var bm = ParticleBase(); SetColorTex(bm, new Color(0.86f, 0.8f, 0.68f), null);
+        var bm = ParticleBase(); SetColorTex(bm, new Color(0.62f, 0.52f, 0.38f), null);
         back.GetComponent<Renderer>().sharedMaterial = bm;
-        foreach (var e in new[] { new Vector3(-0.78f, 0f, 0f), new Vector3(0.78f, 0f, 0f) })
+        void Bar(Vector3 center, Vector3 size, Quaternion rot, Material m)
         {
-            var leg = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(leg.GetComponent<Collider>());
-            leg.transform.SetParent(transform, false);
-            leg.transform.SetPositionAndRotation(ScreenCenter + face * e + Vector3.down * 0.15f, face);
-            leg.transform.localScale = new Vector3(0.06f, 1.9f, 0.06f);
-            leg.GetComponent<Renderer>().sharedMaterial = WoodMat();
+            var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(b.GetComponent<Collider>());
+            b.transform.SetParent(transform, false);
+            b.transform.SetPositionAndRotation(center, rot);
+            b.transform.localScale = size;
+            b.GetComponent<Renderer>().sharedMaterial = m;
         }
-        var topBar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        Destroy(topBar.GetComponent<Collider>());
-        topBar.transform.SetParent(transform, false);
-        topBar.transform.SetPositionAndRotation(ScreenCenter + Vector3.up * 0.78f, face);
-        topBar.transform.localScale = new Vector3(1.62f, 0.06f, 0.06f);
-        topBar.GetComponent<Renderer>().sharedMaterial = WoodMat();
+        var drift = DriftwoodMat();
+        // 两根立柱落地（布幕下沿离地约 0.1 m）
+        foreach (var e in new[] { new Vector3(-0.79f, 0f, 0f), new Vector3(0.79f, 0f, 0f) })
+            Bar(ScreenCenter + face * e + Vector3.down * 0.06f, new Vector3(0.08f, 1.72f, 0.08f), face, drift);
+        // 四边框条（贴着帆布边，略压一点在前面）
+        Bar(ScreenCenter + Vector3.up * 0.77f + face * new Vector3(0f, 0f, -0.012f), new Vector3(1.72f, 0.08f, 0.07f), face, drift);
+        Bar(ScreenCenter + Vector3.down * 0.77f + face * new Vector3(0f, 0f, -0.012f), new Vector3(1.66f, 0.06f, 0.06f), face, drift);
+        // 顶上一截挑出来的横木 + 两个小木钉，像晒帆的架子
+        Bar(ScreenCenter + Vector3.up * 0.86f, new Vector3(1.9f, 0.05f, 0.05f), face, drift);
+        // 背后一条斜撑腿（从顶框中间斜到地上），看得出是能立住的画架
+        Vector3 top = ScreenCenter + Vector3.up * 0.75f + axis * 0.04f;
+        Vector3 foot = new Vector3(ScreenCenter.x, TurntablePos.y, ScreenCenter.z) + axis * 0.55f;
+        Vector3 mid = (top + foot) * 0.5f; Vector3 dirLeg = top - foot;
+        Bar(mid, new Vector3(0.06f, dirLeg.magnitude, 0.06f), Quaternion.LookRotation(axis, dirLeg.normalized), drift);
 
         // 影子相机：在灯的位置，只看剪影层，画面正好铺满布幕
         var cgo = new GameObject("ShadowCasterCam");
@@ -227,6 +264,22 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
         world.AddCollider(new EggboyCollider { x = lampPos.x, z = lampPos.z, r = 0.3f });
         world.AddCollider(new EggboyCollider { x = TurntablePos.x, z = TurntablePos.z, r = 0.45f });
         ApplyAngle();
+    }
+
+    // 帆布底色（乘在 RT 上）：亮处是 RT 的暖米色 × 这个，比原来的纯白暗一档、偏暖，不再像发光的白板
+    static readonly Color CanvasTint = new Color(0.90f, 0.84f, 0.72f, 1f);
+
+    static Material driftMat;
+    static Material DriftwoodMat()
+    {
+        if (driftMat != null) return driftMat;
+        var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        driftMat = new Material(sh);
+        var c = new Color(0.56f, 0.44f, 0.32f);   // 晒褪色的浮木
+        driftMat.color = c;
+        if (driftMat.HasProperty("_BaseColor")) driftMat.SetColor("_BaseColor", c);
+        if (driftMat.HasProperty("_Smoothness")) driftMat.SetFloat("_Smoothness", 0.15f);
+        return driftMat;
     }
 
     static Material woodMat;
@@ -315,7 +368,8 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
         turntable.rotation = Quaternion.LookRotation(axis, Vector3.up) * Quaternion.Euler(0f, Angle, 0f);
     }
 
-    bool PlayerFree => ui != null && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen && player != null && !player.locked;
+    bool PlayerFree => ui != null && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen &&
+        !ui.Cinematic && !MenuController.OverlayOpen && player != null && !player.locked;
     public bool PlayerNear => player != null && Vector3.Distance(player.transform.position, TurntablePos) < 1.9f;
     public bool Turning { get; private set; }
 
@@ -326,30 +380,48 @@ public sealed class ShadowLanternPuzzle : MonoBehaviour
         // 影子相机只在玩家走近时才渲染，省性能
         if (shadowCam != null && player != null) shadowCam.enabled = Vector3.Distance(player.transform.position, TurntablePos) < 30f;
         Turning = false;
-        if (!Solved)
+        if (!Solved && dt > 0f)
         {
             bool hold = DebugHold || (PlayerFree && PlayerNear && Input.GetKey(KeyCode.E));
-            if (hold)
+            Turning = hold;
+            float a = Mathf.Abs(Mathf.DeltaAngle(0f, Angle));
+            float desiredRate = hold ? Mathf.Lerp(12f, TurnSpeed, Mathf.InverseLerp(TargetTolerance, 26f, a)) : 0f;
+            turnRate = Mathf.SmoothDamp(turnRate, desiredRate, ref turnRateVelocity, .12f, Mathf.Infinity, dt);
+            if (hold || turnRate > .10f)
             {
-                Turning = true;
-                float a = Mathf.DeltaAngle(0f, Angle);
-                // 离目标近了转得慢一点，好停准
-                float speed = Mathf.Abs(a) < 20f ? TurnSpeed * 0.45f : TurnSpeed;
-                Angle = Mathf.Repeat(Angle - speed * dt, 360f);
-                if (Mathf.Abs(Mathf.DeltaAngle(0f, Angle)) < TargetTolerance) { Angle = 0f; Solve(); }
+                float step = turnRate * dt;
+                Angle = Mathf.Repeat(Angle - step, 360f);
+                if (a < TargetTolerance || Mathf.Abs(Mathf.DeltaAngle(0f, Angle)) < TargetTolerance)
+                {
+                    Angle = 0f;
+                    Solve();
+                }
                 ApplyAngle();
             }
         }
         glow = Mathf.MoveTowards(glow, Solved ? 1f : 0f, dt * 1.5f);
-        if (screenMat != null) SetColorTex(screenMat, Color.Lerp(Color.white, new Color(1.25f, 1.15f, 0.9f), glow), rt);
+        alignmentLight = Mathf.Max(0f, alignmentLight - dt / .85f);
+        if (screenMat != null)
+        {
+            var tint = Color.Lerp(CanvasTint, new Color(1.12f, .98f, .73f), glow);
+            tint.r += .22f * alignmentLight;
+            tint.g += .13f * alignmentLight;
+            SetColorTex(screenMat, tint, rt);
+        }
     }
 
-    public void DebugSetAngle(float a) { Angle = a; ApplyAngle(); }
+    public void DebugSetAngle(float a)
+    {
+        Angle = a;
+        turnRate = turnRateVelocity = 0f;
+        ApplyAngle();
+    }
 
     void Solve()
     {
         if (Solved) return;
         state.flags.Add("shadow_key_done");
+        alignmentLight = 1f;
         TideTownAchievementSystem.Unlock("shadow_key");
         ShadowAndChimeSystem.PlayProceduralChime(783.99f, 0.3f);
         ShadowAndChimeSystem.PlayProceduralChime(1174.66f, 0.6f);
@@ -443,6 +515,7 @@ public sealed class SoundBottleSystem : MonoBehaviour
     readonly List<Quaternion> houseRot = new List<Quaternion>();
     public float MaxHouseLift { get; private set; }
     Light boxLight;
+    readonly TextMesh[] soundSlots = new TextMesh[Order.Length];
 
     public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, GameState s)
     {
@@ -459,6 +532,7 @@ public sealed class SoundBottleSystem : MonoBehaviour
             if (dog != null) svc.Register(new SoundSource(this, "bark", () => dog.transform.position, () => dog.Following && dog.Visible));
         }
         BuildMusicBox();
+        RefreshSoundSlots();
         if (svc != null) svc.Register(new MusicBoxInteractable(this));
         foreach (var t in FindObjectsOfType<Transform>())
             if ((t.name.StartsWith("B6_") || t.name.StartsWith("B7_")) && t.name.EndsWith("_visual")) houses.Add(t);
@@ -478,9 +552,10 @@ public sealed class SoundBottleSystem : MonoBehaviour
 
     public void Capture(string id)
     {
-        if (!HasBottle || Has(id)) return;
+        if (!HasBottle || Has(id) || !clips.TryGetValue(id, out var clip)) return;
         state.flags.Add("sound_" + id);
-        ShadowAndChimeSystem.PlayClip(clips[id], 0.9f);
+        ShadowAndChimeSystem.PlayClip(clip, 0.9f);
+        RefreshSoundSlots();
         if (id == "bark" && dog != null) dog.GuideTo(player.transform.position, 0.5f);
     }
 
@@ -527,7 +602,8 @@ public sealed class SoundBottleSystem : MonoBehaviour
             go.transform.rotation = Quaternion.LookRotation(-front, Vector3.up);
             var tm = go.AddComponent<TextMesh>();
             tm.font = font; tm.text = glyph[i]; tm.fontSize = 64; tm.characterSize = 0.006f;
-            tm.anchor = TextAnchor.MiddleCenter; tm.color = new Color(0.35f, 0.25f, 0.16f);
+            tm.anchor = TextAnchor.MiddleCenter;
+            soundSlots[i] = tm;
             if (font != null) go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
         }
         var lgo = new GameObject("MusicBoxLight");
@@ -536,6 +612,13 @@ public sealed class SoundBottleSystem : MonoBehaviour
         boxLight = lgo.AddComponent<Light>();
         boxLight.type = LightType.Point; boxLight.range = 6f; boxLight.intensity = 0f; boxLight.color = new Color(1f, 0.85f, 0.55f);
         world.AddCollider(new EggboyCollider { x = best.x, z = best.z, r = 0.35f });
+    }
+
+    void RefreshSoundSlots()
+    {
+        for (int i = 0; i < soundSlots.Length; i++)
+            if (soundSlots[i] != null)
+                soundSlots[i].color = Has(Order[i]) ? new Color(1f, .76f, .36f) : new Color(.35f, .25f, .16f);
     }
 
     public void PlayMusicBox()
@@ -675,7 +758,8 @@ public sealed class MusicBoxInteractable : IInteractable
     {
         if (sys.Playing) return "";
         if (sys.Count >= 4) return sys.Done ? "E　再听一遍" : "E　把声音放进八音盒";
-        return sys.HasBottle ? "八音盒上有四个空槽（" + sys.Count + "/4）" : "";
+        if (!sys.HasBottle) return "";
+        return sys.Count == 3 ? "八音盒还等着最后一段声音" : "把镇上的四段声音带来这里";
     }
     public bool CanInteract(GameState s) => !sys.Playing && sys.Count >= 4;
     public void Interact(GameState s, InteractionService svc) => sys.PlayMusicBox();

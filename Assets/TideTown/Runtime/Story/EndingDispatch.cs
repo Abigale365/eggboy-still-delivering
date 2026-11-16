@@ -135,6 +135,7 @@ public sealed class EndingDispatch : MonoBehaviour
     void Open()
     {
         open = true;
+        if(ui!=null)ui.SetCinematic(true,"dispatch");
         postcardMode = false;
         status = stamped ? "已读取上次加盖邮戳的寄件存档。" : "";
         chase = FindObjectOfType<ChaseCamera>();
@@ -264,6 +265,7 @@ public sealed class EndingDispatch : MonoBehaviour
     void Close()
     {
         open = false;
+        if(ui!=null)ui.SetCinematic(false,"dispatch");
         postcardMode = false;
         if (sample != null) Destroy(sample);
         sample = null;

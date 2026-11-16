@@ -276,6 +276,16 @@ public class WaterAudit : MonoBehaviour
         water.SetInstant(WaterLevel.LevelYs[0]);
         yield return null;
         if (safe == null) { Fail("fall_failed", "场景里没有 SafePoints"); yield break; }
+        // 2026-11-16 自由漫游：从台地跳到下一层是正常玩法，"掉层救援"关掉了（SafePoints.FellBelowRoute 直接返回 false）。
+        // 跳下去回不来的坑由编辑器的 RoamAudit 全岛连通检查保证没有（坑都划成了禁区）。这里只验"正常地面不会被误判成掉层"。
+        if (world.FreeRoam)
+        {
+            int fpCount = 0, n = 0;
+            foreach (var q in safe.points) { n++; if (safe.FellBelowRoute(q, out _)) fpCount++; }
+            fallJson = "{\"ok\":" + (fpCount == 0 ? "true" : "false") + ",\"freeRoam\":true,\"tested\":" + n + ",\"falsePositives\":" + fpCount + ",\"note\":\"fell-rescue disabled under free roam; traps covered by RoamAudit\"}";
+            if (fpCount > 0) Fail("fall_failed", "自由漫游下掉层救援应当关闭：" + fallJson);
+            yield break;
+        }
 
         // 1. 误报
         int tested = 0, falsePos = 0;

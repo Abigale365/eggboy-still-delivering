@@ -99,6 +99,7 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
 
         if (ui.TitleShowing || ui.Paused || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen)
             return;
+        if (ui.Cinematic && !ui.LetterOpen && !AnyModalOpen) return;
 
         // 按 Tab 或 L 键可随时翻阅邮包里的当前信件（在信纸上直接揭下字签抛向空中化为实物）
         // 按键表见 docs/controls.md：Tab 读信揭字，R 潮汐怀表。数字键切"模式"的做法已去掉。
@@ -113,7 +114,7 @@ public sealed class AvantGardeGameplayHub : MonoBehaviour
         }
         else if (Input.GetKeyDown(KeyCode.R))
         {
-            if (!ui.LetterOpen && !AnyModalOpen)
+            if (!ui.LetterOpen && !AnyModalOpen && !player.locked && !AIAgentCalibrationDirector.IsOpen)
                 TriggerMode(3);
         }
         // 透视拓印（WP-E）和光影声音（WP-G）的 v3 旧版是弹窗假玩法，重做完成前不给玩家入口；

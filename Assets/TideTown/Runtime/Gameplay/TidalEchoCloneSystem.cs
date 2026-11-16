@@ -53,7 +53,7 @@ public sealed class TidalEchoCloneSystem : MonoBehaviour
 
     readonly List<EchoFrame> buffer = new List<EchoFrame>();   // 滚动录制
     readonly List<EchoFrame> replay = new List<EchoFrame>();   // 正在重演的那一段
-    float sampleAccum, replayTime, lingerLeft, cooldown;
+    float sampleAccum, replayTime, lingerLeft, cooldown, nextTryChime;
 
     EggboyPlayer puppet;
     Light puppetLight;
@@ -78,10 +78,11 @@ public sealed class TidalEchoCloneSystem : MonoBehaviour
     public void TriggerEchoButton()
     {
         if (EchoActive) { Dismiss(); return; }
-        if (!Summon())
+        if (!Summon() && Time.unscaledTime >= nextTryChime)
         {
             // 还叫不出来（刚用过，或者攒的时间不够）：一声低音，不弹字
             ShadowAndChimeSystem.PlayProceduralChime(196f, 0.2f);
+            nextTryChime = Time.unscaledTime + .65f;
         }
     }
 
@@ -180,13 +181,16 @@ public sealed class TidalEchoCloneSystem : MonoBehaviour
         if (cooldown > 0f) cooldown -= dt;
 
         // 真人游玩时滚动录制；自动审计用 DebugPushFrame 喂
-        if (ui.inputClose && !ui.Paused && !ui.TitleShowing)
+        if (ui.inputClose && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen &&
+            !ui.Cinematic && !MenuController.OverlayOpen && !player.locked)
         {
             sampleAccum += dt;
             while (sampleAccum >= SampleDt)
             {
                 sampleAccum -= SampleDt;
-                bool holding = Input.GetKey(KeyCode.E) && !player.locked && !ui.LetterOpen;
+                if (buffer.Count > 0 && (buffer[buffer.Count - 1].pos - player.transform.position).sqrMagnitude > 2.25f)
+                    buffer.Clear();
+                bool holding = Input.GetKey(KeyCode.E);
                 Push(new EchoFrame
                 {
                     pos = player.transform.position, yaw = player.yaw, vel = player.vel, grounded = player.grounded,
@@ -194,6 +198,7 @@ public sealed class TidalEchoCloneSystem : MonoBehaviour
                 });
             }
         }
+        else sampleAccum = 0f;
         StepReplay(dt);
     }
 

@@ -1,4 +1,5 @@
 // 创新方向 C：小黑踩踏板（工程书 INNOVATION_BOOK_20261110 的 WP-C）。
+// 2026-11-16 起踏板在学校草坪上（小黑只在学校周边活动），木匣从土里拱出来；下面是原来的设定：
 // 船棚旁的浅滩边有一块橙色爪印踏板。人踩上去没反应（太重了，踏板只认小爪子）；
 // 按 F 让小黑跑过去站上去，水里升起一只旧木匣，打开里面是老陈留下的星盘刻度（灯塔站密码的另一种解法）。
 using System.Collections;
@@ -34,8 +35,53 @@ public sealed class DogPawPlate : MonoBehaviour
         if (svc != null) svc.Register(new PawChestInteractable(this));
     }
 
-    // 船棚的油壶附近，找一块涨到 L2 也不会淹、但旁边就是水的地方
+    // 2026-11-16：小黑只在学校周边活动（用户定），踏板从船棚挪到学校草坪上：狗窝附近 2–5 m、能站、不压在小路上、
+    // 离别的东西至少 0.9 m；木匣从踏板旁边的土里拱出来
     void Place()
+    {
+        if (DogFollower.StayNearSchool && dog != null && PlaceAtSchool()) return;
+        PlaceAtShed();
+    }
+
+    bool PlaceAtSchool()
+    {
+        Vector3 anchor = Vector3.zero;
+        foreach (var it in SchoolData.Load().items) if (it.id == "doghouse") anchor = new Vector3(it.x, it.y, it.z);
+        if (anchor == Vector3.zero) anchor = dog.PeekPoint;
+        if (anchor == Vector3.zero) return false;
+        for (float r = 2.0f; r <= 5.0f; r += 0.5f)
+            for (int a = 0; a < 24; a++)
+            {
+                float ang = a * Mathf.PI / 12f;
+                var q = anchor + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+                // 学校草坪本身就在可走区数据里，所以这里不用 InWalkArea 判断"是不是路"，改成离主线路线 1.2 m 以外
+                if (!dog.InSchool(q) || !world.Walkable(q.x, q.z) || WishToy.RouteDistance(new Vector2(q.x, q.z)) < 1.2f || !Clear(q, 0.9f)) continue;
+                var side = new Vector3(-Mathf.Sin(ang), 0f, Mathf.Cos(ang));
+                Vector3 rest = q + side * 1.1f;
+                if (!dog.InSchool(rest) || !world.Walkable(rest.x, rest.z) || !Clear(rest, 0.8f)) { rest = q - side * 1.1f; if (!dog.InSchool(rest) || !world.Walkable(rest.x, rest.z) || !Clear(rest, 0.8f)) continue; }
+                float gy = world.GroundAt(q.x, q.z, anchor.y + 1f);
+                Center = new Vector3(q.x, gy, q.z);
+                rest.y = world.GroundAt(rest.x, rest.z, gy + 1f);
+                ChestRest = rest;
+                seaDirection = Vector3.zero;
+                return true;
+            }
+        return false;
+    }
+
+    bool Clear(Vector3 q, float d)
+    {
+        foreach (var c in world.Colliders)
+        {
+            if (c.water) continue;
+            float ex = c.r ?? Mathf.Max(c.hw ?? 0f, c.hd ?? 0f);
+            if (new Vector2(q.x - c.x, q.z - c.z).magnitude < ex + d) return false;
+        }
+        return true;
+    }
+
+    // 原来的位置：船棚的油壶附近，找一块涨到 L2 也不会淹、但旁边就是水的地方
+    void PlaceAtShed()
     {
         Vector3 oil = Vector3.zero;
         foreach (var it in LighthouseData.Load().items) if (it.id == "oil") oil = new Vector3(it.x, it.y, it.z);
@@ -132,7 +178,7 @@ public sealed class DogPawPlate : MonoBehaviour
                 foreach (var p in new[] { "_BaseColor", "_Color", "baseColorFactor" })
                     if (m.HasProperty(p)) m.SetColor(p, Color.Lerp(m.GetColor(p), new Color(0.85f, 0.62f, 0.3f), 0.35f));
         if (Done) chest.position = ChestRest;
-        else chest.position = ChestRest + seaDirection * 1.4f + Vector3.down * 1.4f;
+        else chest.position = ChestRest + seaDirection * 1.4f + Vector3.down * (seaDirection == Vector3.zero ? 0.7f : 1.4f);
         chest.gameObject.SetActive(Done);
     }
 
@@ -155,6 +201,21 @@ public sealed class DogPawPlate : MonoBehaviour
         yield return new WaitForSeconds(0.4f);
         chest.gameObject.SetActive(true);
         Vector3 from = chest.position;
+        if (seaDirection == Vector3.zero)
+        {
+            // 学校草坪：木匣从土里一顿一顿拱出来，最后蹦一下坐稳
+            for (float t = 0f; t < 1.4f; t += Time.deltaTime)
+            {
+                float k = Mathf.SmoothStep(0f, 1f, t / 1.4f) + Mathf.Sin(t * 22f) * 0.015f * (1f - t / 1.4f);
+                chest.position = Vector3.LerpUnclamped(from, ChestRest, k);
+                yield return null;
+            }
+            ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
+            for (float t = 0f; t < 0.35f; t += Time.deltaTime) { chest.position = ChestRest + Vector3.up * Mathf.Sin(t / 0.35f * Mathf.PI) * 0.12f; yield return null; }
+            chest.position = ChestRest;
+            rising = false;
+            yield break;
+        }
         // 先从水下冒出来，再被浪推到岸上
         Vector3 surface = new Vector3(from.x, Mathf.Max(WaterLevel.StaticY, ChestRest.y) - 0.1f, from.z);
         for (float t = 0f; t < 1.2f; t += Time.deltaTime)
@@ -186,7 +247,8 @@ public sealed class DogPawPlate : MonoBehaviour
         if (chest != null) chest.localRotation *= Quaternion.Euler(0f, 0f, 8f);
         if (ui != null)
             ui.ShowMemory("匣子里的一张航标纸",
-                "纸被海水泡软了，字还看得清：\n\n白檐帽　6\n单筒镜　2\n航海日志　3\n\n底下一行小字：给小黑留着，它鼻子比我灵。");
+                (seaDirection == Vector3.zero ? "纸边沾着土，有点潮，字还看得清：" : "纸被海水泡软了，字还看得清：")
+                + "\n\n白檐帽　6\n单筒镜　2\n航海日志　3\n\n底下一行小字：给小黑留着，它鼻子比我灵。");
     }
 }
 

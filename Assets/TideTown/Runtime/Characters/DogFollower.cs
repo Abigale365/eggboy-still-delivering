@@ -50,6 +50,73 @@ public class DogFollower : MonoBehaviour
 
     public bool Bound => bound;
     public bool Following { get; private set; } = true;
+
+    // ---------- 2026-11-16 用户定：小黑不跟着到处走，只在学校周边活动 ----------
+    // 跟上以后（Following），主角在学校草坪（外扩 LeashMargin）里面时照旧跟在身后；
+    // 主角走出去，小黑就小跑回学校，在草坪上溜达 / 坐一会儿，等主角回来再迎上去。
+    // 指挥（F）、嗅线索、卡住提示、踩爪印踏板都只在学校里有效（爪印踏板也挪到了学校草坪上）。
+    public static bool StayNearSchool = true;
+    const float LeashMargin = 3.0f;
+    Vector2[] homeArea;
+    Vector3 wanderTarget;
+    float wanderTimer;
+    public bool HomeMode { get; private set; }
+    public Vector2[] HomeArea { get { LoadHome(); return homeArea; } }
+
+    [System.Serializable] class HomeTier { public string id; public float[] x, z; }
+    [System.Serializable] class HomeDoc { public HomeTier[] tiers; }
+    void LoadHome()
+    {
+        if (homeArea != null) return;
+        var asset = Resources.Load<TextAsset>("World/world_layout");
+        var doc = asset != null ? JsonUtility.FromJson<HomeDoc>(asset.text) : null;
+        var t = doc?.tiers != null ? System.Array.Find(doc.tiers, a => a.id == "pad_grass_3_0_0") : null;
+        if (t == null || t.x == null) { homeArea = new Vector2[0]; return; }
+        homeArea = new Vector2[t.x.Length];
+        for (int i = 0; i < homeArea.Length; i++) homeArea[i] = new Vector2(t.x[i], t.z[i]);
+    }
+
+    // 点在学校草坪里，或者离草坪边不到 margin 米
+    public bool InSchool(Vector3 p, float margin = 0f)
+    {
+        LoadHome();
+        if (homeArea.Length < 3) return true;
+        bool inside = false;
+        for (int i = 0, j = homeArea.Length - 1; i < homeArea.Length; j = i++)
+        {
+            var a = homeArea[i]; var b = homeArea[j];
+            if ((a.y > p.z) != (b.y > p.z) && p.x < (b.x - a.x) * (p.z - a.y) / (b.y - a.y) + a.x) inside = !inside;
+        }
+        if (inside || margin <= 0f) return inside;
+        var q = new Vector2(p.x, p.z);
+        for (int i = 0, j = homeArea.Length - 1; i < homeArea.Length; j = i++)
+        {
+            var a = homeArea[j]; var ab = homeArea[i] - a;
+            float t = Mathf.Clamp01(Vector2.Dot(q - a, ab) / Mathf.Max(ab.sqrMagnitude, 1e-6f));
+            if ((a + ab * t - q).sqrMagnitude < margin * margin) return true;
+        }
+        return false;
+    }
+
+    public bool InSchoolArea => InSchool(transform.position, 1.0f);
+
+    Vector3 HomeWanderPoint(Vector3 from)
+    {
+        wanderTimer -= Time.deltaTime;
+        if (wanderTimer > 0f && wanderTarget != Vector3.zero) return wanderTarget;   // 到了就在那儿坐着，等下一次换地方
+        // 在狗窝 / 探头点附近 6 m 内找一块学校草坪上能站的地方
+        Vector3 anchor = PeekPoint != Vector3.zero ? PeekPoint : from;
+        for (int k = 0; k < 16; k++)
+        {
+            float ang = Random.value * Mathf.PI * 2f, r = Random.Range(0.8f, 6f);
+            var q = anchor + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
+            if (!InSchool(q) || !world.Walkable(q.x, q.z)) continue;
+            wanderTarget = q; wanderTimer = Random.Range(5f, 10f);
+            return wanderTarget;
+        }
+        wanderTarget = anchor; wanderTimer = 4f;
+        return wanderTarget;
+    }
     public bool Visible { get; private set; } = true;
     public bool Happy { get; private set; }
     public float WagHz { get; private set; }
@@ -74,7 +141,8 @@ public class DogFollower : MonoBehaviour
         Following = true;
         lastPlayerPos = player != null ? player.transform.position : transform.position;
         hasLastPlayer = player != null;
-        if (bound) Snap(TargetPoint());
+        // 只在学校周边活动：主角不在学校时，小黑出现在学校里（不跟到主角身边）
+        if (bound) Snap(StayNearSchool && !InSchool(player.transform.position, LeashMargin) ? HomeWanderPoint(PeekPoint != Vector3.zero ? PeekPoint : transform.position) : TargetPoint());
         SetVisible(true);
     }
 
@@ -108,6 +176,8 @@ public class DogFollower : MonoBehaviour
     public string LastCommand { get; private set; } = "";
     public void GuideTo(Vector3 worldPos, float seconds, float arriveRadius = 1.3f, float staySeconds = 2.5f)
     {
+        // 只在学校周边活动：学校外面的地方不去（卡住提示、船棚 / 结局桌的叫唤提示都不再把它拽出去）
+        if (StayNearSchool && !InSchool(worldPos, LeashMargin)) return;
         guidePos = worldPos;
         guideTimer = seconds;
         guideArrived = false;
@@ -119,6 +189,7 @@ public class DogFollower : MonoBehaviour
     public void CommandOrPet()
     {
         if (!Following || !Visible || player == null) return;
+        if (HomeMode) return;   // 小黑在学校，主角不在身边
         Vector3 p = player.transform.position;
         var plate = DogPawPlate.Instance;
         if (plate != null && !plate.Done && plate.Available && Vector3.Distance(p, plate.Center) < 8f)
@@ -140,9 +211,15 @@ public class DogFollower : MonoBehaviour
         LastCommand = "pet";
         petTimer = 2.6f;
         petCount++;
-        player.PlayEmote("hop");
+        player.FaceTowards(transform.position);
+        player.PlayEmote(player.HasClip("pet_dog") ? "pet_dog" : "hop");
         ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.25f);
     }
+
+    // 表情轮盘里的"摸小黑"：主角在身边才算
+    public bool CanBePetted(Vector3 from) => Following && Visible && !HomeMode
+        && new Vector2(transform.position.x - from.x, transform.position.z - from.z).magnitude < 2.0f;
+    public void PetByPlayer() { petTimer = 2.6f; petCount++; ShadowAndChimeSystem.PlayProceduralChime(659.25f, 0.25f); }
 
     // 附近还没被认出刻度的线索旧物（翻过背面暗格、或者小黑嗅过的都算认出了）
     bool FindSniffTarget(Vector3 from, float range, out string id, out Vector3 pos)
@@ -214,6 +291,11 @@ public class DogFollower : MonoBehaviour
         hasLastPlayer = true;
 
         var target = TargetPoint();
+        // 主角离开学校：回学校溜达
+        bool wasHome = HomeMode;
+        HomeMode = StayNearSchool && guideTimer <= 0f && !InSchool(pNow, LeashMargin);
+        if (HomeMode) target = HomeWanderPoint(transform.position);
+        else if (wasHome) wanderTimer = 0f;
         if (guideTimer > 0f)
         {
             guideTimer -= dt;
@@ -245,7 +327,7 @@ public class DogFollower : MonoBehaviour
         float gap = delta.magnitude;
 
         if (!world.Walkable(pos.x, pos.z)) Snap(target);
-        else if (gap > snapDistance && guideTimer <= 0f)
+        else if (gap > (HomeMode ? 30f : snapDistance) && guideTimer <= 0f)
         {
             Snap(target);
             pos = transform.position;
@@ -253,20 +335,35 @@ public class DogFollower : MonoBehaviour
         else
         {
             float speedGoal = Mathf.Min(maxSpeed, gap * 4f);
-            if (player.Speed > 0.2f) speedGoal = Mathf.Max(speedGoal, player.Speed * 1.08f);
-            speedGoal = Mathf.Max(speedGoal, Mathf.Min(12f, playerStep + 0.35f));
+            if (HomeMode) speedGoal = Mathf.Min(1.6f, gap * 2f);   // 自己在学校里溜达：慢慢小跑
+            else
+            {
+                if (player.Speed > 0.2f) speedGoal = Mathf.Max(speedGoal, player.Speed * 1.08f);
+                speedGoal = Mathf.Max(speedGoal, Mathf.Min(12f, playerStep + 0.35f));
+            }
             Vector3 dir = gap > 1e-4f ? delta / gap : Vector3.zero;
             vel = Vector3.Lerp(vel, dir * speedGoal, Mathf.Min(1f, dt * 10f));
 
-            var next = new Vector3(pos.x + vel.x * dt, pos.y, pos.z + vel.z * dt);
-            next = PushOutOfBoxes(next);
+            var raw = new Vector3(pos.x + vel.x * dt, pos.y, pos.z + vel.z * dt);
+            var next = PushOutOfBoxes(raw);
+            // 2026-11-15：贴着码头边的缆绳、桩子时，推开的方向正好出了可走区，小黑每帧原地不动（创新审计 dog_steps_on_plate）。
+            // 推出去不能走就退回没推的那一步：宁可蹭着障碍走，也不卡死。
+            if (!world.Walkable(next.x, next.z)) next = raw;
             if (world.Walkable(next.x, next.z)) { pos.x = next.x; pos.z = next.z; }
             else if (world.Walkable(next.x, pos.z)) { pos.x = next.x; vel.z = 0f; }
             else if (world.Walkable(pos.x, next.z)) { pos.z = next.z; vel.x = 0f; }
             else vel = Vector3.zero;
         }
 
-        float ground = world.GroundAt(pos.x, pos.z, pos.y);
+        // 2026-11-15：GroundAt 只认脚下 +0.30 以内的地面，海滨步道（3.34）比旧台地（3.02）高 0.32，小黑一直陷在砖地里。
+        // 贴着主角、和主角差不多高时，用主角脚下 +0.15 当参考，台阶能迈上去；
+        // 主角在高得多 / 低得多的地方（灯塔顶、崖下）照旧只看自己脚下，不会被吸到别的层上。
+        float refY = pos.y;
+        float playerY = player.transform.position.y;
+        float nearPlayer = new Vector2(player.transform.position.x - pos.x, player.transform.position.z - pos.z).magnitude;
+        if (nearPlayer < 4.5f && playerY - pos.y < 0.65f && playerY - pos.y > -1.0f)
+            refY = Mathf.Max(pos.y, playerY + 0.15f);
+        float ground = world.GroundAt(pos.x, pos.z, refY);
         float hopOffset = (realPlay && petTimer > 0f) ? Mathf.Abs(Mathf.Sin(petTimer * 10f)) * 0.14f : 0f;
         pos.y = ground + hopOffset;
         LastGroundError = ground - ground;
@@ -329,6 +426,9 @@ public class DogFollower : MonoBehaviour
         foreach (var c in world.Colliders)
         {
             if (c.water) continue;
+            // 2026-11-15：顶面比小黑脚下 + 0.25 m 还低的（码头边水里的礁石、矮路缘）踩得过去，不推。
+            // 原来不分高低一律推开，码头东北角一圈水下礁石把小黑困在角上，去不了爪印踏板。
+            if (c.top.HasValue && c.top.Value <= p.y + 0.25f) continue;
             if (c.r.HasValue)
             {
                 float dx = p.x - c.x, dz = p.z - c.z;

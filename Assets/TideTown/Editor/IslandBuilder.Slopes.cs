@@ -53,12 +53,16 @@ public static partial class IslandBuilder
         AddSlopeRibbon(sections, vertices, uv, top, -edge, edge, 0f, 0f, edge);
         AddSlopeRibbon(sections, vertices, uv, curb, -edge - 0.18f, -edge, 0.08f, 0f, edge);
         AddSlopeRibbon(sections, vertices, uv, curb, edge, edge + 0.18f, 0f, 0.08f, edge);
-        AddSlopeRibbon(sections, vertices, uv, walk, -edge - 0.93f, -edge - 0.18f, 0.08f, 0.08f, edge);
-        AddSlopeRibbon(sections, vertices, uv, walk, edge + 0.18f, edge + 0.93f, 0.08f, 0.08f, edge);
+        if (road.id != "to_shed")
+        {
+            AddSlopeRibbon(sections, vertices, uv, walk, -edge - 0.93f, -edge - 0.18f, 0.08f, 0.08f, edge);
+            AddSlopeRibbon(sections, vertices, uv, walk, edge + 0.18f, edge + 0.93f, 0.08f, 0.08f, edge);
+        }
         if (!groundOnly)
         {
-            AddSlopeRibbon(sections, vertices, uv, skirt, -edge - 0.93f, -edge - 0.93f, 0.08f, -0.25f, edge);
-            AddSlopeRibbon(sections, vertices, uv, skirt, edge + 0.93f, edge + 0.93f, -0.25f, 0.08f, edge);
+            float skirtOff = road.id == "to_shed" ? edge + 0.18f : edge + 0.93f;
+            AddSlopeRibbon(sections, vertices, uv, skirt, -skirtOff, -skirtOff, 0.08f, -0.25f, edge);
+            AddSlopeRibbon(sections, vertices, uv, skirt, skirtOff, skirtOff, -0.25f, 0.08f, edge);
         }
 
         var mesh = new Mesh { name = "road_" + road.id + (groundOnly ? "_col" : ""), subMeshCount = groundOnly ? 3 : 4 };
@@ -101,10 +105,9 @@ public static partial class IslandBuilder
         {
             AddUpperLanding(nodes, 1.88f);
         }
-        else if (road.id == "to_shed")
+        else if (road.id == "to_shed" && nodes.Count <= 5)
         {
-            // The edge of the town platform runs diagonally across the top of this ramp.
-            // Carry the level landing across it, then regrade down to the existing low point.
+            // Legacy 5-node shed ramp crossing the diagonal town edge down to the low point.
             var landing = nodes[1] + SlopeDirection(nodes[1], nodes[2]) * 0.34f;
             float span = SlopeDistance(landing, nodes[2]) + SlopeDistance(nodes[2], nodes[3]) + SlopeDistance(nodes[3], nodes[4]);
             float distance = 0f;

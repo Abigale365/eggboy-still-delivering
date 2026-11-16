@@ -8,6 +8,7 @@
 // 只用固定种子，重建两次结果一致。不花 Lux3D 积分。
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -72,17 +73,18 @@ public static partial class IslandBuilder
         var normal = new Color32[n * n];
         float br = tint.r / 255f, bg = tint.g / 255f, bb = tint.b / 255f;
 
-        // 叶子 / 草用一堆圆斑（叶簇），石头用裂纹 + 斑驳，沙子用细颗粒
+        // 叶簇保留圆斑；草地单独使用可平铺、扭曲的多尺度噪声，不再生成 1400 个圆形鼓包。
+        // 合流取得构建锁后，先删除 TexRoot/NatureGrass_{Albedo,Normal}.png 再 BuildMain；保留 .meta。
         var blobs = new float[n * n];
         var blobTone = new float[n * n];
-        if (kind == NatureKind.Leaves || kind == NatureKind.Grass)
+        if (kind == NatureKind.Leaves)
         {
             var rnd = new Lcg(seed + 5);
-            int count = kind == NatureKind.Leaves ? 900 : 1400;
+            int count = 900;
             for (int k = 0; k < count; k++)
             {
                 float cx = rnd.Next01() * n, cy = rnd.Next01() * n;
-                float rad = kind == NatureKind.Leaves ? 6f + rnd.Next01() * 9f : 1.5f + rnd.Next01() * 3.5f;
+                float rad = 6f + rnd.Next01() * 9f;
                 float ry = rad;
                 float tone = rnd.Next01();
                 int x0 = Mathf.FloorToInt(cx - rad) - 1, x1 = Mathf.CeilToInt(cx + rad) + 1;
@@ -112,6 +114,21 @@ public static partial class IslandBuilder
             float r, gg, b;
             switch (kind)
             {
+                case NatureKind.Grass:
+                {
+                    float wu = u + .09f * (GrassNoise(u, v, 3, seed + 101) - .5f);
+                    float wv = v + .09f * (GrassNoise(u, v, 3, seed + 109) - .5f);
+                    float patch = .62f * GrassNoise(wu, wv, 5, seed + 127)
+                        + .26f * GrassNoise(wu, wv, 11, seed + 139)
+                        + .12f * GrassNoise(wu, wv, 23, seed + 151);
+                    float grain = GrassNoise(u, v, 173, seed + 163) - .5f;
+                    float hue = (GrassNoise(wu, wv, 7, seed + 179) - .5f) * .07f;
+                    shade = .94f + .25f * (patch - .5f) + .035f * grain;
+                    h = .13f * patch + .025f * grain;
+                    r = br * shade * (1f + hue); gg = bg * shade;
+                    b = bb * shade * (1f - hue);
+                    break;
+                }
                 case NatureKind.Rock:
                 {
                     // 裂纹：低频噪声的等值线附近变暗
@@ -136,11 +153,10 @@ public static partial class IslandBuilder
                 }
                 default:
                 {
-                    // 叶簇 / 草叶：圆斑中心亮、边缘暗，斑与斑之间是深色缝
+                    // 叶簇：圆斑中心亮、边缘暗。
                     float d = blobs[i], t = blobTone[i];
-                    float hue = (t - 0.5f) * (kind == NatureKind.Leaves ? 0.30f : 0.16f);
-                    shade = kind == NatureKind.Leaves ? 0.55f + 0.55f * d + 0.12f * (m - 0.5f)
-                                                      : 0.90f + 0.10f * d + 0.22f * (m - 0.5f);   // 草地对比度低，远看不花，只留大块深浅
+                    float hue = (t - 0.5f) * .30f;
+                    shade = .55f + .55f * d + .12f * (m - .5f);
                     h = d * 0.8f + 0.1f * m;
                     r = br * shade * (1f + hue * 0.9f);
                     gg = bg * shade * (1f + hue * 0.3f);
@@ -163,6 +179,17 @@ public static partial class IslandBuilder
         }
         WriteSurfaceTexture(albedoPath, albedo, n);
         WriteSurfaceTexture(normalPath, normal, n);
+    }
+
+    static float GrassNoise(float u, float v, int period, int seed)
+    {
+        float x = u * period, y = v * period;
+        int xi = Mathf.FloorToInt(x), yi = Mathf.FloorToInt(y);
+        float fx = Mathf.SmoothStep(0f, 1f, x - xi), fy = Mathf.SmoothStep(0f, 1f, y - yi);
+        return Mathf.Lerp(Mathf.Lerp(Hash01(Wrap(xi, period), Wrap(yi, period), seed),
+                Hash01(Wrap(xi + 1, period), Wrap(yi, period), seed), fx),
+            Mathf.Lerp(Hash01(Wrap(xi, period), Wrap(yi + 1, period), seed),
+                Hash01(Wrap(xi + 1, period), Wrap(yi + 1, period), seed), fx), fy);
     }
 
     // ---------- 网格 ----------
@@ -571,11 +598,13 @@ public static partial class IslandBuilder
         int nRock = 0, nTree = 0, nBush = 0;
 
         // 1. 崖边圆石：每层台地（含海岸底座）沿边走一圈，往外、往下成排堆
+        var cliffRnd = new Lcg(20261116); int cliffUpper = 0;
         var areas = new List<Area>(layout.tiers);
         if (layout.coast != null) areas.Add(new Area { id = "coast", y = 0.15f, x = layout.coast.x, z = layout.coast.z });
         foreach (var t in areas)
         {
             if (t.x == null || t.x.Length < 3) continue;
+            if (t.id == "pier" || t.id == "dock" || t.id == "winch_pad") continue;   // 码头木栈道 / 绞盘石台由专门结构建造，不长悬崖灌木和杂石
             var poly = new List<Vector2>();
             for (int i = 0; i < t.x.Length; i++) poly.Add(new Vector2(t.x[i], t.z[i]));
             for (int i = 0; i < poly.Count; i++)
@@ -597,20 +626,31 @@ public static partial class IslandBuilder
                     if (drop < 0.45f) continue;                       // 台阶太矮，不堆石头
 
                     // 崖顶一圈花丛（预览图里每道崖边上都是开花的灌木）
+                    // 2026-11-15：原来花丛摆在崖边线外 0.25 m，底下是空的（浮在崖口上）。改成往里收 0.35 m，
+                    // 并往下 0.45 m 内必须打到实心地面才种。随机数的抽取顺序不变，岛上其他东西的摆放不受影响。
                     if (t.id != "coast" && rnd.Next01() < 0.75f)
                     {
-                        var bp2 = e + outN * 0.25f;
+                        var bp2 = e - outN * 0.35f;
                         float bs = 1.2f + rnd.Next01() * 0.9f;
                         var bp = new Vector3(bp2.x, t.y - 0.12f, bp2.y);
-                        if (!BlocksWalk(walks, bp, 0.45f * bs, t.y - 0.3f, t.y + 0.7f, 0.1f) && !NearBuilding(bp, 0.4f))
+                        var oldBp = new Vector3(e.x + outN.x * 0.25f, t.y - 0.12f, e.y + outN.y * 0.25f);
+                        if (!BlocksWalk(walks, oldBp, 0.45f * bs, t.y - 0.3f, t.y + 0.7f, 0.1f) && !NearBuilding(oldBp, 0.4f))
                         {
-                            Place(bushRoot, "EdgeBush", blossoms[nBush % blossoms.Length], Blossom(nBush),
-                                  bp, new Vector3(bs, bs * 0.85f, bs), rnd.Next01() * 360f);
-                            nBush++;
+                            float yaw = rnd.Next01() * 360f;
+                            if (GroundBelow(bp.x, bp.z, t.y + 0.05f) >= t.y - 0.45f
+                                && !BlocksWalk(walks, bp, 0.45f * bs, t.y - 0.3f, t.y + 0.7f, 0.1f) && !NearBuilding(bp, 0.4f))
+                            {
+                                Place(bushRoot, "EdgeBush", blossoms[nBush % blossoms.Length], Blossom(nBush),
+                                      bp, new Vector3(bs, bs * 0.85f, bs), yaw);
+                                nBush++;
+                            }
                         }
                     }
 
                     // 第四轮：高崖面上零星长出花草（目标图灯塔岬角、海边崖壁上都挂着一丛丛花），树叶花丛不挡人
+                    // 2026-11-15：原来挂在竖直崖面上（底下什么都没有）。先记下来，等这一段的圆石堆好，
+                    // 只落在圆石顶上；这一段没有圆石（镇子里台地之间的干净石墙）就不种。
+                    bool tuftPending = false; float tuftScale = 0f, tuftYaw = 0f; bool tuftBloom = false;
                     if (drop > 1.5f && rnd.Next01() < 0.45f)
                     {
                         float ty = Mathf.Lerp(Mathf.Max(lower, 0f) + 0.5f, t.y - 0.45f, rnd.Next01());
@@ -619,19 +659,20 @@ public static partial class IslandBuilder
                         var tp = new Vector3(tp2.x, ty, tp2.y);
                         if (!BlocksWalk(walks, tp, 0.4f * ts, ty - 0.3f, ty + 0.5f, 0.05f) && !NearBuilding(tp, 0.3f))
                         {
-                            bool bloom = rnd.Next01() < 0.6f;
-                            Place(bushRoot, "CliffTuft", bloom ? blossoms[nBush % blossoms.Length] : bushes[nBush % bushes.Length],
-                                  bloom ? Blossom(nBush) : new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
-                                  tp, new Vector3(ts, ts * 0.8f, ts), rnd.Next01() * 360f);
-                            nBush++;
+                            tuftBloom = rnd.Next01() < 0.6f;
+                            tuftYaw = rnd.Next01() * 360f;
+                            tuftScale = ts;
+                            tuftPending = true;
                         }
                     }
                     // 第三轮：镇子里面台地之间（下面还是台地，不是海岸 / 海）目标图是干净的浅色石墙，不堆圆石
                     if (t.id != "coast" && lower > 0.35f) continue;
+                    Vector3 tuftRest = Vector3.zero; float tuftRestTop = float.NegativeInfinity;
                     float yb = Mathf.Max(lower, -0.4f);
                     // 从下往上一排排堆；台地只堆到下半截（上半截露崖面，崖顶是花丛），海岸底座照旧堆满
                     float stackTop = t.id == "coast" ? t.y + 0.1f : yb + (t.y - yb) * 0.55f;
-                    for (float yy = yb; yy < stackTop;)
+                    float yy = yb;
+                    for (; yy < stackTop;)
                     {
                         float size = 0.9f + rnd.Next01() * 1.1f;
                         float r = size * 0.5f;
@@ -647,11 +688,142 @@ public static partial class IslandBuilder
                             Place(rockRoot, "Boulder", RockFor(size, cy), new[] { rnd.Next01() < 0.5f ? rockA : rockB },
                                   c, new Vector3(r * sq, r, r * (2f - sq)), rnd.Next01() * 360f);
                             nRock++;
+                            if (top > tuftRestTop) { tuftRestTop = top; tuftRest = c; }
                         }
                         yy += size * 0.75f;
                     }
+                    // 2026-11-16 扩建：镇子外圈临海的高崖（台地 ≥ 2.5 m，灯塔台、主街、住宅台地）接着往上堆到 95%，
+                    // 不再露出上半截 90° 的褐色平切崖面。港湾低台（船棚、码头、绞盘台）不加高——渡口浮箱通道旁不能多出高过河床的石头。
+                    // 用单独的随机数：上面那一段和岛上其他摆放的随机序列一点不变。
+                    if (t.id != "coast" && t.y >= 2.5f)
+                    {
+                        float upperTop = yb + (t.y - yb) * 0.95f;
+                        for (; yy < upperTop;)
+                        {
+                            float size = 0.9f + cliffRnd.Next01() * 1.1f;
+                            float r = size * 0.5f;
+                            float outOff = r * (0.35f + cliffRnd.Next01() * 0.35f) + 0.1f;
+                            var c2 = e + outN * outOff + dir * ((cliffRnd.Next01() - 0.5f) * 0.5f);
+                            float sq = 0.85f + cliffRnd.Next01() * 0.3f, rot = cliffRnd.Next01() * 360f; bool aMat = cliffRnd.Next01() < 0.5f;
+                            float cy = yy + r * 0.45f;
+                            float top = cy + r * 0.75f;
+                            if (top > t.y + 0.1f) { cy -= top - (t.y + 0.1f); top = t.y + 0.1f; }
+                            var c = new Vector3(c2.x, cy, c2.y);
+                            if (!BlocksWalk(walks, c, r, cy - r * 0.7f, top, 0.25f) && !NearBuilding(c, r * 0.6f))
+                            {
+                                Place(rockRoot, "Boulder", size > 1.5f ? rocks[cliffUpper % 6] : rocksLo[cliffUpper % 6], new[] { aMat ? rockA : rockB },
+                                      c, new Vector3(r * sq, r, r * (2f - sq)), rot);
+                                cliffUpper++;
+                                if (top > tuftRestTop) { tuftRestTop = top; tuftRest = c; }
+                            }
+                            yy += size * 0.75f;
+                        }
+                        // 两列之间再错开垒一列（沿崖边挪半个间距），石头之间不再露出整片崖面
+                        for (float y2 = yb + 0.3f; y2 < upperTop;)
+                        {
+                            float size = 0.9f + cliffRnd.Next01() * 1.1f, r = size * 0.5f;
+                            float outOff = r * (0.3f + cliffRnd.Next01() * 0.3f) + 0.1f;
+                            var c2 = e + outN * outOff + dir * (len / steps * 0.5f + (cliffRnd.Next01() - 0.5f) * 0.3f);
+                            float sq = 0.85f + cliffRnd.Next01() * 0.3f, rot = cliffRnd.Next01() * 360f; bool aMat = cliffRnd.Next01() < 0.5f;
+                            float cy = y2 + r * 0.45f, top = cy + r * 0.75f;
+                            if (top > t.y + 0.1f) { cy -= top - (t.y + 0.1f); top = t.y + 0.1f; }
+                            var c = new Vector3(c2.x, cy, c2.y);
+                            if (InPolyXZ(poly, c2 - outN * 0.05f) == false && !BlocksWalk(walks, c, r, cy - r * 0.7f, top, 0.25f) && !NearBuilding(c, r * 0.6f))
+                            {
+                                Place(rockRoot, "Boulder", size > 1.5f ? rocks[cliffUpper % 6] : rocksLo[cliffUpper % 6], new[] { aMat ? rockA : rockB },
+                                      c, new Vector3(r * sq, r, r * (2f - sq)), rot);
+                                cliffUpper++;
+                            }
+                            y2 += size * 0.75f;
+                        }
+                    }
+                    if (tuftPending && !float.IsNegativeInfinity(tuftRestTop))
+                    {
+                        var tp = new Vector3(tuftRest.x, tuftRestTop - 0.1f * tuftScale, tuftRest.z);
+                        if (!BlocksWalk(walks, tp, 0.4f * tuftScale, tp.y - 0.3f, tp.y + 0.5f, 0.05f) && !NearBuilding(tp, 0.3f))
+                        {
+                            Place(bushRoot, "CliffTuft", tuftBloom ? blossoms[nBush % blossoms.Length] : bushes[nBush % bushes.Length],
+                                  tuftBloom ? Blossom(nBush) : new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
+                                  tp, new Vector3(tuftScale, tuftScale * 0.8f, tuftScale), tuftYaw);
+                            nBush++;
+                        }
+                    }
                 }
             }
+        }
+
+        // 1c. 2026-11-15：架在海岸低地上的坡道（西山上山道、东南灯塔坡道）两侧，用岩块堆出山麓 / 岬角的斜坡底座，
+        //     不再是一道光秃秃的路基土脊。只堆在脚下是海岸低地或海（< 1 m）的地方，石顶比路面低 0.25 m 以上，不挡路。
+        //     用单独的随机数和计数：岛上其他石头、花、树的摆放一点不变。
+        {
+            var flankRnd = new Lcg(20261115);
+            int flank = 0;
+            foreach (var rid in new[] { "mountain", "west_up", "to_lighthouse" })
+            {
+                var road = layout.roads == null ? null : Array.Find(layout.roads, rr => rr.id == rid);
+                if (road == null || road.x.Length < 2) continue;
+                var others = new List<WalkArea>();
+                for (int wi = 0; wi < walks.Count; wi++) if (!layout.walk[wi].id.StartsWith(rid + "_")) others.Add(walks[wi]);
+                float half = road.width * 0.5f;
+                for (int i = 0; i + 1 < road.x.Length; i++)
+                {
+                    var a = new Vector3(road.x[i], road.y[i], road.z[i]); var b = new Vector3(road.x[i + 1], road.y[i + 1], road.z[i + 1]);
+                    var d = b - a; d.y = 0f; float len = d.magnitude; if (len < 0.1f) continue; d /= len;
+                    var side = new Vector3(d.z, 0f, -d.x);
+                    int steps = Mathf.Max(1, Mathf.RoundToInt(len / 1.3f));
+                    for (int s = 0; s < steps; s++)
+                    {
+                        var c0 = Vector3.Lerp(a, b, (s + 0.5f) / steps);
+                        foreach (float sign in new[] { -1f, 1f })
+                        {
+                            var edge = c0 + side * sign * (half + 0.1f);
+                            float ground = GroundBelow(edge.x + side.x * sign * 0.8f, edge.z + side.z * sign * 0.8f, c0.y - 0.6f);
+                            if (ground > 1.0f || c0.y - ground < 1.2f) continue;
+                            float lid = c0.y - 0.28f;
+                            for (float yy = Mathf.Max(ground, -0.4f); yy < ground + (lid - ground) * 0.8f;)
+                            {
+                                float size = 0.9f + flankRnd.Next01() * 1.2f, r = size * 0.5f;
+                                var cc = edge + side * sign * (r * (0.3f + flankRnd.Next01() * 0.4f) + 0.05f) + d * ((flankRnd.Next01() - 0.5f) * 0.6f);
+                                float cy = yy + r * 0.45f, top = cy + r * 0.75f;
+                                if (top > lid) { cy -= top - lid; top = lid; }
+                                var c = new Vector3(cc.x, cy, cc.z);
+                                float sq = 0.85f + flankRnd.Next01() * 0.3f, rot = flankRnd.Next01() * 360f; bool aMat = flankRnd.Next01() < 0.5f;
+                                if (!BlocksWalk(others, c, r, cy - r * 0.7f, top, 0.25f) && !NearBuilding(c, r * 0.6f))
+                                {
+                                    Place(rockRoot, "FlankRock", size > 1.5f ? rocks[flank % 6] : rocksLo[flank % 6], new[] { aMat ? rockA : rockB },
+                                          c, new Vector3(r * sq, r, r * (2f - sq)), rot);
+                                    flank++;
+                                }
+                                yy += size * 0.7f;
+                            }
+                        }
+                    }
+                }
+            }
+            // 港湾：绞盘台和船棚台之间那块低洼岸地（原来是死水缝，岸线外展后是一块下沉草坑）铺成礁石斜岸。
+            // 石顶不超过 0.95 m（L2 水位 1.15 以下，看得见但站不上去、也不能当桥），离渡口浮箱通道中线 1.5 m 以外。
+            var ferryLine = SmoothCoastal(HarborKnots);
+            var winch = Array.Find(layout.tiers, tt => tt.id == "winch_pad");
+            var shedTier = Array.Find(layout.tiers, tt => tt.id == "shed");
+            var winchPoly = winch == null ? new List<Vector2>() : winch.x.Select((x, k) => new Vector2(x, winch.z[k])).ToList();
+            var shedPoly = shedTier == null ? new List<Vector2>() : shedTier.x.Select((x, k) => new Vector2(x, shedTier.z[k])).ToList();
+            var coastPoly = layout.coast == null ? new List<Vector2>() : layout.coast.x.Select((x, k) => new Vector2(x, layout.coast.z[k])).ToList();
+            int pocket = 0;
+            for (float px = 12.6f; px < 16.4f; px += 0.62f)
+            for (float pz = -14.9f; pz < -10.3f; pz += 0.62f)
+            {
+                var q = new Vector2(px + (flankRnd.Next01() - 0.5f) * 0.4f, pz + (flankRnd.Next01() - 0.5f) * 0.4f);
+                float r = 0.32f + flankRnd.Next01() * 0.28f, rot = flankRnd.Next01() * 360f, sq = 0.85f + flankRnd.Next01() * 0.3f; bool aMat = flankRnd.Next01() < 0.5f;
+                if (!InPolyXZ(coastPoly, q) || InPolyXZ(winchPoly, q) || InPolyXZ(shedPoly, q)) continue;
+                if (DistToPoly(winchPoly, q) < 0.15f || DistToPoly(shedPoly, q) < 0.15f) continue;
+                if (CoastalDistance(new Vector3(q.x, 0f, q.y), ferryLine) < 1.5f + r * 0.6f) continue;
+                if (GroundBelow(q.x, q.y, 0.6f) > 0.5f) continue;
+                float top = Mathf.Min(0.95f, 0.15f + r * 1.9f);
+                var c = new Vector3(q.x, top - r * 0.75f, q.y);
+                Place(rockRoot, "HarborShoreRock", rocksLo[pocket % 6], new[] { aMat ? rockA : rockB }, c, new Vector3(r * sq, r, r * (2f - sq)), rot);
+                pocket++;
+            }
+            Debug.Log($"NATURE flank rocks={flank} harbor pocket rocks={pocket}");
         }
 
         // 2. 海里礁石：海岸外 1.5–5 m，稀疏
@@ -714,7 +886,7 @@ public static partial class IslandBuilder
                 if (!inland && !onBeach && roll >= 0.8f) continue;
                 float r = 0.55f + rnd.Next01() * 0.6f;
                 var c = new Vector3(p2.x, 0.15f + r * 0.1f, p2.y);
-                if (BlocksWalk(walks, c, r, -1f, 1.6f, 0.3f) || NearBuilding(c, r)) continue;
+                if (BlocksWalk(walks, c, Mathf.Max(r, 0.95f), -0.8f, 2.2f, 0.50f) || NearBuilding(c, r + 0.3f)) continue;
                 // 2026-11-08：北半边（离镜头远的那侧）的崖顶种树，目标图镇子背后是一片树林；前景海岸不种，免得挡镇子
                 if (inland && p2.y > (cz0 + cz1) * 0.5f && roll < 0.2f && !NearBuilding(c, 1.8f)
                     && !BlocksWalk(walks, new Vector3(p2.x, 0.15f, p2.y), 0.9f, -0.5f, 3f, 0.3f))
@@ -735,10 +907,17 @@ public static partial class IslandBuilder
                 if (!onBeach && (inland || roll < 0.45f))
                 {
                     float bs = 1.1f + rnd.Next01() * 0.8f;
+                    var sbp = new Vector3(p2.x, 0.12f, p2.y);
+                    if (BlocksWalk(walks, sbp, 0.60f * bs, 0.0f, 2.2f, 0.35f)) continue;
                     bool bloom = !inland || rnd.Next01() < 0.6f;
+                    float shoreYaw = rnd.Next01() * 360f;
+                    // 2026-11-15：岸边灌木只种在离水线 1.2 m 以上、脚下确实有岸地的地方（原来贴着水线、连凹进去的水坑边也种，一涨水就泡着）
+                    float shoreGround = GroundBelow(p2.x, p2.y, 0.6f);
+                    if (DistToEdge(cpoly, p2) < 1.2f || shoreGround < 0.1f) continue;
+                    sbp.y = shoreGround - 0.01f;
                     Place(bushRoot, "ShoreBush", bloom ? blossoms[nBush % blossoms.Length] : bushes[nBush % bushes.Length],
                           bloom ? Blossom(nBush) : new[] { leafMats[nBush % 3], flowerMats[(nBush / 3) % 3] },
-                          new Vector3(p2.x, 0.12f, p2.y), new Vector3(bs, bs * 0.8f, bs), rnd.Next01() * 360f);
+                          sbp, new Vector3(bs, bs * 0.8f, bs), shoreYaw);
                     nBush++;
                     continue;
                 }
@@ -854,6 +1033,84 @@ public static partial class IslandBuilder
         }
         Debug.Log($"LAWN beds={nBed} smallTrees={nSmall}");
 
+        // 3d. 学校操场靠栅栏内侧的花坛和开粉花的树（参考预览图：东南草坪带一棵粉花树与镶边花坛，避开路线和学校道具）
+        if (layout.walk != null)
+        {
+            WalkArea schoolWalk = null;
+            for (int wi = 0; wi < layout.walk.Length; wi++)
+                if (layout.walk[wi].id == "pad_grass_3_0_0") { schoolWalk = walks[wi]; break; }
+            if (schoolWalk != null)
+            {
+                var schoolData = SchoolData.Load();
+                var routeAsset = Resources.Load<TextAsset>("World/route");
+                var routePts = new List<Vector2>();
+                if (routeAsset != null)
+                {
+                    foreach (var line in routeAsset.text.Split('{'))
+                    {
+                        int ix = line.IndexOf("\"x\":"); int iz = line.IndexOf("\"z\":");
+                        if (ix >= 0 && iz >= 0 &&
+                            float.TryParse(line.Substring(ix + 4).Split(',')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float rx) &&
+                            float.TryParse(line.Substring(iz + 4).Split(',', '}')[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float rz))
+                            routePts.Add(new Vector2(rx, rz));
+                    }
+                }
+                bool SchoolSpotClear(Vector3 p, float minEdge, float minItem, float minRoute)
+                {
+                    var p2 = new Vector2(p.x, p.z);
+                    if (!InPolyXZ(schoolWalk.poly, p2) || DistToEdge(schoolWalk.poly, p2) < minEdge) return false;
+                    if (NearBuilding(p, 2.0f)) return false;
+                    if (schoolData?.items != null)
+                        foreach (var it in schoolData.items)
+                            if (Vector2.Distance(p2, new Vector2(it.x, it.z)) < minItem) return false;
+                    for (int ri = 0; ri + 1 < routePts.Count; ri++)
+                    {
+                        Vector2 a = routePts[ri], b = routePts[ri + 1], ab = b - a;
+                        float tt = Mathf.Clamp01(Vector2.Dot(p2 - a, ab) / Mathf.Max(1e-5f, ab.sqrMagnitude));
+                        if (Vector2.Distance(p2, a + ab * tt) < minRoute) return false;
+                    }
+                    return true;
+                }
+
+                var schoolTreeSpots = new[]
+                {
+                    (pos: new Vector3(24.4f, schoolWalk.y, -1.6f), pink: true, scale: 1.05f),
+                    (pos: new Vector3(24.3f, schoolWalk.y, 3.8f), pink: false, scale: 0.92f),
+                };
+                foreach (var st in schoolTreeSpots)
+                {
+                    float gy = GroundBelow(st.pos.x, st.pos.z, schoolWalk.y + 0.4f);
+                    var p = new Vector3(st.pos.x, gy, st.pos.z);
+                    if (Mathf.Abs(gy - schoolWalk.y) > 0.2f || !SchoolSpotClear(p, 0.9f, 2.1f, 1.50f)) continue;
+                    var crown = st.pink ? leafPink : leafMats[nTree % 3];
+                    var tgo = Place(treeRoot, "SchoolLawnTree", trees[nTree % trees.Length], new[] { crown, trunk }, p,
+                                    new Vector3(st.scale, st.scale * 0.96f, st.scale), rnd.Next01() * 360f);
+                    var tcol = new GameObject("TrunkCol");
+                    tcol.transform.SetParent(tgo.transform, false);
+                    tcol.transform.localPosition = new Vector3(0f, 0.85f, 0f);
+                    tcol.AddComponent<BoxCollider>().size = new Vector3(0.30f, 1.7f, 0.30f);
+                    tcol.AddComponent<TownObstacle>().kind = TownObstacle.Kind.Obstacle;
+                    nTree++;
+                }
+
+                var schoolBeds = new[] { new Vector2(12.3f, -8.3f), new Vector2(15.3f, -8.0f), new Vector2(24.4f, -3.5f), new Vector2(24.8f, 1.4f) };
+                foreach (var b2 in schoolBeds)
+                {
+                    float gy = GroundBelow(b2.x, b2.y, schoolWalk.y + 0.4f);
+                    var p = new Vector3(b2.x, gy, b2.y);
+                    if (Mathf.Abs(gy - schoolWalk.y) > 0.2f || !SchoolSpotClear(p, 0.65f, 1.85f, 1.25f)) continue;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float a = k * 2.1f + rnd.Next01();
+                        var bp = p + new Vector3(Mathf.Cos(a) * 0.38f, 0f, Mathf.Sin(a) * 0.38f);
+                        float bs = 0.56f + rnd.Next01() * 0.24f;
+                        Place(bushRoot, "SchoolLawnBed", blossoms[(nBush + k) % blossoms.Length], Blossom(nBush + k), bp, new Vector3(bs, bs * 0.82f, bs), rnd.Next01() * 360f);
+                    }
+                    nBush += 3;
+                }
+            }
+        }
+
         // 3b. 住宅组团小广场中心的大树（目标图左组团中间那棵）
         foreach (var sp in plazaTreeSpots)
         {
@@ -862,8 +1119,11 @@ public static partial class IslandBuilder
         }
 
         // 4. 花丛：沿每块可走区的外沿，往外 0.55 m；落在同一层地面上、不在任何可走区里才种
-        foreach (var w in walks)
+        for (int wi = 0; wi < walks.Count; wi++)
         {
+            var w = walks[wi];
+            string wid = layout.walk != null && wi < layout.walk.Length ? layout.walk[wi].id : "";
+            if (wid == "pier" || wid == "dock" || wid == "winch_pad") continue;
             var poly = w.poly;
             for (int i = 0; i < poly.Count; i++)
             {

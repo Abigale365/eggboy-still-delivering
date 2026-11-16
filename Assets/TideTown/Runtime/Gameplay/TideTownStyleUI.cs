@@ -65,6 +65,9 @@ public static class TideTownStyleUI
     {
         var root = FindHudCanvasRoot(ui);
         if (root == null || root.childCount < 2) return null;
+        // 2026-11-16 UI 绘本化：信纸背后多了一层信封，信纸不再是第 0 个子物体；按名字找，找不到再走旧办法
+        var named = root.Find("LetterOverlay");
+        if (named != null) return named.GetComponent<RectTransform>();
         // EggboyUI.Build 中：child 0 是 GameplayHUD，child 1 是 letterOverlay
         for (int i = 0; i < root.childCount; i++)
         {
@@ -79,7 +82,284 @@ public static class TideTownStyleUI
     {
         var ov = FindLetterOverlay(ui);
         if (ov == null || ov.childCount == 0) return null;
+        var named = ov.Find("LetterPaper");
+        if (named != null) return named.GetComponent<RectTransform>();
         return ov.GetChild(0).GetComponent<RectTransform>();
+    }
+
+    // ───────────── 2026-11-16「海滨绘本邮局」程序化精灵（不依赖外部图片，第一次用时生成、之后复用） ─────────────
+    static Sprite cachedBorder, cachedFrame, cachedWax, cachedPostmark, cachedKeycap, cachedVignette, cachedPill;
+
+    static Texture2D NewTex(int w, int h)
+    {
+        var t = new Texture2D(w, h, TextureFormat.RGBA32, false, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        return t;
+    }
+
+    // 圆角矩形的有符号距离（像素，内部为负）
+    static float RoundRectSdf(float x, float y, float w, float h, float r)
+    {
+        float qx = Mathf.Abs(x - w * 0.5f) - (w * 0.5f - r), qy = Mathf.Abs(y - h * 0.5f) - (h * 0.5f - r);
+        float ox = Mathf.Max(qx, 0f), oy = Mathf.Max(qy, 0f);
+        return Mathf.Sqrt(ox * ox + oy * oy) + Mathf.Min(Mathf.Max(qx, qy), 0f) - r;
+    }
+
+    // 带内描边双细线的圆角卡片（灰度：底是白，两道细线是 0.62 / 0.74 灰，Image.color 一染就是同色系的深一档描边）。九宫格。
+    public static Sprite RoundedBorderSprite
+    {
+        get
+        {
+            if (cachedBorder != null) return cachedBorder;
+            const int S = 96; const float R = 16f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float d = RoundRectSdf(x + 0.5f, y + 0.5f, S, S, R);
+                    float a = Mathf.Clamp01(0.5f - d);
+                    float g = 1f;
+                    float l1 = 1f - Mathf.Clamp01(Mathf.Abs(d + 5.5f) - 0.6f);   // 外细线
+                    float l2 = 1f - Mathf.Clamp01(Mathf.Abs(d + 8.5f) - 0.4f);   // 内细线
+                    g = Mathf.Lerp(g, 0.62f, l1); g = Mathf.Lerp(g, 0.74f, l2);
+                    byte v = (byte)(g * 255f);
+                    px[y * S + x] = new Color32(v, v, v, (byte)(a * 255f));
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedBorder = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(24, 24, 24, 24));
+            return cachedBorder;
+        }
+    }
+
+    // 只有两道细线、中间透明的圆角框（叠在信纸上做信笺内框）。九宫格。
+    public static Sprite RoundedFrameSprite
+    {
+        get
+        {
+            if (cachedFrame != null) return cachedFrame;
+            const int S = 96; const float R = 12f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float d = RoundRectSdf(x + 0.5f, y + 0.5f, S, S, R);
+                    float a = Mathf.Max(1f - Mathf.Clamp01(Mathf.Abs(d + 1.5f) - 0.5f), 0.6f * (1f - Mathf.Clamp01(Mathf.Abs(d + 5f) - 0.3f)));
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(a) * 255f));
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedFrame = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(20, 20, 20, 20));
+            return cachedFrame;
+        }
+    }
+
+    // 胶囊（两头全圆），九宫格，横向可拉长
+    public static Sprite PillSprite
+    {
+        get
+        {
+            if (cachedPill != null) return cachedPill;
+            const int W = 64, H = 64; const float R = 31.5f;
+            var tex = NewTex(W, H); var px = new Color32[W * H];
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float d = RoundRectSdf(x + 0.5f, y + 0.5f, W, H, R);
+                    px[y * W + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(0.5f - d) * 255f));
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedPill = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(31, 31, 31, 31));
+            return cachedPill;
+        }
+    }
+
+    // 朱砂红火漆印：外圈波浪滴蜡边、内圈压印环、中间一颗四角星和一圈星点。本身带颜色，Image.color 用白色。
+    public static Sprite WaxSealSprite
+    {
+        get
+        {
+            if (cachedWax != null) return cachedWax;
+            const int S = 128; float c = S * 0.5f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            var baseCol = new Color(0.70f, 0.16f, 0.12f); var dark = new Color(0.46f, 0.08f, 0.07f); var hi = new Color(0.90f, 0.38f, 0.30f);
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float dx = x + 0.5f - c, dy = y + 0.5f - c, r = Mathf.Sqrt(dx * dx + dy * dy), ang = Mathf.Atan2(dy, dx);
+                    float edge = 56f + 3.2f * Mathf.Sin(ang * 9f) + 1.6f * Mathf.Sin(ang * 23f + 1.3f);
+                    float a = Mathf.Clamp01(edge - r + 0.5f);
+                    if (a <= 0f) { px[y * S + x] = new Color32(0, 0, 0, 0); continue; }
+                    var col = Color.Lerp(baseCol, hi, Mathf.Clamp01((-dx - dy) / 90f) * 0.45f);               // 左上受光
+                    col = Color.Lerp(col, dark, Mathf.Clamp01((r - 44f) / 12f) * 0.55f);                     // 滴蜡边缘厚一点、暗一点
+                    float ring = 1f - Mathf.Clamp01(Mathf.Abs(r - 38f) - 1.2f);                              // 压印环
+                    col = Color.Lerp(col, dark, ring * 0.8f);
+                    float ring2 = 1f - Mathf.Clamp01(Mathf.Abs(r - 34f) - 0.5f);
+                    col = Color.Lerp(col, hi, ring2 * 0.5f);
+                    // 四角星（中心）
+                    float sx = Mathf.Abs(dx), sy = Mathf.Abs(dy);
+                    float star = Mathf.Clamp01(1.2f - (Mathf.Pow(sx / 20f, 0.5f) + Mathf.Pow(sy / 20f, 0.5f)) * 1.0f);
+                    col = Color.Lerp(col, dark, Mathf.Clamp01(star * 3f) * 0.85f);
+                    // 一圈 8 颗星点
+                    for (int k = 0; k < 8; k++)
+                    {
+                        float ka = k * Mathf.PI / 4f + Mathf.PI / 8f;
+                        float ddx = dx - Mathf.Cos(ka) * 27f, ddy = dy - Mathf.Sin(ka) * 27f;
+                        if (ddx * ddx + ddy * ddy < 5.5f) col = Color.Lerp(col, dark, 0.8f);
+                    }
+                    px[y * S + x] = new Color(col.r, col.g, col.b, a);
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedWax = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+            return cachedWax;
+        }
+    }
+
+    // 复古邮戳圆环：外粗环 + 内细环 + 中间三道横波浪线，边缘斑驳（白色，Image.color 染朱砂红、带透明度）
+    public static Sprite PostmarkRingSprite
+    {
+        get
+        {
+            if (cachedPostmark != null) return cachedPostmark;
+            const int S = 160; float c = S * 0.5f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float dx = x + 0.5f - c, dy = y + 0.5f - c, r = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = 1f - Mathf.Clamp01(Mathf.Abs(r - 70f) - 2.2f);
+                    a = Mathf.Max(a, 1f - Mathf.Clamp01(Mathf.Abs(r - 60f) - 0.8f));
+                    if (r < 56f)
+                        for (int k = -1; k <= 1; k++)
+                        {
+                            float wy = k * 14f + Mathf.Sin(dx * 0.11f) * 3f;
+                            a = Mathf.Max(a, (1f - Mathf.Clamp01(Mathf.Abs(dy - wy) - 1.1f)) * Mathf.Clamp01((56f - r) / 6f));
+                        }
+                    float mottle = Mathf.PerlinNoise(x * 0.09f, y * 0.09f) * 0.7f + Mathf.PerlinNoise(x * 0.37f + 9f, y * 0.37f) * 0.3f;
+                    a *= Mathf.Clamp01(0.35f + mottle);
+                    px[y * S + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(a) * 255f));
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedPostmark = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f);
+            return cachedPostmark;
+        }
+    }
+
+    // 键帽：顶面暖白，底下一道深褐厚度边，顶沿一条浅高光；本身带颜色，Image.color 用白色（变暗就乘灰）。九宫格。
+    public static Sprite KeycapSprite
+    {
+        get
+        {
+            if (cachedKeycap != null) return cachedKeycap;
+            const int S = 64; const float R = 10f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            var body = new Color(0.36f, 0.24f, 0.15f); var face = new Color(0.98f, 0.94f, 0.86f); var faceLo = new Color(0.92f, 0.85f, 0.73f);
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float d = RoundRectSdf(x + 0.5f, y + 0.5f, S, S, R);
+                    float a = Mathf.Clamp01(0.5f - d);
+                    // 顶面：比外框整体往上收 6 px（下面露出厚度边），左右上各收 3 px
+                    float df = RoundRectSdf(x + 0.5f - 3f, y + 0.5f - 7f, S - 6f, S - 10f, R - 2f);
+                    float inFace = Mathf.Clamp01(0.5f - df);
+                    var col = Color.Lerp(body, Color.Lerp(faceLo, face, (y - 7f) / (S - 10f)), inFace);
+                    float highlight = (1f - Mathf.Clamp01(Mathf.Abs(df + 2f) - 0.6f)) * Mathf.Clamp01((y - S * 0.6f) / (S * 0.3f));
+                    col = Color.Lerp(col, Color.white, highlight * 0.7f);
+                    px[y * S + x] = new Color(col.r, col.g, col.b, a);
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedKeycap = Sprite.Create(tex, new Rect(0, 0, S, S), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(14, 16, 14, 14));
+            return cachedKeycap;
+        }
+    }
+
+    // 四周柔和暗角、中央完全通透（白色 + 透明度，Image.color 染暖褐）
+    public static Sprite SoftVignetteSprite
+    {
+        get
+        {
+            if (cachedVignette != null) return cachedVignette;
+            const int W = 256, H = 144;
+            var tex = NewTex(W, H); var px = new Color32[W * H];
+            for (int y = 0; y < H; y++)
+                for (int x = 0; x < W; x++)
+                {
+                    float u = (x + 0.5f) / W * 2f - 1f, v = (y + 0.5f) / H * 2f - 1f;
+                    float d = Mathf.Sqrt(u * u * 0.85f + v * v * 1.15f);
+                    float a = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((d - 0.55f) / 0.75f));
+                    px[y * W + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedVignette = Sprite.Create(tex, new Rect(0, 0, W, H), new Vector2(0.5f, 0.5f), 100f);
+            return cachedVignette;
+        }
+    }
+
+    // 航海十字罗盘（M 键地图册右上角）：半透明羊皮纸圆盘 + 双环 16 道刻度 + 四主角（北角朱砂、其余深褐/奶白对半）+ 四个细斜角。
+    // 本身带颜色，GUI 直接画；"N" 字由调用方另写，留出北角上方的位置。
+    static Texture2D cachedCompass;
+    public static Texture2D CompassRoseTexture
+    {
+        get
+        {
+            if (cachedCompass != null) return cachedCompass;
+            const int S = 128; float c = S * 0.5f;
+            var tex = NewTex(S, S); var px = new Color32[S * S];
+            var ink = new Color(0.23f, 0.16f, 0.10f); var cream = new Color(0.98f, 0.95f, 0.88f); var rule = new Color(0.55f, 0.42f, 0.29f);
+            var cin = new Color(0.66f, 0.18f, 0.13f); var cinHi = new Color(0.88f, 0.45f, 0.36f);
+            for (int y = 0; y < S; y++)
+                for (int x = 0; x < S; x++)
+                {
+                    float dx = x + 0.5f - c, dy = y + 0.5f - c, r = Mathf.Sqrt(dx * dx + dy * dy);
+                    var col = new Color(0f, 0f, 0f, 0f);
+                    col = Over(col, cream, 0.80f * Mathf.Clamp01(60.5f - r));
+                    float ring = Mathf.Max(1f - Mathf.Clamp01(Mathf.Abs(r - 59f) - 1.1f), 0.8f * (1f - Mathf.Clamp01(Mathf.Abs(r - 53.5f) - 0.45f)));
+                    float deg = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                    float off = Mathf.Abs(Mathf.DeltaAngle(deg, Mathf.Round(deg / 22.5f) * 22.5f)) * Mathf.Deg2Rad * r;
+                    if (r > 53.5f && r < 59f) ring = Mathf.Max(ring, 0.85f * Mathf.Clamp01(1.2f - off));
+                    col = Over(col, rule, ring);
+                    // 细斜角
+                    float p = (dx + dy) * 0.7071f, q = (dx - dy) * 0.7071f;
+                    float sd = Mathf.Min(Mathf.Abs(p) / 22f + Mathf.Abs(q) / 4.5f, Mathf.Abs(q) / 22f + Mathf.Abs(p) / 4.5f);
+                    float ad = Mathf.Clamp01((1f - sd) * 6f);
+                    if (ad > 0f) col = Over(col, p * q > 0f ? Color.Lerp(rule, cream, 0.35f) : rule, ad * 0.9f);
+                    // 主四角 + 深褐细描边
+                    float sNS = Mathf.Abs(dy) / 33f + Mathf.Abs(dx) / 7.5f, sEW = Mathf.Abs(dx) / 33f + Mathf.Abs(dy) / 7.5f;
+                    col = Over(col, ink, 0.9f * Mathf.Clamp01((1.12f - Mathf.Min(sNS, sEW)) * 10f));
+                    float aEW = Mathf.Clamp01((1f - sEW) * 7f), aNS = Mathf.Clamp01((1f - sNS) * 7f);
+                    if (aEW > 0f) col = Over(col, dy > 0f ? ink : cream, aEW);
+                    if (aNS > 0f) col = Over(col, dy > 0f ? (dx < 0f ? cin : cinHi) : (dx < 0f ? ink : cream), aNS);
+                    col = Over(col, ink, Mathf.Clamp01(3.2f - r));
+                    col = Over(col, cream, Mathf.Clamp01(1.6f - r));
+                    px[y * S + x] = col;
+                }
+            tex.SetPixels32(px); tex.Apply(false, false);
+            cachedCompass = tex;
+            return cachedCompass;
+        }
+    }
+
+    static Color Over(Color dst, Color src, float a)
+    {
+        a = Mathf.Clamp01(a);
+        float outA = a + dst.a * (1f - a);
+        if (outA <= 0f) return new Color(0f, 0f, 0f, 0f);
+        float w = dst.a * (1f - a);
+        return new Color((src.r * a + dst.r * w) / outA, (src.g * a + dst.g * w) / outA, (src.b * a + dst.b * w) / outA, outA);
+    }
+
+    // 暂停菜单里的设置项按钮统一外观（EggboyUI 的开关和 MenuController 的"引路光点"共用）
+    public static void StyleSettingButton(Button btn)
+    {
+        if (btn == null) return;
+        var img = btn.targetGraphic as Image;
+        if (img != null) { img.sprite = RoundedBorderSprite; img.type = Image.Type.Sliced; img.color = new Color32(0xf3, 0xe1, 0xc0, 255); }
+        btn.transition = Selectable.Transition.ColorTint;
+        btn.colors = new ColorBlock
+        {
+            normalColor = Color.white, highlightedColor = new Color32(255, 236, 205, 255), pressedColor = new Color32(232, 196, 150, 255),
+            selectedColor = Color.white, disabledColor = new Color32(200, 200, 200, 180), colorMultiplier = 1f, fadeDuration = 0.08f
+        };
+        foreach (var sh in btn.GetComponents<Shadow>()) UnityEngine.Object.Destroy(sh);
+        var t = btn.GetComponentInChildren<Text>();
+        if (t != null) { t.color = InkDark; t.fontSize = 14; t.fontStyle = FontStyle.Normal; t.alignment = TextAnchor.MiddleLeft; var trt = t.rectTransform; trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = new Vector2(16f, 0f); trt.offsetMax = new Vector2(-10f, 0f); }
     }
 
     public static Image CreatePanel(Transform parent, string name, float w, float h, Color32 color, bool rounded = true)
@@ -97,14 +377,29 @@ public static class TideTownStyleUI
 
     public static RectTransform CreateParchmentCard(Transform parent, string name, float w, float h, int ruledLines = 7)
     {
+        // 2026-11-16 统一成手账色板：羊皮纸 + 内缩双细线（RoundedBorderSprite）+ 胡桃木细外沿 + 柔和投影，右上角一枚淡朱砂邮戳
         var card = CreatePanel(parent, name, w, h, PaperColor, true);
+        card.sprite = RoundedBorderSprite;
+        var rim = card.gameObject.AddComponent<Outline>();
+        rim.effectColor = new Color32(0x4a, 0x30, 0x1c, 215);
+        rim.effectDistance = new Vector2(2f, -2f);
         var sh = card.gameObject.AddComponent<Shadow>();
-        sh.effectColor = new Color32(0, 0, 0, 88);
-        sh.effectDistance = new Vector2(4f, -6f);
+        sh.effectColor = new Color32(0x1a, 0x10, 0x08, 80);
+        sh.effectDistance = new Vector2(4f, -7f);
+        if (h >= 140f && w >= 260f)
+        {
+            var mark = CreatePanel(card.transform, "CardPostmark", 66f, 66f, new Color32(0xc0, 0x3a, 0x2c, 70), false);
+            mark.sprite = PostmarkRingSprite;
+            mark.raycastTarget = false;
+            var mrt = mark.rectTransform;
+            mrt.anchorMin = mrt.anchorMax = mrt.pivot = new Vector2(1f, 1f);
+            mrt.anchoredPosition = new Vector2(-14f, -12f);
+            mrt.localRotation = Quaternion.Euler(0f, 0f, -12f);
+        }
 
         for (int i = 0; i < ruledLines; i++)
         {
-            var line = CreatePanel(card.transform, "Rule_" + i, w - 64f, 1f, PaperRuleColor, false);
+            var line = CreatePanel(card.transform, "Rule_" + i, w - 72f, 1f, new Color32(0xe9, 0xdc, 0xc0, 150), false);
             line.raycastTarget = false;
             var lrt = line.rectTransform;
             lrt.anchorMin = lrt.anchorMax = lrt.pivot = new Vector2(0.5f, 0.5f);
@@ -153,10 +448,18 @@ public static class TideTownStyleUI
         bool primaryAmber,
         Action onClick)
     {
-        Color32 normal = primaryAmber ? AmberAccent : SlipColor;
+        // 2026-11-16 和暂停手账的设置按钮同一套：暖米底 + 内缩双细线；主按钮是暖橘底、胡桃木细外沿、奶白字
+        Color32 normal = primaryAmber ? new Color32(0xe8, 0x86, 0x3c, 255) : new Color32(0xf3, 0xe1, 0xc0, 255);
         Color32 textCol = primaryAmber ? new Color32(0xff, 0xf8, 0xec, 255) : InkDark;
 
         var img = CreatePanel(parent, "Btn_" + label, size.x, size.y, normal, true);
+        img.sprite = RoundedBorderSprite;
+        if (primaryAmber)
+        {
+            var rim = img.gameObject.AddComponent<Outline>();
+            rim.effectColor = new Color32(0x6a, 0x30, 0x14, 150);
+            rim.effectDistance = new Vector2(1.2f, -1.2f);
+        }
         var rt = img.rectTransform;
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = anchoredPos;

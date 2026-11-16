@@ -14,6 +14,10 @@ public class EggboyPlayer : MonoBehaviour
     const float LandStand = 0.32f, LandMove = 0.16f; // 落地缓冲多久
     const float Step = 0.22f; // 不用跳就能迈上去的高度（原 0.14 会被路缘/小台阶卡住）
     const float PlatR = 0.3f; // 撞台子侧面时身体的半径
+    const float JumpBuffer = .12f, CoyoteTime = .10f;
+    float jumpBufferLeft, coyoteLeft;
+    bool airborneFromJump;
+    public void ResetJumpInput() { jumpBufferLeft = coyoteLeft = 0f; airborneFromJump = false; }
     const float AirControl = 0.35f;
 
     static readonly Dictionary<string, int> Repeat = new Dictionary<string, int>
@@ -28,6 +32,7 @@ public class EggboyPlayer : MonoBehaviour
     public bool locked;         // 读信时不能动
     public float idle;          // 站着不动多久了（秒）
     public bool grounded = true;
+    public float speedScale = 1f; // 2026-11-14 涉水时走得慢：TideFeel 按水深设（1 = 正常），不动走 / 跑本身的数值
     public bool TryingToMove { get; private set; }
     public Vector3 camFocus;    // 给镜头跟的点
     public JumpState jump = new JumpState();
@@ -61,6 +66,155 @@ public class EggboyPlayer : MonoBehaviour
     public void SetStoryCrouch(bool crouch) => storyCrouch = crouch;
     public bool IsStoryCrouched => storyCrouchWeight > 0.9f;
 
+    // ---- 互动动作（docs/INTERACTION_FEEL_BOOK.md）：锁窗 + 抓握帧回调 + 持物姿态 ----
+    public enum CarryPose { None, Wood, Oil, Ball }
+
+    class CarryTarget { public string bone; public Quaternion rot; }
+
+    public Transform CarryAnchor { get; private set; } // 挂在 body 骨头下，抱着的东西跟着身体起伏
+    public CarryPose Carry => carry;
+    public bool ActionLocked => Time.time < actionLockUntil;
+    public string CurrentAction => actionClip;
+
+    CarryPose carry = CarryPose.None;
+    float carryWeight;
+    CarryTarget[] carryTargets;
+    float actionLockUntil;
+    string actionClip;
+    System.Action pendingGrab, pendingComplete;
+    float grabAt, completeAt;
+
+    public bool HasClip(string name) => clips.ContainsKey(name);
+
+    // 播一个互动动作：lockSeconds 内不能走 / 跳（&lt;0 取片段时长）；grabAtSeconds 时调 onGrab（道具上手），播完调 onComplete。
+    // 没有这个片段时立即调两个回调，剧情不会卡住。
+    public bool PlayInteractAction(string clip, float lockSeconds = -1f, float grabAtSeconds = -1f,
+        System.Action onGrab = null, System.Action onComplete = null)
+    {
+        FlushPendingAction();
+        if (!clips.TryGetValue(clip, out var s))
+        {
+            Debug.LogWarning("模型里没有互动动作 " + clip + "，直接执行回调");
+            onGrab?.Invoke();
+            onComplete?.Invoke();
+            return false;
+        }
+        PlayEmote(clip);
+        actionClip = clip;
+        float len = s.length;
+        actionLockUntil = Time.time + (lockSeconds < 0f ? len : lockSeconds);
+        if (grounded) { vel.x = 0f; vel.z = 0f; }
+        pendingGrab = onGrab;
+        grabAt = Time.time + Mathf.Max(0f, grabAtSeconds);
+        pendingComplete = onComplete;
+        completeAt = Time.time + len;
+        return true;
+    }
+
+    // 长按互动期间每帧调用：短暂锁住移动，松手 0.1 秒后自动解锁
+    public void HoldActionLock(float seconds = 0.1f)
+    {
+        actionLockUntil = Mathf.Max(actionLockUntil, Time.time + seconds);
+        if (grounded) { vel.x = 0f; vel.z = 0f; }
+    }
+
+    public void StopEmote(string name)
+    {
+        if (emote != null && emote == name) EndEmote();
+    }
+
+    // 有挂起的回调（新动作打断旧动作时）立刻执行，道具状态不会丢
+    void FlushPendingAction()
+    {
+        var g = pendingGrab; pendingGrab = null;
+        var c = pendingComplete; pendingComplete = null;
+        g?.Invoke();
+        c?.Invoke();
+    }
+
+    void TickActions()
+    {
+        if (pendingGrab != null && Time.time >= grabAt) { var g = pendingGrab; pendingGrab = null; g(); }
+        if (pendingComplete != null && Time.time >= completeAt) { var c = pendingComplete; pendingComplete = null; c(); }
+    }
+
+    public void SetCarryPose(CarryPose p)
+    {
+        if (carry == p) return;
+        carry = p;
+        carryTargets = BuildCarryTargets(p);
+    }
+
+    // 和 EggboyAnimGenerator.ApplyPose 同一套写法：在绑定姿态上转手臂，记下目标局部朝向。
+    // 抱柴火的目标正好等于 pickup_wood.anim 的最后一帧，动作播完接持物姿态不会跳。
+    CarryTarget[] BuildCarryTargets(CarryPose p)
+    {
+        if (Bones == null || p == CarryPose.None) return null;
+        // armR0 抬放, armR1 前后, handR0, handR1, 左边同理；useL=false 时左手不管
+        float armR0, armR1, handR0, handR1, armL0, armL1, handL0, handL1;
+        bool useL = true;
+        switch (p)
+        {
+            case CarryPose.Wood: armR0 = 14f; armR1 = 52f; handR0 = 0f; handR1 = 42f; armL0 = 14f; armL1 = 52f; handL0 = 0f; handL1 = 42f; break;
+            case CarryPose.Ball: armR0 = 8f; armR1 = 46f; handR0 = 0f; handR1 = 48f; armL0 = 8f; armL1 = 46f; handL0 = 0f; handL1 = 48f; break;
+            // 2026-11-16 手提油壶：右臂自然下垂、往外 / 往前稍微张开一点，手腕回正（原来往前端着 34°、手腕弯 24°，像端盘子）
+            case CarryPose.Oil: armR0 = -12f; armR1 = 14f; handR0 = 0f; handR1 = 4f; armL0 = armL1 = handL0 = handL1 = 0f; useL = false; break;
+            default: return null;
+        }
+        var list = new List<CarryTarget>();
+        float d = Mathf.Deg2Rad;
+        void Target(string bone, float r1, float r0, bool right)
+        {
+            var e = Bones.Get(bone);
+            if (e == null) return;
+            var saved = e.bone.localRotation;
+            e.bone.localRotation = e.bindLocalRotation;
+            Bones.Rotate(bone, Vector3.up, (right ? r1 : -r1) * d);
+            Bones.Rotate(bone, Vector3.forward, (right ? -r0 : r0) * d);
+            list.Add(new CarryTarget { bone = bone, rot = e.bone.localRotation });
+            e.bone.localRotation = saved;
+        }
+        Target("armR", armR1, armR0, true);
+        Target("handR", handR1, handR0, true);
+        if (useL)
+        {
+            Target("armL", armL1, armL0, false);
+            Target("handL", handL1, handL0, false);
+        }
+        return list.ToArray();
+    }
+
+    void ApplyCarryOverlay(float dt)
+    {
+        // 互动动作自己在摆手臂时不叠；别的小动作（点头、跳一下）照样抱着
+        bool want = carry != CarryPose.None && carryTargets != null && (emote == null || emote != actionClip);
+        carryWeight = Mathf.MoveTowards(carryWeight, want ? 1f : 0f, dt * 8f);
+        if (carryWeight <= 0f || carryTargets == null || Bones == null) return;
+        // 提油壶只盖 80%：走跑时步态的摆臂还留两成，油壶跟着右臂前后晃
+        float w = carry == CarryPose.Oil ? carryWeight * 0.8f : carryWeight;
+        foreach (var t in carryTargets)
+        {
+            var e = Bones.Get(t.bone);
+            if (e == null) continue;
+            e.bone.localRotation = Quaternion.Slerp(e.bone.localRotation, t.rot, w);
+        }
+        // 手指扣住提手（和跑步握拳同一套弯法，弯到八成）
+        if (carry == CarryPose.Oil && gait != null) gait.Grip(LegSide.R, 0.85f * carryWeight);
+    }
+
+    // 模型还在绑定姿态时调用：在胸前约 46 cm 高、往前 28 cm 的位置放一个锚点
+    void CreateCarryAnchor()
+    {
+        var body = Bones != null ? Bones.Bone("body") : null;
+        var go = new GameObject("CarryAnchor");
+        var t = go.transform;
+        t.SetParent(transform, false);
+        t.localPosition = new Vector3(0f, 0.46f, 0.28f);
+        t.localRotation = Quaternion.identity;
+        if (body != null) t.SetParent(body, true);
+        CarryAnchor = t;
+    }
+
     // 模型挂在这个物体下面。朝向不对时改 modelYawDegrees
     public void Setup(GameObject model, IEggboyWorld w, float modelYawDegrees)
     {
@@ -89,6 +243,7 @@ public class EggboyPlayer : MonoBehaviour
         pose = new EggboyPose(bones);
         gait = new EggboyGait(bones, skin, modelT);
         antiClip = new EggboyAntiClip(skin, bones, modelT);
+        CreateCarryAnchor();
         Debug.Log($"EGGBOY skin: shell {skin.shellVerts.Length}, leather {skin.leatherVerts.Length}, visor {skin.visorVerts.Length}; "
             + $"gait {gait.Ok}, antiClip {antiClip.ok}, bones {smr.bones.Length}");
 
@@ -97,6 +252,13 @@ public class EggboyPlayer : MonoBehaviour
             // FBX 里的名字是 EGGBOY|EGGBOY|idle，只留最后一段
             var key = s.name.Substring(s.name.LastIndexOf('|') + 1);
             clips[key] = s;
+        }
+        foreach (var extra in Resources.LoadAll<AnimationClip>("Animations"))
+        {
+            if (extra == null || clips.ContainsKey(extra.name)) continue;
+            extra.legacy = true;
+            anim.AddClip(extra, extra.name);
+            clips[extra.name] = anim[extra.name];
         }
         foreach (var k in new[] { "idle", "walk", "run" })
             if (clips.TryGetValue(k, out var s)) s.wrapMode = WrapMode.Loop;
@@ -125,6 +287,7 @@ public class EggboyPlayer : MonoBehaviour
     void EndEmote()
     {
         emote = null;
+        actionClip = null;
         Play(loco, 0.3f);
         onEmoteEnd?.Invoke();
     }
@@ -173,10 +336,16 @@ public class EggboyPlayer : MonoBehaviour
         if (world == null || gait == null) return;
         // Animation 更新之前先还原上一帧的干净值，程序层叠加量才不会跨帧累积
         if (Bones != null) { if (disableAnim) Bones.RestoreBindPose(); else Bones.RestoreClean(); }
+        TickActions();
         float len = Mathf.Sqrt(inX * inX + inZ * inZ);
-        bool moving = len > 0.1f && !locked;
+        bool blocked = locked || ActionLocked;
+        if (blocked) jumpBufferLeft = 0f;
+        else jumpBufferLeft = jumpPressed ? JumpBuffer : Mathf.Max(0f, jumpBufferLeft - dt);
+        if (grounded && jump.phase != JumpPhase.crouch) { coyoteLeft = CoyoteTime; airborneFromJump = false; }
+        else coyoteLeft = Mathf.Max(0f, coyoteLeft - dt);
+        bool moving = len > 0.1f && !blocked;
         TryingToMove = moving;
-        float target = moving ? (run ? Run : Walk) : 0f;
+        float target = moving ? (run ? Run : Walk) * speedScale : 0f;
         float dirX = moving ? inX / len : 0f, dirZ = moving ? inZ / len : 0f;
         JumpState J = jump;
         J.t += dt;
@@ -189,8 +358,13 @@ public class EggboyPlayer : MonoBehaviour
         vel.z += ((holdStill ? 0f : dirZ * target) - vel.z) * k;
 
         // 起跳：先下蹲一下；落地缓冲中也能接着跳
-        if (jumpPressed && grounded && !locked && (J.phase == JumpPhase.none || J.phase == JumpPhase.land))
+        bool coyoteJump = !grounded && !airborneFromJump && coyoteLeft > 0f;
+        if (jumpBufferLeft > 0f && !blocked && (grounded || coyoteJump)
+            && (J.phase == JumpPhase.none || J.phase == JumpPhase.land || (coyoteJump && J.phase == JumpPhase.air)))
         {
+            jumpBufferLeft = coyoteLeft = 0f;
+            airborneFromJump = true;
+            FlushPendingAction();
             if (emote != null) EndEmote();
             float speed0 = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
             J.moving = speed0 > 0.3f;
@@ -202,7 +376,7 @@ public class EggboyPlayer : MonoBehaviour
         }
 
         // 走动会打断一次性动作（跳一下除外）
-        if (moving && emote != null && emote != "hop") EndEmote();
+        if (moving && emote != null && emote != "hop") { FlushPendingAction(); EndEmote(); }
 
         // 移动 + 碰撞（使用空间分桶仅查询玩家周围格子内的碰撞体）
         var p = transform.position;
@@ -257,12 +431,15 @@ public class EggboyPlayer : MonoBehaviour
         float vyPrev = J.vy;
         if (J.phase == JumpPhase.crouch && J.t >= J.dur)
         {
+            coyoteLeft = 0f;
+            airborneFromJump = true;
             J.vy = J.vy0 = Mathf.Sqrt(2f * GUp * (J.moving ? JumpMove : JumpStand));
             grounded = false;
             SetJump(JumpPhase.air);
         }
         else if (grounded && ground < p.y - Step)
         {
+            airborneFromJump = false;
             J.vy = J.vy0 = 0f;
             J.moving = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) > 0.3f;
             J.run = Mathf.Clamp01((Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) - Walk) / (Run - Walk));
@@ -369,6 +546,8 @@ public class EggboyPlayer : MonoBehaviour
             Bones.Rotate("footL", Vector3.right, bend);
             Bones.Rotate("footR", Vector3.right, bend);
         }
+        TickActions();
+        ApplyCarryOverlay(dt);
         if (antiClipOn && antiClip != null) antiClip.Solve(dt, 1f + 2f * gait.jw);
         if (debugPose && Time.time - debugT > 1f)
         {

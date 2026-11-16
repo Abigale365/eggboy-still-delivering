@@ -114,6 +114,60 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
             results.AddRange(list);
     }
     public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
+    readonly List<EggboyCollider> cameraCandidates = new List<EggboyCollider>();
+    readonly HashSet<EggboyCollider> cameraSeen = new HashSet<EggboyCollider>();
+
+    // 覆盖整条相机射线跨过的空间桶，去重后做解析相交，避免末端单格漏墙。
+    public void QueryCollidersRange(Vector3 a, Vector3 b, float margin, List<EggboyCollider> results)
+    {
+        results.Clear(); cameraSeen.Clear();
+        if (spatialDirty) RebuildSpatialGrid();
+        int x0 = Mathf.FloorToInt((Mathf.Min(a.x,b.x)-margin)/SpatialCell), x1 = Mathf.FloorToInt((Mathf.Max(a.x,b.x)+margin)/SpatialCell);
+        int z0 = Mathf.FloorToInt((Mathf.Min(a.z,b.z)-margin)/SpatialCell), z1 = Mathf.FloorToInt((Mathf.Max(a.z,b.z)+margin)/SpatialCell);
+        for (int z=z0;z<=z1;z++) for(int x=x0;x<=x1;x++)
+            if(spatialBuckets.TryGetValue(((long)x<<32)|(uint)z,out var list))
+                foreach(var c in list) if(cameraSeen.Add(c)) results.Add(c);
+    }
+    public float CameraBlockDistance(Vector3 pivot, Vector3 direction, float maxDistance)
+    {
+        direction.Normalize();
+        QueryCollidersRange(pivot,pivot+direction*maxDistance,.35f,cameraCandidates);
+        float allowed=maxDistance;
+        foreach(var c in cameraCandidates)
+            if(CameraIntersection(c,pivot,direction,allowed,.30f,out float enter)) allowed=Mathf.Min(allowed,Mathf.Max(0f,enter-.08f));
+        return allowed;
+    }
+    public bool CameraPointBlocked(Vector3 point)
+    {
+        QueryCollidersRange(point,point,.01f,cameraCandidates);
+        foreach(var c in cameraCandidates) if(CameraIntersection(c,point,Vector3.forward,0f,0f,out _)) return true;
+        return false;
+    }
+    static bool CameraIntersection(EggboyCollider c,Vector3 p,Vector3 d,float max,float radius,out float enter)
+    {
+        enter=0f;float exit=max;
+        // 细杆和轮廓采样圆交给前景消融，避免逐柱前缩抖动。
+        if(c.water || (c.r.HasValue && c.r.Value<.24f)) return false;
+        if(c.r.HasValue){
+            float x=p.x-c.x,z=p.z-c.z,r=c.r.Value+radius;
+            float a=d.x*d.x+d.z*d.z,b=x*d.x+z*d.z,q=x*x+z*z-r*r;
+            if(a<1e-8f){if(q>0f)return false;}
+            else {float disc=b*b-a*q;if(disc<0)return false;float s=Mathf.Sqrt(disc);enter=Mathf.Max(enter,(-b-s)/a);exit=Mathf.Min(exit,(-b+s)/a);}
+        } else if(c.hw.HasValue && c.hd.HasValue){
+            if(!CameraSlab(p.x,d.x,c.x-c.hw.Value-radius,c.x+c.hw.Value+radius,ref enter,ref exit)
+                ||!CameraSlab(p.z,d.z,c.z-c.hd.Value-radius,c.z+c.hd.Value+radius,ref enter,ref exit))return false;
+        } else return false;
+        // top == null 是完整垂直阻挡柱；仅显式 top 才允许越过。
+        float low=c.minY>0f?c.minY-radius:float.NegativeInfinity;
+        float high=c.top.HasValue?c.top.Value+.08f+radius:float.PositiveInfinity;
+        return CameraSlab(p.y,d.y,low,high,ref enter,ref exit)&&exit>=enter&&exit>=0f&&enter<=max;
+    }
+    static bool CameraSlab(float p,float d,float low,float high,ref float enter,ref float exit)
+    {
+        if(Mathf.Abs(d)<1e-8f)return p>=low&&p<=high;
+        float a=(low-p)/d,b=(high-p)/d;if(a>b){float t=a;a=b;b=t;}
+        enter=Mathf.Max(enter,a);exit=Mathf.Min(exit,b);return exit>=enter;
+    }
     public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
 
     void Awake()
@@ -186,6 +240,8 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
             if (mf == null || mf.sharedMesh == null) continue;
             string goName = mf.gameObject.name;
             if (!goName.StartsWith("Road_")) continue;
+            // The finished surfaces are authored against their platform joins and roadbeds.
+            if (mf.sharedMesh.name.StartsWith("Finished Road ", System.StringComparison.Ordinal)) continue;
 
             var mesh = Instantiate(mf.sharedMesh);
             if (mesh.subMeshCount >= 4)
@@ -256,6 +312,16 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
         spatialDirty = true;
     }
 
+    // 2026-11-14 沙滩上能涉多深的水（米）。原来到处都是 0.05：水一没过脚面就算走不了，EGGBOY 永远碰不到水。
+    // 沙滩（0.3）在 L1（0.45）没过脚 15 厘米，可以下去踩水；L2（1.15）就太深了。
+    // 只放开沙滩，路面照旧 0.05：渡口缺口那段路的河床在 L2 时水深只有 12 厘米，路面也放开的话人直接蹚过去，
+    // 木箱 / 绞盘 / 心愿船这些过海的办法就全被绕开了（创新审计 print_gap_blocks 等 4 项会不过）。
+    public const float WadeDepth = 0.18f;
+    public const float RoadWadeDepth = 0.05f;
+
+    // 站在这儿、地面这么高，水最多能没过脚多少还算能走
+    public float WadeLimit(float x, float z, float ground) => IsBeachSurface(x, z, ground) ? WadeDepth : RoadWadeDepth;
+
     public bool Walkable(float x, float z) => walkPolys.Count == 0 || TryWalkableGround(x, z, out _);
 
     bool TryWalkableGround(float x, float z, out float ground)
@@ -266,16 +332,97 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
         bool sand = beachPoly != null && Contains(beachPoly.points, x, z);
         if (!road && !lawn && !sand) return false;
         ground = GroundAt(x, z);
-        if (ground < WaterY - 0.05f) return false;
+        if (ground < WaterY - WadeLimit(x, z, ground)) return false;
         return sand && Mathf.Abs(ground - beachPoly.y) <= 0.12f || (road ? ground > 0.22f : lawn && ground >= 2.5f);
     }
 
     public bool IsBeachSurface(float x, float z, float height) =>
         beachPoly != null && Mathf.Abs(height - beachPoly.y) <= 0.12f && Contains(beachPoly.points, x, z);
 
+    // ---------------- 2026-11-16 自由漫游（用户议题 2） ----------------
+    // 原来主角只能走在 walkPolys / lawnPolys / beachPoly 三种白名单多边形里，台地上大片草地、山顶、海岸都是空气墙。
+    // 现在只看真实的东西：
+    //   1. 地形高低：从身体顶部（脚 + 1.3 m）往下打 Ground 射线，落点比脚高出 Step（0.23 m，空中 0.28 m）就是墙 / 崖面，挡住；
+    //      从身体顶部往下打，所以头顶上方的平台（灯塔顶）不会把人吸上去。
+    //   2. 跳落：按跳往下最多 MaxDrop（3 m，用户定的）；走路只下 0.6 m 以内的坎，更高的边停住（要跳才下去）。
+    //   3. 水：照旧，没过脚超过可涉深度（沙滩 0.18，别处 0.05）就不能走——渡口缺口在 L2 时靠这条挡住。
+    //   4. 少量禁区（Resources/World/roam_blocks.json）：需要硬边界、又没有真实墙体的地方（比如从别处绕过渡口缺口）。
+    //   5. 墙体、护栏、建筑、树干、岩块照旧由轮廓碰撞圆挡（EggboyPlayer 里）。
+    // walkPolys 保留，只表示"铺装路面"（狗爪印、海风、地图、谜题摆放这些地方还在用 InWalkArea / Walkable 判断）。
+    public const float MaxDrop = 3.0f;
+    public const float WalkDrop = 0.6f;
+    public const float BodyTop = 1.3f;
+    public const float StepUp = 0.23f;
+    // 空中只认比当前脚高 0.28 m 以内的落点：GroundAt 只看脚上方 0.3 m，再高的落点"看不见"，会从台子侧面钻进去
+    // （起跳 0.42 m + 0.28 m，跳起来最高能上 0.7 m 的台子）
+    public const float JumpUp = 0.28f;
+    public bool FreeRoam => Features.freeRoam && walkPolys.Count > 0;
+
+    [System.Serializable] public class RoamBlock { public string id, when; public float minY = -10f, maxY = 100f; public float[] x, z; [System.NonSerialized] public Vector2[] pts; }
+    [System.Serializable] class RoamBlockDoc { public RoamBlock[] blocks; }
+    RoamBlock[] roamBlocks;
+    public System.Func<string, bool> RoamCondition;   // when 条件（比如 "gap"）由别的系统回答；没人回答当作成立
+    public IReadOnlyList<RoamBlock> RoamBlocks { get { LoadRoamBlocks(); return roamBlocks; } }
+
+    void LoadRoamBlocks()
+    {
+        if (roamBlocks != null) return;
+        var asset = Resources.Load<TextAsset>("World/roam_blocks");
+        var doc = asset != null ? JsonUtility.FromJson<RoamBlockDoc>(asset.text) : null;
+        roamBlocks = doc != null && doc.blocks != null ? doc.blocks : new RoamBlock[0];
+        foreach (var b in roamBlocks)
+        {
+            b.pts = new Vector2[Mathf.Min(b.x?.Length ?? 0, b.z?.Length ?? 0)];
+            for (int i = 0; i < b.pts.Length; i++) b.pts[i] = new Vector2(b.x[i], b.z[i]);
+        }
+    }
+
+    public bool InRoamBlock(float x, float z, float ground)
+    {
+        LoadRoamBlocks();
+        foreach (var b in roamBlocks)
+        {
+            if (ground < b.minY || ground > b.maxY || !Contains(b.pts, x, z)) continue;
+            if (!string.IsNullOrEmpty(b.when) && b.when != "always" && RoamCondition != null && !RoamCondition(b.when)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    // 从 fromY 往下最高的 Ground 面；没有返回 NaN（海面以外、地图边外）
+    public float SurfaceBelow(float x, float z, float fromY)
+    {
+        float best = float.NaN;
+        var hits = Physics.RaycastAll(new Vector3(x, fromY, z), Vector3.down, fromY + 60f, groundMask, QueryTriggerInteraction.Ignore);
+        foreach (var hit in hits) if (float.IsNaN(best) || hit.point.y > best) best = hit.point.y;
+        return best;
+    }
+
+    // 自由漫游下从 from 走一步到 (x, z) 行不行（只看地形 / 水 / 禁区；碰撞圆在 EggboyPlayer 里另算）
+    public bool RoamStep(Vector3 from, float x, float z, bool jumping)
+    {
+        float g = SurfaceBelow(x, z, from.y + BodyTop);
+        if (float.IsNaN(g)) return false;
+        float rise = g - from.y;
+        if (rise > (jumping ? JumpUp : StepUp)) return false;                 // 墙 / 崖面 / 太高的台子
+        // 走路只往下迈 0.6 m 以内（路缘、小台阶）；更高的台地边要按跳才下得去（最多 3 m）——不会一不留神走下崖
+        if (from.y - g > (jumping ? MaxDrop + 0.45f : WalkDrop)) return false;
+        if (g < WaterY - WadeLimit(x, z, g)) return false;                   // 深水
+        if (InRoamBlock(x, z, g)) return false;
+        return true;
+    }
+
+    // 自由漫游下这一点能不能站（给安全点、拾取站位这类"找一个能站的地方"用）
+    public bool RoamStandable(float x, float z, float nearY)
+    {
+        float g = SurfaceBelow(x, z, nearY + BodyTop);
+        return !float.IsNaN(g) && g >= WaterY - WadeLimit(x, z, g) && !InRoamBlock(x, z, g);
+    }
+
     public bool CanTraverse(Vector3 from, float x, float z, bool jumping)
     {
         if (walkPolys.Count == 0) return true;
+        if (FreeRoam) return RoamStep(from, x, z, jumping);
         if (!TryWalkableGround(x, z, out float ground)) return jumping && beachPoly != null && from.y >= beachPoly.y + 0.55f && IsDryBeachApproach(x, z);
         if (beachPoly == null) return true;
         // 跳下沙滩才进入低层。沙滩上的人不能从崖壁底部穿进上层地形。
@@ -286,7 +433,8 @@ public class IslandWorld : MonoBehaviour, IEggboyWorld
 
     bool IsDryBeachApproach(float x, float z)
     {
-        if (beachPoly?.points == null || beachPoly.points.Length < 3 || WaterY > 0.05f) return false;
+        // 2026-11-14：原来水位一过 0.05 就不让跳下沙滩；现在沙滩只要还涉得过去（没过脚不超过 WadeDepth）就能下
+        if (beachPoly?.points == null || beachPoly.points.Length < 3 || WaterY > beachPoly.y + WadeDepth) return false;
         // 北侧坡道与沙滩之间有一条低矮的干岸带，允许角色在空中越过这段间隙。
         const float MaxGap = 0.90f;
         var point = new Vector2(x, z);

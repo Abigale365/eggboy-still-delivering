@@ -1,8 +1,9 @@
 // WP-13：学校的拖鞋（支持 3D 检视）、红球和狗碗。支持灵活先后顺序，避免玩家先看到秋千红球却点不了。
 using UnityEngine;
 
-public sealed class SlipperInteractable : IInteractable
+public sealed class SlipperInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "S1_slipper" && !s.flags.Contains("slipper_seen"));
     readonly Vector3 pos;
     readonly StoryDirector director;
     public SlipperInteractable(Vector3 p, StoryDirector d) { pos = p; director = d; }
@@ -12,11 +13,12 @@ public sealed class SlipperInteractable : IInteractable
         s != null && (s.step == "S0_arrive" || s.step == "S1_slipper" || (s.step == "S2_ball" && !s.flags.Contains("slipper_seen")));
     public string Prompt(GameState s) => Active(s) ? "E　拿起端详拖鞋" : "";
     public bool CanInteract(GameState s) => Active(s);
-    public void Interact(GameState s, InteractionService svc) => director.InspectSlipper();
+    public void Interact(GameState s, InteractionService svc) => director.InspectSlipperAt(pos);
 }
 
-public sealed class BallInteractable : IInteractable
+public sealed class BallInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "S2_ball" && !s.flags.Contains("ball_taken"));
     readonly Vector3 pos;
     readonly StoryDirector director;
     public BallInteractable(Vector3 p, StoryDirector d) { pos = p; director = d; }
@@ -27,11 +29,12 @@ public sealed class BallInteractable : IInteractable
         && (s.step == "S2_ball" || (d != null && !d.IsAuditMode && (s.step == "S0_arrive" || s.step == "S1_slipper")));
     public string Prompt(GameState s) => Active(s, director) ? "E　捡起红球" : "";
     public bool CanInteract(GameState s) => Active(s, director);
-    public void Interact(GameState s, InteractionService svc) => director.TakeBall();
+    public void Interact(GameState s, InteractionService svc) => director.TakeBallAt();
 }
 
-public sealed class BowlInteractable : IInteractable
+public sealed class BowlInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "S3_bowl" && s.carrying == "ball");
     readonly Vector3 pos;
     readonly StoryDirector director;
     public BowlInteractable(Vector3 p, StoryDirector d) { pos = p; director = d; }

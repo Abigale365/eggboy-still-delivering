@@ -201,23 +201,33 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             winchWorldPos = first - crossingDir * 1.6f;
             if (world != null)
             {
-                Vector3 side = new Vector3(-crossingDir.z, 0f, crossingDir.x);
                 var ramp = FindShedRamp();
-                float bestScore = float.MaxValue;
-                for (float back = 1.0f; back <= 3.6f; back += 0.4f)
-                    for (float lat = -2.4f; lat <= 2.4f; lat += 0.4f)
-                    {
-                        Vector3 q = first - crossingDir * back + side * lat;
-                        if (!world.InWalkArea(q.x, q.z)) continue;
-                        float gy = world.GroundAt(q.x, q.z, first.y + 3f);
-                        if (gy < WaterLevel.LevelYs[2] + 0.15f) continue; // L2 也不淹
-                        // The floating crates are diagonal to the ramp. Measure clearance from the
-                        // actual ramp centerline so the solid winch does not block the uphill lane.
-                        float clearance = ramp != null ? RampDistance(ramp, q) : Mathf.Abs(lat);
-                        float score = back + Mathf.Abs(clearance - 1.03f) + (lat > 0f ? 2.4f : 0f);
-                        if (clearance < 0.72f) score += 10f;
-                        if (score < bestScore) { bestScore = score; winchWorldPos = new Vector3(q.x, gy, q.z); }
-                    }
+                Vector3 winchQuay = new Vector3(13.4f, 1.4f, -13.1f);
+                float quayGy = world.InWalkArea(winchQuay.x, winchQuay.z) ? world.GroundAt(winchQuay.x, winchQuay.z, 3.0f) : -99f;
+                float quayClr = ramp != null ? RampDistance(ramp, winchQuay) : float.MaxValue;
+                if (quayGy >= WaterLevel.LevelYs[2] + 0.15f && quayClr >= 1.15f)
+                {
+                    winchWorldPos = new Vector3(winchQuay.x, quayGy, winchQuay.z);
+                }
+                else
+                {
+                    Vector3 side = new Vector3(-crossingDir.z, 0f, crossingDir.x);
+                    float bestScore = float.MaxValue;
+                    for (float back = 0.0f; back <= 3.6f; back += 0.4f)
+                        for (float lat = -2.4f; lat <= 2.4f; lat += 0.4f)
+                        {
+                            Vector3 q = first - crossingDir * back + side * lat;
+                            if (!world.InWalkArea(q.x, q.z)) continue;
+                            float gy = world.GroundAt(q.x, q.z, first.y + 3f);
+                            if (gy < WaterLevel.LevelYs[2] + 0.15f) continue; // L2 也不淹
+                            // The floating crates are diagonal to the ramp. Measure clearance from the
+                            // actual ramp centerline so the solid winch does not block the uphill lane.
+                            float clearance = ramp != null ? RampDistance(ramp, q) : Mathf.Abs(lat);
+                            float score = back + Mathf.Abs(clearance - 1.25f);
+                            if (clearance < 0.85f) score += 10f;
+                            if (score < bestScore) { bestScore = score; winchWorldPos = new Vector3(q.x, gy, q.z); }
+                        }
+                }
             }
         }
         if (world != null)
@@ -230,7 +240,10 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         var winchGo = new GameObject("Scene_M3_潮汐船坞齿轮绞盘_总成");
         winchGo.transform.SetParent(transform, false);
         winchGo.transform.position = winchWorldPos;
-        winchGo.transform.rotation = Quaternion.Euler(0f, 40f, 0f);
+        Vector3 winchFwd = new Vector3(crossingDir.x, 0f, crossingDir.z);
+        winchGo.transform.rotation = winchFwd.sqrMagnitude > 0.001f
+            ? Quaternion.LookRotation(winchFwd.normalized, Vector3.up)
+            : Quaternion.Euler(0f, 40f, 0f);
         winchRoot = winchGo.transform;
         if (world != null)
             world.AddCollider(new EggboyCollider { x = winchWorldPos.x, z = winchWorldPos.z, r = 0.10f, top = winchWorldPos.y + 1.15f });
@@ -251,7 +264,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         var pontoonGo = new GameObject("Scene_DockPontoonBridge");
         pontoonGo.transform.SetParent(transform, false);
         pontoonBaseY = crossingChannelCenter.y;
-        pontoonGo.transform.position = new Vector3(crossingChannelCenter.x, pontoonBaseY - 0.9f, crossingChannelCenter.z);
+        pontoonGo.transform.position = new Vector3(crossingChannelCenter.x, pontoonBaseY - 1.35f, crossingChannelCenter.z);
         pontoonGo.transform.rotation = Quaternion.LookRotation(crossingDir, Vector3.up);
         pontoonBridgeRoot = pontoonGo.transform;
 
@@ -350,10 +363,20 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             winchWorldPos + new Vector3(-1.2f, 0f, -0.8f)
         };
 
+        // 绞盘台本身在高潮会湿。沿岸找最近能站住的高处，避开上坡通道和海堤实体。
+        bool bottleBankFound = world == null;
+        if (world != null)
+        {
+            bottleBankFound = TryBottleBankPosition(pts[2], out var bank);
+            if (bottleBankFound) pts[2] = bank + Vector3.up * .05f;
+            else Debug.LogWarning("DRIFTBOTTLE 绞盘附近找不到高潮可达的岸边");
+        }
+
         for (int i = 0; i < pts.Length; i++)
         {
+            if (i == 2 && !bottleBankFound) continue;
             Vector3 p = pts[i];
-            if (world != null) p.y = world.GroundAt(p.x, p.z, p.y);
+            if (world != null && i != 2) p.y = world.GroundAt(p.x, p.z, p.y);
             var bGo = new GameObject("TidalDriftBottle_" + i);
             bGo.transform.SetParent(transform, false);
             bGo.transform.position = p;
@@ -363,6 +386,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             {
                 jar.transform.SetParent(bGo.transform, false);
                 jar.transform.localRotation = Quaternion.Euler(68f, i * 55f, 15f);
+                foreach (var collider in jar.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
             }
 
             var lGo = new GameObject("BottleGlow");
@@ -370,12 +394,53 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             lGo.transform.localPosition = new Vector3(0f, 0.28f, 0f);
             var l = lGo.AddComponent<Light>();
             l.type = LightType.Point;
-            l.color = new Color32(135, 225, 255, 255);
-            l.range = 2.6f;
-            l.intensity = 1.6f;
+            l.color = new Color32(251, 207, 142, 255);
+            l.range = i == 2 ? .95f : 1.4f;
+            l.intensity = i == 2 ? .28f : .44f;
+            l.shadows = LightShadows.None;
 
             driftBottles.Add(bGo.transform);
         }
+    }
+
+    bool TryBottleBankPosition(Vector3 origin, out Vector3 position)
+    {
+        position = origin;
+        float dry = WaterLevel.LevelYs[3] + .15f;
+        var ramp = FindShedRamp();
+        var nearby = new List<EggboyCollider>();
+        float best = float.MaxValue;
+        const float radius = .31f;
+        for (float dx = -5.5f; dx <= 5.5f; dx += .25f)
+            for (float dz = -5.5f; dz <= 5.5f; dz += .25f)
+            {
+                float score = dx * dx + dz * dz;
+                if (score >= best) continue;
+                var point = origin + new Vector3(dx, 0f, dz);
+                if ((ramp != null && RampDistance(ramp, point) < .88f) ||
+                    !world.InWalkArea(point.x, point.z)) continue;
+                float ground = world.GroundAt(point.x, point.z, 3.65f);
+                if (ground < dry || ground > 3.48f) continue;
+                world.QueryColliders(point.x, point.z, nearby);
+                if (nearby.Exists(c => BlocksBottleBank(c, point, ground, radius))) continue;
+                best = score;
+                position = new Vector3(point.x, ground, point.z);
+            }
+        return best < float.MaxValue;
+    }
+
+    static bool BlocksBottleBank(EggboyCollider obstacle, Vector3 point, float ground, float radius)
+    {
+        if (obstacle.water || obstacle.minY > ground + .04f ||
+            (obstacle.top.HasValue && obstacle.top.Value <= ground + .22f)) return false;
+        float dx = point.x - obstacle.x, dz = point.z - obstacle.z;
+        if (obstacle.r.HasValue)
+        {
+            float reach = obstacle.r.Value + radius;
+            return dx * dx + dz * dz < reach * reach;
+        }
+        return obstacle.hw.HasValue && obstacle.hd.HasValue &&
+            Mathf.Abs(dx) < obstacle.hw.Value + radius && Mathf.Abs(dz) < obstacle.hd.Value + radius;
     }
 
     public Vector3 GetDogBowlPosition()
@@ -545,8 +610,9 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             bool bridgeUp = winchRaised && !boatBridge;
             // 升起后浮在当前水面上（桥面略高于水），没升起就沉在水底
             float floatY = Mathf.Max(pontoonBaseY, WaterLevel.StaticY - 0.22f);
-            float bob = bridgeUp ? Mathf.Sin(Time.time * 2.1f) * 0.02f : -0.9f;
-            Vector3 targetPos = new Vector3(crossingChannelCenter.x, (bridgeUp ? floatY : pontoonBaseY) + bob, crossingChannelCenter.z);
+            float bob = bridgeUp ? Mathf.Sin(Time.time * 2.1f) * 0.02f : 0f;
+            float targetY = bridgeUp ? floatY + bob : pontoonBaseY - 1.35f;
+            Vector3 targetPos = new Vector3(crossingChannelCenter.x, targetY, crossingChannelCenter.z);
             pontoonBridgeRoot.position = Vector3.Lerp(pontoonBridgeRoot.position, targetPos, dt * 3.5f);
             // 缺口：真人游玩时中间几只浮箱不出现
             bool gap = GapActive;
@@ -572,7 +638,8 @@ public sealed class WorldMechanismDirector : MonoBehaviour
             WinchTick(dt, playerHolds, echoHolds);
         }
 
-        if (player == null || ui == null || !ui.inputClose || player.locked || ui.TitleShowing || ui.Paused || ui.LetterOpen)
+        if (player == null || ui == null || !ui.inputClose || player.locked || ui.TitleShowing || ui.Paused ||
+            ui.LetterOpen || ui.Cinematic || MenuController.OverlayOpen || !Input.GetKeyDown(KeyCode.E))
             return;
 
         // 1. 拾取阅读退潮浅滩的漂流瓶（按 E）
@@ -580,7 +647,7 @@ public sealed class WorldMechanismDirector : MonoBehaviour
         {
             var b = driftBottles[i];
             if (b == null || !b.gameObject.activeSelf) continue;
-            if (Vector3.Distance(player.transform.position, b.position) < 2.2f && Input.GetKeyDown(KeyCode.E))
+            if (Vector3.Distance(player.transform.position, b.position) < 1.45f)
             {
                 b.gameObject.SetActive(false);
                 ShadowAndChimeSystem.PlayProceduralChime(783.99f, 0.3f);

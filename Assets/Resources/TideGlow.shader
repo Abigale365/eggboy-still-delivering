@@ -27,7 +27,12 @@ Shader "TideTown/Glow"
                 float _Size;
                 float _Core;
             CBUFFER_END
-            float _TideLampOn;   // 全局：TownLighting 按天色设，白天 0（灯不亮），黄昏 1
+            float _TideLampOn;   // 全局：TownLighting 按天色设，白天 0.25 左右（微亮），黄昏 1
+
+            // 2026-11-15 PL-13 白天的灯只是灯罩里一点暖光：光晕比按比例算的再小一圈、再淡一档，
+            // 不然大太阳底下每盏灯顶着一团光球。黄昏（1）时两个系数都是 1，和原来一样。
+            float GlowDim(float on) { return on * lerp(0.6, 1.0, on); }
+            float GlowSize(float on) { return lerp(0.62, 1.0, saturate(on)); }
 
             struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -37,7 +42,7 @@ Shader "TideTown/Glow"
                 Varyings o;
                 float3 centerWS = TransformObjectToWorld(float3(0, 0, 0));
                 float3 viewPos = TransformWorldToView(centerWS);
-                viewPos.xy += v.positionOS.xy * _Size;
+                viewPos.xy += v.positionOS.xy * _Size * GlowSize(_TideLampOn);
                 viewPos.z += 0.25;   // 往镜头挪一点，不被灯罩自己挡住
                 o.positionCS = TransformWViewToHClip(viewPos);
                 o.uv = v.uv * 2.0 - 1.0;
@@ -48,7 +53,7 @@ Shader "TideTown/Glow"
             {
                 float r = saturate(1.0 - length(i.uv));
                 float a = pow(r, _Core) + pow(r, 12.0) * 1.5;
-                return half4(_Color.rgb * a * _TideLampOn, 1.0);
+                return half4(_Color.rgb * a * GlowDim(_TideLampOn), 1.0);
             }
             ENDHLSL
         }

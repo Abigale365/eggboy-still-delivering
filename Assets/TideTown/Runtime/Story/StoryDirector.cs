@@ -105,9 +105,9 @@ public sealed partial class StoryDirector : MonoBehaviour
             return;
         }
 
-        // 真人游玩模式：采用纯密室逃脱式无保姆引导探索，关闭地上发光引路圆点与左上角直白任务剧透
-        ui.SetGoal("");
-        ui.SetTutorial("");
+        // D2：步骤变化短显，平时收起；暂停与 H 仍可复看当前完整目标。
+        var current = Step(State.step);
+        ui.SetGoal(current != null ? current.goal : "");
         if (island != null)
         {
             if (island.mailboxTrail != null) island.mailboxTrail.SetActive(false);
@@ -136,12 +136,51 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (ui != null) ui.SetTutorial("");
         letterLock = gate.Acquire("letter");
         if (letterLock != null && player != null) player.locked = true;
+        PlayAction("pickup_mailbox", ExprId.curious, 0.90f, 0.40f);
         var id = Step(State.step)?.letter;
         LetterData letter = FindLetter(id);
         if (ui != null)
         {
             if (letter != null) ui.ShowLetter(letter.title, letter.body, letter.signature);
             else ui.ShowLetter();
+        }
+    }
+
+    // 统一驱动“专属动作资产 + 锁窗 + 抓握帧回调 + 表情联动”（自动审计模式下回调立即执行且不锁移动）
+    void PlayAction(string clip, ExprId expr, float lockSec = -1f, float grabSec = -1f,
+        System.Action onGrab = null, System.Action onComplete = null)
+    {
+        if (player != null)
+        {
+            if (IsAuditMode || !player.HasClip(clip))
+            {
+                if (player.HasClip(clip)) player.PlayEmote(clip);
+                onGrab?.Invoke();
+                onComplete?.Invoke();
+            }
+            else
+            {
+                player.PlayInteractAction(clip, lockSec, grabSec, onGrab, onComplete);
+            }
+        }
+        else
+        {
+            onGrab?.Invoke();
+            onComplete?.Invoke();
+        }
+        if (game != null) game.SetExpression(expr);
+    }
+
+    void SyncCarryPose()
+    {
+        if (player == null || State == null) return;
+        switch (State.carrying)
+        {
+            case "wood": player.SetCarryPose(EggboyPlayer.CarryPose.Wood); break;
+            case "oil": player.SetCarryPose(EggboyPlayer.CarryPose.Oil); break;
+            // 红球由 PhysicalPickupController 用右手 IK 托着时不叠双臂抱物姿态
+            case "ball": player.SetCarryPose(PhysicalPickupController.Instance != null && PhysicalPickupController.Instance.HoldsBall ? EggboyPlayer.CarryPose.None : EggboyPlayer.CarryPose.Ball); break;
+            default: player.SetCarryPose(EggboyPlayer.CarryPose.None); break;
         }
     }
 
@@ -238,7 +277,11 @@ public sealed partial class StoryDirector : MonoBehaviour
         if (gate != null && letterLock != null) gate.Release(letterLock);
         letterLock = null;
         if (!openedByStory) { ApplyStepGoal(); return; }
-        if (player != null) player.locked = false;
+        if (player != null)
+        {
+            player.locked = false;
+            player.StopEmote("read_letter");
+        }
 
         if (readingSchool) { readingSchool = false; ApplyStepGoal(); return; }
         if (State.step == "E1_read" && game != null) game.SetExpression(ExprId.happy);
@@ -301,6 +344,9 @@ public sealed partial class StoryDirector : MonoBehaviour
     void Update()
     {
         if (!ready || player == null || ui == null || gate == null) return;
+        SyncWorldProps();   // 2026-11-16：地上的柴堆 / 油壶、炉膛里的柴跟着剧情状态（别的系统直接改 flags 时也能跟上）
+        ui.SetCinematic(Cutscene || Climbing || Ended || (game != null && game.introHold),"story");
+        TickFirstTutorials();
         var st = Step(State.step);
         DebugAuto = "step=" + State.step + " auto=" + (st != null && st.auto) + " at=" + (st != null ? st.at : "")
             + " gate=" + gate.Locked + " letter=" + ui.LetterOpen + " arrived=" + arrivedStep;
@@ -348,11 +394,32 @@ public sealed partial class StoryDirector : MonoBehaviour
         {
             player.locked = true;
             player.FaceTowards(facePos);
-            if (st.id == "S0_arrive" && game != null) game.SetExpression(ExprId.sad);
+            if (player.HasClip("read_letter")) player.PlayEmote("read_letter", int.MaxValue);
             else player.PlayEmote("look");
+            if (game != null) game.SetExpression(st.id == "S0_arrive" ? ExprId.sad : ExprId.curious);
         }
         var letter = FindLetter(st.letter);
         if (letter != null) ui.ShowLetterDetail(letter.title, letter.body, letter.signature);
         else ui.ShowLetter();
+    }
+
+    void TickFirstTutorials()
+    {
+        if(State.seenTutorials==null)State.seenTutorials=new List<string>();
+        if(ui.FirstTutorialActive || (!IsAuditMode&&(ui.Cinematic||ui.Paused||ui.LetterOpen||ui.TitleShowing||MenuController.OverlayOpen)))return;
+        bool letters=State.flags.Contains("letters_taken")&&State.step!="P1_mailbox";
+        if(OfferTutorial("tab_letter",letters,"Tab　随时重读已收信件（可拆字）",KeyCode.Tab))return;
+        if(OfferTutorial("map_town",letters&&island!=null&&player.transform.position.x>island.MailboxPos.x+3f,"M　打开潮汐镇地图",KeyCode.M))return;
+        if(OfferTutorial("dog_command",dog!=null&&dog.Following,"F　指挥小黑踩踏板 / 嗅旧物 / 互动",KeyCode.F))return;
+        // 这三种工具由互动中枢启动即已可用，取信后依次介绍，避免标题页堆提示。
+        if(OfferTutorial("pocketwatch_r",letters&&!State.seenTutorials.Contains("pocketwatch_r")&&FindObjectOfType<TidalEchoCloneSystem>()!=null,"R　唤出 10 秒前的回声分身",KeyCode.R))return;
+        if(OfferTutorial("viewfinder_c",letters&&!State.seenTutorials.Contains("viewfinder_c")&&FindObjectOfType<PerspectivePrintSystem>()!=null,"C　举起透视取景框",KeyCode.C))return;
+        OfferTutorial("wishlist_v",letters&&!State.seenTutorials.Contains("wishlist_v")&&FindObjectOfType<AIAgentCalibrationDirector>()!=null,"V　写下心愿召唤微缩物",KeyCode.V);
+    }
+    bool OfferTutorial(string id,bool unlocked,string text,KeyCode key)
+    {
+        if(!unlocked||State.seenTutorials.Contains(id))return false;
+        Debug.Log("TUTORIAL_ONCE "+id);
+        return ui.ShowFirstTutorial(text,key,()=>{if(!State.seenTutorials.Contains(id)){State.seenTutorials.Add(id);store.Save(State);}});
     }
 }

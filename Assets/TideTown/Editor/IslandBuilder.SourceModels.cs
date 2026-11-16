@@ -64,7 +64,17 @@ public static partial class IslandBuilder
     {
         var root = new GameObject("MailboxTrail");
         root.transform.SetParent(parent, false);
-        var gold = EmissiveMat("MailboxTrailGold", new Color32(0xd4, 0x9a, 0x48, 255));
+        // 2026-11-16 C3：原来是 0.22×0.035×0.22 的亮金方块、底色黑、自发光 ×2.6，在绘本画面里很抢。
+        // 改成压扁的小圆石（0.11×0.024×0.11，一半埋进地里，只露 1.2 cm），底色暖赭石、自发光换成柔和的琥珀色 ×0.8，
+        // 像嵌在石缝里的暖金微光小石子。
+        var gold = Mat("MailboxTrailGold", new Color32(0xc4, 0x9e, 0x6c, 255));
+        if (gold.HasProperty("_EmissionColor"))
+        {
+            gold.SetColor("_EmissionColor", new Color(1.0f, 0.70f, 0.40f, 1f) * 0.8f);
+            gold.EnableKeyword("_EMISSION");
+        }
+        gold.SetFloat("_Smoothness", 0.25f);
+        EditorUtility.SetDirty(gold);
         for (int i = 1; i < route.route.Length; i++)
         {
             var a = route.route[i - 1];
@@ -77,9 +87,16 @@ public static partial class IslandBuilder
                 var p = Vector2.Lerp(start, end, (float)j / pieces);
                 float y = GroundY(p.x, p.y);
                 if (y <= 0.2f) continue;
-                var mark = Cube(root.transform, "gold_marker", new Vector3(p.x, y + 0.025f, p.y),
-                    new Vector3(0.22f, 0.035f, 0.22f), gold);
-                mark.transform.localRotation = Quaternion.Euler(0f, 45f, 0f);
+                var mark = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                UnityEngine.Object.DestroyImmediate(mark.GetComponent<Collider>());
+                mark.name = "gold_marker";
+                mark.transform.SetParent(root.transform, false);
+                mark.transform.position = new Vector3(p.x, y, p.y);   // 球心落在地面：一半埋着，只露 1.2 cm
+                mark.transform.localScale = new Vector3(0.11f, 0.024f, 0.11f);
+                mark.transform.localRotation = Quaternion.Euler(0f, (i * 53 + j * 37) % 360, 0f);
+                var mr = mark.GetComponent<Renderer>();
+                mr.sharedMaterial = gold;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             }
             if (b.id == "03") break;
         }

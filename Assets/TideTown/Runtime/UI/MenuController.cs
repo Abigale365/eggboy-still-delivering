@@ -13,6 +13,7 @@
 //   2. 弹窗刚关闭的 0.5 秒内也算占用，不受两个脚本谁先跑的影响。
 //   3. 游戏自己解锁鼠标时（NoteScriptUnlock）1 秒内不把鼠标解锁当成“意外解锁”。
 using UnityEngine;
+using UnityEngine.UI;
 
 public sealed class MenuController : MonoBehaviour
 {
@@ -25,10 +26,25 @@ public sealed class MenuController : MonoBehaviour
 
     // 脚本主动 Cursor.lockState = None 之后调用（弹窗要用鼠标时）。
     public static void NoteScriptUnlock() { lastScriptUnlockAt = Time.unscaledTime; }
+    public static void ReleasePointer()
+    {
+        NoteScriptUnlock(); Cursor.lockState = CursorLockMode.None; Cursor.visible = true;
+    }
+    public static void RestorePointer(EggboyUI ui)
+    {
+        var map = Object.FindObjectOfType<TownMap>();
+        var director = Object.FindObjectOfType<StoryDirector>();
+        if (ui == null || ui.Paused || ui.LetterOpen || ui.TitleShowing || ui.Cinematic || OverlayOpen
+            || (map != null && map.IsOpen) || (director != null && (director.Cutscene || director.Climbing || director.Ended))) return;
+        if (Application.platform == RuntimePlatform.WebGLPlayer) { ReleasePointer(); return; }
+        Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false;
+    }
 
     EggboyUI ui;
     TownMap map;
     StoryDirector director;
+    Button guideButton;
+    Text guideCaption;
     bool letterOpenLastFrame;
     bool wasLocked;
     float lastEscAt = -10f;
@@ -47,12 +63,46 @@ public sealed class MenuController : MonoBehaviour
         ui = u;
         map = m;
         director = d;
+        var canvas = TideTownStyleUI.FindHudCanvasRoot(ui);
+        if (map == null || canvas == null) return;
+        guideButton = TideTownStyleUI.CreateWarmButton(canvas, "", new Vector2(0f, -133f),
+            new Vector2(360f, 26f), false, () =>
+            {
+                map.CycleGuideMode();
+                RefreshGuideCaption();
+            });
+        guideButton.name = "PauseGroundGuide";
+        guideCaption = guideButton.GetComponentInChildren<Text>();
+        // 2026-11-16 手账暂停菜单：挂进左页设置列表的第五项（EggboyUI 留的 PauseGuideSlot），样式和"默认移动""镜头自动回正"一样
+        var slot = TideTownStyleUI.FindDeepChild(canvas, "PauseGuideSlot");
+        if (slot != null)
+        {
+            guideButton.transform.SetParent(slot, false);
+            var rt = (RectTransform)guideButton.transform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = rt.offsetMax = Vector2.zero; rt.anchoredPosition = Vector2.zero;
+            TideTownStyleUI.StyleSettingButton(guideButton);
+        }
+        RefreshGuideCaption();
+        guideButton.gameObject.SetActive(false);
+    }
+
+    void RefreshGuideCaption()
+    {
+        string mode;
+        switch (map.GuideMode)
+        {
+            case TownMap.GroundGuideMode.Always: mode = "常显"; break;
+            case TownMap.GroundGuideMode.Off: mode = "关闭"; break;
+            default: mode = "柔和自动"; break;
+        }
+        guideCaption.text = "引路光点：" + mode;   // 和"默认移动：奔跑"同一种写法
     }
 
     // 现在有没有解密弹窗开着
     public static bool OverlayOpen =>
         ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || AIAgentCalibrationDirector.IsOpen
-        || AvantGardeGameplayHub.AnyModalOpen;
+        || AvantGardeGameplayHub.AnyModalOpen || WishInspectModal.IsOpen;
 
     void TrackOverlay()
     {
@@ -104,5 +154,7 @@ public sealed class MenuController : MonoBehaviour
         bool locked = Cursor.lockState == CursorLockMode.Locked;
         if (WouldAutoPause(wasLocked, locked, Application.isFocused)) ui.SetPaused(true);
         wasLocked = locked;
+        if (guideButton != null && guideButton.gameObject.activeSelf != ui.Paused)
+            guideButton.gameObject.SetActive(ui.Paused);
     }
 }

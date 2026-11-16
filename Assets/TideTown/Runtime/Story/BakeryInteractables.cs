@@ -1,8 +1,9 @@
 // WP-11 面包店互动：门前摊位拿火柴、后院抱柴火、烤炉装柴和点火（含按住 E 擦火柴与三段鼓风助燃），以及 A4–A8 回忆线索 3D 检视。
 using UnityEngine;
 
-public sealed class StallInteractable : IInteractable
+public sealed class StallInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (s.step == "B1_matches" && !s.flags.Contains("matches_taken"));
     public Vector3 Position { get; }
     StoryDirector director;
     public StallInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
@@ -13,11 +14,12 @@ public sealed class StallInteractable : IInteractable
     public string Prompt(GameState s) =>
         InBakeryPhase(s) && !s.flags.Contains("matches_taken") ? "E　拿火柴盒" : "";
     public bool CanInteract(GameState s) => InBakeryPhase(s) && !s.flags.Contains("matches_taken");
-    public void Interact(GameState s, InteractionService svc) => director.TakeMatches();
+    public void Interact(GameState s, InteractionService svc) => director.TakeMatchesAt(Position);
 }
 
-public sealed class WoodInteractable : IInteractable
+public sealed class WoodInteractable : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && ((s.step == "B2_wood" || s.flags.Contains("wood_wet")) && s.carrying != "wood");
     public Vector3 Position { get; }
     StoryDirector director;
     public WoodInteractable(Vector3 p, StoryDirector d) { Position = p; director = d; }
@@ -29,13 +31,15 @@ public sealed class WoodInteractable : IInteractable
 
     public string Prompt(GameState s) => CanPickWood(s) ? "E　抱起柴火捆" : "";
     public bool CanInteract(GameState s) => CanPickWood(s);
-    public void Interact(GameState s, InteractionService svc) => director.TakeWood();
+    public void Interact(GameState s, InteractionService svc) => director.TakeWoodAt(Position);
 }
 
-public sealed class StoveInteractable : IInteractable, IHoldInteraction
+public sealed class StoveInteractable : IInteractable, IHoldInteraction, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && ((s.step == "B3_load" || s.step == "B4_light"));
     public float HoldSeconds(GameState state) =>
         state != null && state.flags.Contains("wood_loaded") && state.flags.Contains("matches_taken") && !state.flags.Contains("oven_lit") ? 0.7f : 0f;
+    public string HoldEmote(GameState state) => "hold_light_stove";
     public Vector3 Position { get; }
     StoryDirector director;
     BakeryEffects effects;
@@ -68,15 +72,16 @@ public sealed class StoveInteractable : IInteractable, IHoldInteraction
     }
     public void Interact(GameState s, InteractionService svc)
     {
-        if (s.carrying == "wood" && (!s.flags.Contains("wood_loaded") || s.flags.Contains("wood_wet"))) director.LoadWood();
+        if (s.carrying == "wood" && (!s.flags.Contains("wood_loaded") || s.flags.Contains("wood_wet"))) director.LoadWoodAt(Position);
         else if (s.flags.Contains("wood_loaded") && s.flags.Contains("matches_taken") && !s.flags.Contains("oven_lit")) director.LightOven(effects);
         else if (s.flags.Contains("oven_lit") && effects != null && effects.BellowsStage < 3) director.BoostOvenBellows(effects);
     }
 }
 
 // 海风里掉在地上的柴 / 油壶 / 红球：按 E 捡回来（捡的时候走的是原来的 TakeWood / TakeOil / TakeBall）
-public sealed class DroppedItemPickup : IInteractable
+public sealed class DroppedItemPickup : IInteractable, IObjectiveInteractable
 {
+    public bool IsObjective(GameState s) => s != null && (Valid(s));
     readonly string item;
     readonly StoryDirector director;
     readonly GameObject visual;
@@ -94,9 +99,28 @@ public sealed class DroppedItemPickup : IInteractable
     {
         if (!Valid(s)) return;
         gone = true;
+        if (director != null)
+        {
+            director.PickupDroppedItem(visual, keepVisual, take);
+            return;
+        }
         if (visual != null && !keepVisual) Object.Destroy(visual);
         take?.Invoke();
     }
+}
+
+// 2026-11-16 面包店门铃：挂在正门拱券右边的墙上。按 E 走过去伸手碰响（铃身摆、叮当两声），再端详
+public sealed class BellInteractable : IInteractable
+{
+    public Vector3 Position { get; }
+    readonly StoryDirector director;
+    readonly string label, text;
+    public BellInteractable(Vector3 p, StoryDirector d, string itemLabel, string itemText) { Position = p; director = d; label = itemLabel; text = itemText; }
+    public string EntityId => "bell";
+    public string Prompt(GameState s) =>
+        s != null && s.seenMemories.Contains("bell_detail") ? "E　摇响门铃（已发现刻痕）" : "E　摇响门铃";
+    public bool CanInteract(GameState s) => true;
+    public void Interact(GameState s, InteractionService svc) => director.RingBellAt(Position, label, text);
 }
 
 public sealed class MemoryInteractable : IInteractable

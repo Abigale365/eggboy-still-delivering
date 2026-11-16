@@ -12,66 +12,106 @@ public class TownMap : MonoBehaviour
     [Serializable] class RouteNodeJson { public string id; public bool stop; public float x, z; }
     [Serializable] class RouteFileJson { public RouteNodeJson[] route; }
 
+    // 与 ShotTool 的真实正交相机共用这份坐标定义。图片左上为原点，+Z 朝北。
+    [Serializable]
+    public sealed class MapBounds
+    {
+        public float cx, cz, spanX, spanZ;
+        public int pixelWidth, pixelHeight;
+
+        public bool Matches(int width, int height)
+        {
+            // Unity 可能把 1774x887 导入为 2048x1024；换算取拍摄范围和原图比例。
+            return width > 0 && height > 0 && pixelWidth > 0 && pixelHeight > 0
+                && spanX > 0f && spanZ > 0f && !float.IsInfinity(spanX) && !float.IsInfinity(spanZ)
+                && !float.IsNaN(cx) && !float.IsInfinity(cx) && !float.IsNaN(cz) && !float.IsInfinity(cz)
+                && Mathf.Abs(spanX / spanZ - (float)pixelWidth / pixelHeight) < .001f
+                && Mathf.Abs((float)pixelWidth / pixelHeight - (float)width / height) < .001f;
+        }
+
+        public Vector2 ProjectPixels(Vector3 position)
+        {
+            return new Vector2((.5f + (position.x - cx) / spanX) * pixelWidth,
+                (.5f - (position.z - cz) / spanZ) * pixelHeight);
+        }
+    }
+
     struct LandmarkInfo
     {
         public string name;
         public string sub;
         public Vector3 worldPos;
         public string stampId;
-        public Color badgeColor;
+        public string sceneName;
 
-        public LandmarkInfo(string n, string s, Vector3 p, string st, Color c)
+        public LandmarkInfo(string n, string s, Vector3 p, string st, string sceneName)
         {
-            name = n; sub = s; worldPos = p; stampId = st; badgeColor = c;
+            name = n; sub = s; worldPos = p; stampId = st; this.sceneName = sceneName;
         }
     }
 
     static readonly LandmarkInfo[] Landmarks =
     {
-        new LandmarkInfo("山口邮筒", "起点", new Vector3(-31.04f, 3.2f, -6.76f), "", new Color(0.75f, 0.32f, 0.25f, 0.92f)),
-        new LandmarkInfo("旧邮局", "老周的值班室", new Vector3(-22.50f, 5.2f, -9.51f), "", new Color(0.32f, 0.45f, 0.58f, 0.92f)),
-        new LandmarkInfo("① 林阿婆面包店", "第一站 · 烤炉与柴火", new Vector3(-14.40f, 5.2f, -8.50f), "bakery", new Color(0.76f, 0.45f, 0.20f, 0.94f)),
-        new LandmarkInfo("♪ 广场八音盒", "心愿展台 · 声影机关", new Vector3(-11.90f, 3.3f, -5.80f), "", new Color(0.58f, 0.42f, 0.24f, 0.90f)),
-        new LandmarkInfo("② 潮汐镇学校", "第二站 · 阿萤与小黑", new Vector3(13.53f, 5.6f, -2.02f), "school", new Color(0.26f, 0.56f, 0.42f, 0.94f)),
-        new LandmarkInfo("学校操场", "秋千 / 红球 / 滑梯", new Vector3(17.50f, 3.8f, -5.60f), "", new Color(0.30f, 0.52f, 0.36f, 0.88f)),
-        new LandmarkInfo("学校后院 · 狗窝", "拖鞋 / 狗碗", new Vector3(21.76f, 4.1f, 1.95f), "", new Color(0.48f, 0.38f, 0.28f, 0.88f)),
-        new LandmarkInfo("⚙ 渡口齿轮绞盘", "涨潮过海机关", new Vector3(11.60f, 1.8f, -11.40f), "", new Color(0.62f, 0.48f, 0.20f, 0.90f)),
-        new LandmarkInfo("海边船棚 & 码头", "拿煤油壶", new Vector3(18.12f, 3.2f, -15.56f), "", new Color(0.25f, 0.48f, 0.64f, 0.92f)),
-        new LandmarkInfo("③ 海角灯塔", "第三站 · 点亮灯头", new Vector3(34.22f, 8.5f, 8.75f), "lighthouse", new Color(0.78f, 0.56f, 0.18f, 0.94f)),
-        new LandmarkInfo("山顶新邮局", "终点 · 记忆寄件台", new Vector3(-27.54f, 7.6f, 14.89f), "", new Color(0.55f, 0.36f, 0.62f, 0.92f)),
+        new LandmarkInfo("山口邮筒", "起点", new Vector3(-31.04f, 3.2f, -6.76f), "", "P_MAILBOX"),
+        new LandmarkInfo("旧邮局", "老周的值班室", new Vector3(-22.50f, 5.2f, -9.51f), "", "B1_post_office"),
+        new LandmarkInfo("① 林阿婆面包店", "第一站 · 烤炉与柴火", new Vector3(-14.40f, 5.2f, -8.50f), "bakery", "B2_bakery"),
+        new LandmarkInfo("面包店门铃", "面包店正门旁", new Vector3(-12.58f, 3.72f, -6.66f), "", "Bakery_bell"),
+        new LandmarkInfo("♪ 广场八音盒", "心愿展台 · 声影机关", new Vector3(-11.90f, 3.3f, -5.80f), "", "MusicBoxPlinth"),
+        new LandmarkInfo("② 潮汐镇学校", "第二站 · 阿萤与小黑", new Vector3(13.53f, 5.6f, -2.02f), "school", "B3_school"),
+        new LandmarkInfo("学校操场", "秋千 / 红球 / 滑梯", new Vector3(17.50f, 3.8f, -5.60f), "", "P_21"),
+        new LandmarkInfo("学校后院 · 狗窝", "拖鞋 / 狗碗", new Vector3(21.76f, 4.1f, 1.95f), "", "S_doghouse"),
+        new LandmarkInfo("⚙ 渡口齿轮绞盘", "涨潮过海机关", new Vector3(13.40f, 1.8f, -13.10f), "", "Scene_M3_潮汐船坞齿轮绞盘_总成"),
+        new LandmarkInfo("海边船棚 & 码头", "拿煤油壶", new Vector3(19.50f, 3.2f, -14.80f), "", "B5_boathouse"),
+        new LandmarkInfo("③ 海角灯塔", "第三站 · 点亮灯头", new Vector3(33.59f, 8.5f, 9.62f), "lighthouse", "B4_lighthouse"),
+        new LandmarkInfo("山顶新邮局", "终点 · 记忆寄件台", new Vector3(-27.80f, 5.5f, 18.55f), "", "P_06"),
     };
 
     EggboyPlayer player;
     EggboyUI ui;
     StoryDirector director;
+    InteractionService interactions;
+    Transform bakeryArrival, schoolArrival, schoolSlide, summit;
     ControlGate gate;
     IslandWorld island;
     Texture2D preview;
     object mapLock;
+    MapBounds mapBounds;
+    readonly Vector3[] landmarkPositions = new Vector3[Landmarks.Length];
 
     bool hasCam;
     Vector3 camPos, camFwd, camUp;
     float focal;
     int imgW = 1774, imgH = 887;
 
-    // 3D 地面引路光点与目标物暖金光球（不挡视线的纯 3D 地面引导）
-    const int GuideDotCount = 9;
+    public enum GroundGuideMode { Automatic, Always, Off }
+    const string GuidePreference = "tidetown.groundGuide";
+    const float RecallSeconds = 6f, StraySeconds = 8f;
+    const float GuideHeight = 0.008f;
+    static readonly float[] GuideDistances = { 1.55f, 3.10f, 4.65f, 6.20f };
+    static readonly bool CaptureMode = Array.Exists(Environment.GetCommandLineArgs(), a =>
+        a == "-shot" || a == "-feeldemo" || a == "-shot_aa");
+    public GroundGuideMode GuideMode { get; private set; }
     GameObject guideRoot;
     Transform[] guideDots;
     Renderer[] guideDotRenderers;
-    Transform targetBeaconRoot;
-    Transform targetOrb;
-    Transform targetRing;
-    Light targetLight;
+    Renderer targetDisc;
     Material guideBaseMat;
+    Texture2D guideTexture;
+    readonly MaterialPropertyBlock guideColor = new MaterialPropertyBlock();
+    string guideStep;
+    Vector3 guideTarget, idleAnchor;
+    float guideRecall, guideIdle, guideStray, guideOpacity, nextGuideRoute;
+    bool guideOffRoute;
 
     // 路网寻路折线（用于 3D 地面引路光点与 2D 地图引导虚线，避免穿墙入海）
     bool navLoaded;
     readonly List<Vector2> navNodes = new List<Vector2>();
     readonly List<List<int>> navAdj = new List<List<int>>();
     readonly List<Vector3> guidePath = new List<Vector3>();
+    readonly List<Vector3> mapPath = new List<Vector3>();
 
     public bool IsOpen { get; private set; }
+    public bool HasOrthographicMap => mapBounds != null;
     public float ClosedAt { get; private set; }
 
     public void Init(EggboyPlayer p, EggboyUI u, StoryDirector d, ControlGate g)
@@ -79,8 +119,17 @@ public class TownMap : MonoBehaviour
         player = p;
         ui = u;
         director = d;
+        interactions = GetComponent<InteractionService>();
+        if (director != null)
+        {
+            bakeryArrival = GameObject.Find("P_11")?.transform;
+            schoolArrival = GameObject.Find("P_19")?.transform;
+            schoolSlide = GameObject.Find("S_slide")?.transform;
+            summit = GameObject.Find("P_06")?.transform;
+        }
         gate = g;
         island = FindObjectOfType<IslandWorld>();
+        GuideMode = (GroundGuideMode)Mathf.Clamp(PlayerPrefs.GetInt(GuidePreference), 0, 2);
         preview = Resources.Load<Texture2D>("UI/town_preview");
         if (preview != null) { imgW = preview.width; imgH = preview.height; }
         LoadCamera();
@@ -89,6 +138,22 @@ public class TownMap : MonoBehaviour
 
     void LoadCamera()
     {
+        var boundsAsset = Resources.Load<TextAsset>("UI/map_bounds");
+        if (boundsAsset != null && preview != null)
+        {
+            var bounds = JsonUtility.FromJson<MapBounds>(boundsAsset.text);
+            if (bounds != null && bounds.Matches(imgW, imgH))
+            {
+                mapBounds = bounds;
+                imgW = bounds.pixelWidth;
+                imgH = bounds.pixelHeight;
+                hasCam = true;
+                return;
+            }
+            Debug.LogError("MAP_BOUNDS invalid for town_preview: " + imgW + "x" + imgH);
+            return;
+        }
+        // Wave 1 包及旧 Prototype 保留概念底图，等实拍和边界元数据一起导入再切换。
         var asset = Resources.Load<TextAsset>("World/world_layout");
         if (asset == null) return;
         var list = JsonUtility.FromJson<MapCameraList>(asset.text);
@@ -315,21 +380,29 @@ public class TownMap : MonoBehaviour
             if (mapLock == null) return;
         }
         IsOpen = true;
+        for (int i = 0; i < Landmarks.Length; i++)
+        {
+            var landmark = Landmarks[i];
+            var anchor = mapBounds != null ? GameObject.Find(landmark.sceneName) : null;
+            landmarkPositions[i] = anchor != null ? anchor.transform.position : landmark.worldPos;
+        }
+        ui.SetCinematic(true,"map");
         player.locked = true;
         player.vel = Vector3.zero;
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        MenuController.ReleasePointer();
     }
 
     public void Close()
     {
         if (!IsOpen) return;
         IsOpen = false;
+        if(ui!=null)ui.SetCinematic(false,"map");
         ClosedAt = Time.unscaledTime;
         MenuController.NoteScriptUnlock();
         if (gate != null && mapLock != null) gate.Release(mapLock);
         mapLock = null;
         if (player != null) player.locked = false;
+        MenuController.RestorePointer(ui);
     }
 
     void Update()
@@ -345,155 +418,213 @@ public class TownMap : MonoBehaviour
         else if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) Close();
     }
 
+    public void CycleGuideMode()
+    {
+        GuideMode = (GroundGuideMode)(((int)GuideMode + 1) % 3);
+        PlayerPrefs.SetInt(GuidePreference, (int)GuideMode);
+        PlayerPrefs.Save();
+    }
+
     void OnDisable()
     {
         Close();
         if (guideRoot != null) guideRoot.SetActive(false);
     }
 
+    void OnDestroy()
+    {
+        if (guideBaseMat != null) Destroy(guideBaseMat);
+        if (guideTexture != null) Destroy(guideTexture);
+    }
+
     void EnsureGuide3D()
     {
         if (guideRoot != null) return;
+        var shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null) return;
+
         guideRoot = new GameObject("DynamicGroundGuide3D");
         guideRoot.transform.SetParent(transform, false);
+        guideBaseMat = new Material(shader) { name = "GroundGuideGlow" };
+        guideBaseMat.SetFloat("_Surface", 1f);
+        guideBaseMat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        guideBaseMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        guideBaseMat.SetFloat("_ZWrite", 0f);
+        guideBaseMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        guideBaseMat.SetOverrideTag("RenderType", "Transparent");
+        guideBaseMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
 
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Unlit/Color");
-        if (shader == null) shader = Shader.Find("Sprites/Default");
-        guideBaseMat = new Material(shader) { name = "GuideGoldMat" };
-        var warm = new Color(1f, 0.82f, 0.32f, 1f);
-        if (guideBaseMat.HasProperty("_BaseColor")) guideBaseMat.SetColor("_BaseColor", warm);
-        if (guideBaseMat.HasProperty("_Color")) guideBaseMat.SetColor("_Color", warm);
-
-        guideDots = new Transform[GuideDotCount];
-        guideDotRenderers = new Renderer[GuideDotCount];
-        for (int i = 0; i < GuideDotCount; i++)
+        const int size = 32;
+        guideTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
-            var dot = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            dot.name = "GuideDot_" + i;
-            Destroy(dot.GetComponent<Collider>());
-            dot.transform.SetParent(guideRoot.transform, false);
-            dot.transform.localScale = new Vector3(0.22f, 0.015f, 0.22f);
-            var r = dot.GetComponent<Renderer>();
-            r.sharedMaterial = new Material(guideBaseMat);
-            guideDots[i] = dot.transform;
-            guideDotRenderers[i] = r;
+            name = "GroundGuideFalloff",
+            wrapMode = TextureWrapMode.Clamp
+        };
+        var pixels = new Color32[size * size];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var offset = new Vector2((x + .5f) / size * 2f - 1f, (y + .5f) / size * 2f - 1f);
+                float alpha = 1f - Mathf.SmoothStep(.0f, 1f, offset.magnitude);
+                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+            }
+        guideTexture.SetPixels32(pixels);
+        guideTexture.Apply(false, true);
+        guideBaseMat.SetTexture("_BaseMap", guideTexture);
+
+        guideDots = new Transform[GuideDistances.Length];
+        guideDotRenderers = new Renderer[GuideDistances.Length];
+        for (int i = 0; i < guideDots.Length; i++)
+        {
+            guideDotRenderers[i] = CreateGuideDisc("GuideDot_" + i, guideRoot.transform);
+            guideDots[i] = guideDotRenderers[i].transform;
         }
 
-        targetBeaconRoot = new GameObject("TargetBeacon").transform;
-        targetBeaconRoot.SetParent(guideRoot.transform, false);
+        var beacon = new GameObject("TargetBeacon").transform;
+        beacon.SetParent(guideRoot.transform, false);
+        targetDisc = CreateGuideDisc("TargetGroundDisc", beacon);
+    }
 
-        var ringGo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        ringGo.name = "TargetGroundDisc";
-        Destroy(ringGo.GetComponent<Collider>());
-        ringGo.transform.SetParent(targetBeaconRoot, false);
-        ringGo.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-        ringGo.transform.localScale = new Vector3(0.95f, 0.014f, 0.95f);
-        ringGo.GetComponent<Renderer>().sharedMaterial = guideBaseMat;
-        targetRing = ringGo.transform;
-
-        var orbGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        orbGo.name = "TargetWarmOrb";
-        Destroy(orbGo.GetComponent<Collider>());
-        orbGo.transform.SetParent(targetBeaconRoot, false);
-        orbGo.transform.localPosition = new Vector3(0f, 1.05f, 0f);
-        orbGo.transform.localScale = Vector3.one * 0.24f;
-        orbGo.GetComponent<Renderer>().sharedMaterial = guideBaseMat;
-        targetOrb = orbGo.transform;
-
-        var lightGo = new GameObject("TargetWarmLight");
-        lightGo.transform.SetParent(targetBeaconRoot, false);
-        lightGo.transform.localPosition = new Vector3(0f, 1.1f, 0f);
-        targetLight = lightGo.AddComponent<Light>();
-        targetLight.type = LightType.Point;
-        targetLight.color = new Color(1f, 0.80f, 0.36f);
-        targetLight.range = 4.2f;
-        targetLight.intensity = 1.6f;
-        targetLight.shadows = LightShadows.None;
+    Renderer CreateGuideDisc(string name, Transform parent)
+    {
+        var dot = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        dot.name = name;
+        var collider = dot.GetComponent<Collider>();
+        if (collider != null)
+        {
+            collider.enabled = false;
+            Destroy(collider);
+        }
+        dot.transform.SetParent(parent, false);
+        dot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        var renderer = dot.GetComponent<Renderer>();
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.sharedMaterial = guideBaseMat;
+        renderer.enabled = false;
+        return renderer;
     }
 
     void UpdateGroundGuide3D()
     {
-        // 自动审计截图模式或过场/暂停/弹窗/序章已有 mailboxTrail 时隐藏动态地面引导
-        bool canShow = ui != null && ui.inputClose
-            && !ui.Paused && !ui.TitleShowing && !ui.LetterOpen && !MenuController.OverlayOpen
-            && director != null && !director.IsAuditMode
-            && !director.Cutscene && !director.Ended && !director.Climbing
-            && director.State != null && director.State.step != "P0_boot"
-            && TryGetStepTarget(out var targetPos, out _);
-
-        if (!canShow)
+        if (CaptureMode)
         {
-            if (guideRoot != null && guideRoot.activeSelf) guideRoot.SetActive(false);
+            if (island != null && island.mailboxTrail != null && island.mailboxTrail.activeSelf)
+                island.mailboxTrail.SetActive(false);
+            HideGuide();
             return;
         }
 
+        if (GuideMode == GroundGuideMode.Off || !ui.inputClose || ui.TitleShowing || ui.Paused ||
+            ui.LetterOpen || ui.Cinematic || IsOpen || MenuController.OverlayOpen || player.locked ||
+            director == null || director.IsAuditMode || director.Cutscene || director.Ended || director.Climbing ||
+            director.State == null || director.State.step == "P0_boot" ||
+            !TryGetStepTarget(out var target, out _))
+        {
+            HideGuide();
+            return;
+        }
+
+        var position = player.transform.position;
+        if (guideStep != director.State.step || (guideTarget - target).sqrMagnitude > 0.01f)
+        {
+            guideStep = director.State.step;
+            guideTarget = target;
+            guideRecall = RecallSeconds;
+            guideIdle = guideStray = 0f;
+            idleAnchor = position;
+            nextGuideRoute = 0f;
+        }
+
+        float dt = Time.unscaledDeltaTime;
+        if (Input.GetKeyDown(KeyCode.H)) guideRecall = RecallSeconds;
+        if (HorizontalDistance(position, idleAnchor) > .55f)
+        {
+            guideIdle = 0f;
+            idleAnchor = position;
+        }
+        else guideIdle += dt;
+
+        if (Time.unscaledTime >= nextGuideRoute)
+        {
+            nextGuideRoute = Time.unscaledTime + .18f;
+            BuildGuidePolyline(position, target, guidePath);
+            guideOffRoute = HorizontalDistance(position, target) > 4f && !NearGuideRoute(position);
+        }
+        guideStray = guideOffRoute ? guideStray + dt : 0f;
+
+        bool active = GuideMode == GroundGuideMode.Always ||
+            guideRecall > 0f || guideIdle >= StraySeconds || guideStray >= StraySeconds;
+        guideOpacity = Mathf.MoveTowards(guideOpacity, active ? .92f : .06f, dt * 2.5f);
+        guideRecall = Mathf.Max(0f, guideRecall - dt);
+        if (guideOpacity <= .02f) return;
+
         EnsureGuide3D();
+        if (guideRoot == null) return;
         if (!guideRoot.activeSelf) guideRoot.SetActive(true);
-
-        TryGetStepTarget(out var tgt, out _);
-        if (island == null) island = FindObjectOfType<IslandWorld>();
-
-        float tgtGroundY = island != null ? island.GroundAt(tgt.x, tgt.z, tgt.y + 2f) : tgt.y;
-        if (tgtGroundY <= 0.1f) tgtGroundY = tgt.y;
-        targetBeaconRoot.position = new Vector3(tgt.x, tgtGroundY, tgt.z);
-
-        float t = Time.time;
-        float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.8f);
-        if (targetOrb != null)
+        float span = PolylineTotalLengthXZ(guidePath);
+        float pulse = .9f + .1f * Mathf.Sin(Time.unscaledTime * 2.3f);
+        for (int i = 0; i < guideDots.Length; i++)
         {
-            targetOrb.localPosition = new Vector3(0f, 0.95f + 0.18f * Mathf.Sin(t * 2.4f), 0f);
-            targetOrb.localScale = Vector3.one * (0.20f + 0.08f * pulse);
-        }
-        if (targetRing != null)
-        {
-            float rs = 0.78f + 0.25f * pulse;
-            targetRing.localScale = new Vector3(rs, 0.014f, rs);
-        }
-        if (targetLight != null)
-        {
-            targetLight.intensity = 1.3f + 0.8f * pulse;
+            float distance = GuideDistances[i];
+            float fade = i / (guideDots.Length - 1f);
+            var sample = SamplePolylineXZ(guidePath, distance);
+            float fromPlayer = HorizontalDistance(position, sample);
+            guideDotRenderers[i].enabled = distance < span - .45f &&
+                fromPlayer >= 1.5f && fromPlayer <= 6.5f &&
+                PlaceGuideDisc(guideDotRenderers[i], sample, Mathf.Lerp(.10f, .07f, fade),
+                    guideOpacity * Mathf.Lerp(.96f, .42f, fade) * pulse);
         }
 
-        // 地面金色引路光点流：沿可走路网折线从玩家脚下前方 1.35m 引导至当前任务目标，避免穿墙入海
-        var pPos = player.transform.position;
-        BuildGuidePolyline(pPos, new Vector3(tgt.x, tgtGroundY, tgt.z), guidePath);
-        float totalDist = PolylineTotalLengthXZ(guidePath);
-
-        for (int i = 0; i < GuideDotCount; i++)
-        {
-            float d = 1.35f + i * 1.45f;
-            if (d >= totalDist - 0.8f || totalDist < 2.2f)
-            {
-                if (guideDots[i].gameObject.activeSelf) guideDots[i].gameObject.SetActive(false);
-                continue;
-            }
-            if (!guideDots[i].gameObject.activeSelf) guideDots[i].gameObject.SetActive(true);
-
-            Vector3 sample = SamplePolylineXZ(guidePath, d);
-            float gy = island != null ? island.GroundAt(sample.x, sample.z, sample.y + 2.5f) : sample.y;
-            if (gy <= 0.1f) gy = Mathf.Lerp(pPos.y, tgtGroundY, d / Mathf.Max(1f, totalDist));
-            if (island != null && gy < island.WaterY) gy = island.WaterY + 0.04f;
-
-            guideDots[i].position = new Vector3(sample.x, gy + 0.03f, sample.z);
-            float wave = 0.5f + 0.5f * Mathf.Sin(t * 4.2f - i * 0.65f);
-            float scale = 0.15f + 0.10f * wave;
-            guideDots[i].localScale = new Vector3(scale, 0.016f, scale);
-
-            var mat = guideDotRenderers[i].sharedMaterial;
-            if (mat != null)
-            {
-                var c = Color.Lerp(new Color(0.88f, 0.64f, 0.20f, 1f), new Color(1f, 0.94f, 0.55f, 1f), wave);
-                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
-                if (mat.HasProperty("_Color")) mat.SetColor("_Color", c);
-            }
-        }
+        targetDisc.enabled = span <= 6.5f && HorizontalDistance(position, target) >= 1.5f &&
+            PlaceGuideDisc(targetDisc, target, .23f, guideOpacity * .62f * pulse);
     }
+
+    void HideGuide()
+    {
+        if (guideRoot != null && guideRoot.activeSelf) guideRoot.SetActive(false);
+        guideIdle = guideStray = guideOpacity = 0f;
+        if (player != null) idleAnchor = player.transform.position;
+        nextGuideRoute = 0f;
+    }
+
+    bool PlaceGuideDisc(Renderer disc, Vector3 position, float size, float opacity)
+    {
+        float ground = island != null ? island.GroundAt(position.x, position.z, position.y + 1.2f) : position.y;
+        if (island != null && (ground <= .05f || ground < island.WaterY - .01f)) return false;
+        disc.transform.position = new Vector3(position.x, ground + GuideHeight, position.z);
+        disc.transform.localScale = Vector3.one * size;
+        guideColor.SetColor("_BaseColor", new Color(1f, .78f, .36f, opacity));
+        disc.SetPropertyBlock(guideColor);
+        return true;
+    }
+
+    bool NearGuideRoute(Vector3 position)
+    {
+        var point = new Vector2(position.x, position.z);
+        for (int i = 0; i < navNodes.Count; i++)
+        {
+            Vector2 a = navNodes[i];
+            foreach (int v in navAdj[i])
+            {
+                if (v <= i) continue;
+                var segment = navNodes[v] - a;
+                float t = Mathf.Clamp01(Vector2.Dot(point - a, segment) / segment.sqrMagnitude);
+                if ((point - a - t * segment).sqrMagnitude <= 9f) return true;
+            }
+        }
+        return navNodes.Count == 0;
+    }
+
+    static float HorizontalDistance(Vector3 a, Vector3 b) =>
+        Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+
 
     public Vector2 ProjectUV(Vector3 p) { return Project(p); }
 
     Vector2 Project(Vector3 p)
     {
+        if (mapBounds != null) return mapBounds.ProjectPixels(p);
         var q = p - camPos;
         float dz = Vector3.Dot(q, camFwd);
         float dy = Vector3.Dot(q, camUp);
@@ -507,7 +638,7 @@ public class TownMap : MonoBehaviour
         return new Vector2(img.x + uv.x / imgW * img.width, img.y + uv.y / imgH * img.height);
     }
 
-    bool TryGetStepTarget(out Vector3 targetPos, out string targetLabel)
+    internal bool TryGetStepTarget(out Vector3 targetPos, out string targetLabel)
     {
         targetPos = Vector3.zero;
         targetLabel = "";
@@ -517,53 +648,33 @@ public class TownMap : MonoBehaviour
         {
             case "P0_boot":
             case "P1_mailbox":
-                targetPos = new Vector3(-31.04f, 3.0f, -6.76f);
-                targetLabel = "山口红色邮筒（按 E 取信）";
-                return true;
+                return InteractionTarget("mailbox_03", "山口红色邮筒（按 E 取信）", out targetPos, out targetLabel);
             case "B0_arrive":
-                targetPos = new Vector3(-14.40f, 3.0f, -9.38f);
+                targetPos = bakeryArrival != null ? bakeryArrival.position : new Vector3(-14.40f, 3f, -9.58f);
                 targetLabel = "① 林阿婆面包店门前";
                 return true;
             case "B1_matches":
-                targetPos = new Vector3(-14.40f, 3.0f, -10.30f);
-                targetLabel = "面包店门前摊位（拿火柴盒）";
-                return true;
+                return InteractionTarget("stall", "橱窗下的摊位（拿火柴盒）", out targetPos, out targetLabel);
             case "B2_wood":
-                targetPos = new Vector3(-9.41f, 3.0f, -8.08f);
-                targetLabel = "面包店右侧柴堆（抱柴火捆）";
-                return true;
+                return InteractionTarget("wood", "烤炉右前方（抱柴火捆）", out targetPos, out targetLabel);
             case "B3_load":
-                targetPos = new Vector3(-10.55f, 3.0f, -5.84f);
-                targetLabel = "面包店石烤炉（把柴火塞进炉膛）";
-                return true;
+                return InteractionTarget("stove", "面包店石烤炉（把柴火塞进炉膛）", out targetPos, out targetLabel);
             case "B4_light":
                 if (!s.flags.Contains("oven_lit"))
-                {
-                    targetPos = new Vector3(-10.55f, 3.0f, -5.84f);
-                    targetLabel = "面包店石烤炉（按住 E 擦火柴）";
-                    return true;
-                }
-                targetPos = new Vector3(13.53f, 3.0f, -4.25f);
-                targetLabel = "② 潮汐镇学校";
-                return true;
+                    return InteractionTarget("stove", "面包店石烤炉（按住 E 擦火柴）", out targetPos, out targetLabel);
+                goto case "S0_arrive";
             case "S0_arrive":
-                targetPos = new Vector3(13.53f, 3.0f, -4.25f);
+                targetPos = schoolArrival != null ? schoolArrival.position : new Vector3(13.53f, 3f, -4.25f);
                 targetLabel = "② 潮汐镇学校（靠近自动读信）";
                 return true;
             case "S1_slipper":
-                targetPos = new Vector3(22.86f, 3.0f, 2.67f);
-                targetLabel = "学校后院狗窝旁（查看拖鞋）";
-                return true;
+                return InteractionTarget("slipper", "学校后院狗窝旁（查看拖鞋）", out targetPos, out targetLabel);
             case "S2_ball":
-                targetPos = new Vector3(16.80f, 3.0f, -5.60f);
-                targetLabel = "学校操场秋千下（捡起红球）";
-                return true;
+                return InteractionTarget("ball", "学校操场秋千前（捡起红球）", out targetPos, out targetLabel);
             case "S3_bowl":
-                targetPos = new Vector3(20.71f, 3.0f, 1.95f);
-                targetLabel = "学校后院狗窝前（红球放进狗碗）";
-                return true;
+                return InteractionTarget("bowl", "学校后院狗窝前（红球放进狗碗）", out targetPos, out targetLabel);
             case "S4_read":
-                targetPos = new Vector3(19.00f, 3.0f, -5.30f);
+                targetPos = schoolSlide != null ? schoolSlide.position : new Vector3(19f, 3f, -4f);
                 targetLabel = "操场滑梯旁（小黑与阿萤的信）";
                 return true;
             case "L0_cross":
@@ -571,180 +682,363 @@ public class TownMap : MonoBehaviour
                 targetLabel = "海边淹水坡道（踩木箱去船棚）";
                 return true;
             case "L1_shed":
-                targetPos = new Vector3(21.55f, 1.4f, -15.60f);
-                targetLabel = "海边船棚屋檐下（拿煤油壶）";
-                return true;
+                return InteractionTarget("oil", "海边船棚屋檐下（拿煤油壶）", out targetPos, out targetLabel);
             case "L2_door":
-                targetPos = new Vector3(35.20f, 5.0f, 6.46f);
-                targetLabel = "③ 海角灯塔塔门（按 E 上塔）";
-                return true;
+                return InteractionTarget("lighthouse_door", "③ 海角灯塔塔门（按 E 上塔）", out targetPos, out targetLabel);
             case "L3_oil":
             case "L4_light":
             case "L5_reply":
-                targetPos = new Vector3(34.22f, 12.2f, 8.75f);
-                targetLabel = "灯塔顶层灯头（加煤油/转灯头）";
-                return true;
+                return InteractionTarget("lamp_head", "灯塔顶层灯头（加煤油/转灯头）", out targetPos, out targetLabel);
             case "E0_back":
             case "E1_read":
-                targetPos = new Vector3(-21.20f, 3.0f, -9.20f);
-                targetLabel = "旧邮局门前课桌（读老周的信）";
-                return true;
+                return InteractionTarget("ending_desk", "旧邮局门前课桌（读老周的信）", out targetPos, out targetLabel);
             case "E2_climb":
             case "E3_end":
-                targetPos = new Vector3(-27.54f, 6.4f, 14.89f);
+                targetPos = summit != null ? summit.position : new Vector3(-27.80f, 5.5f, 18.55f);
                 targetLabel = "山顶新邮局（记忆寄件工作台）";
                 return true;
         }
         return false;
     }
 
+    bool InteractionTarget(string id, string label, out Vector3 target, out string targetLabel)
+    {
+        target = default;
+        targetLabel = label;
+        return interactions != null && interactions.TryGetPosition(id, out target);
+    }
+
+    // ───────── 2026-11-16「潮汐镇手绘航海地图册（Postal Atlas）」 ─────────
+    // 和暂停手账、信封同一套色板：胡桃木外框 + 暖米羊皮纸内页 + 深褐细描边；顶栏 3 枚邮戳槽，地图右上角航海罗盘，底栏任务 + 图例。
+    // 仍用 OnGUI 画（MapAudit 截图走同一帧）。所有尺寸、字号按屏幕等比缩放，2K/4K 下字不糊。
+    static readonly Color AtlasWalnut = new Color32(0x3b, 0x2a, 0x1a, 255);
+    static readonly Color AtlasWalnutHi = new Color32(0x6a, 0x4c, 0x30, 230);
+    static readonly Color AtlasParchment = new Color32(0xfb, 0xf3, 0xe2, 255);
+    static readonly Color AtlasParchmentDeep = new Color32(0xf1, 0xe2, 0xc4, 255);
+    static readonly Color AtlasInk = new Color32(0x3b, 0x2a, 0x1a, 255);
+    static readonly Color AtlasInkSoft = new Color32(0x3b, 0x2a, 0x1a, 150);
+    static readonly Color AtlasInkMuted = new Color32(0x8a, 0x6a, 0x4a, 255);
+    static readonly Color AtlasRule = new Color32(0xc9, 0xa8, 0x7a, 255);
+    static readonly Color AtlasRuleSoft = new Color32(0xc9, 0xa8, 0x7a, 190);
+    static readonly Color AtlasCinnabar = new Color32(0xb2, 0x35, 0x28, 255);
+    static readonly Color AtlasGold = new Color32(0xe9, 0xa9, 0x3f, 255);
+    static readonly Color AtlasGoldSoft = new Color32(0xfd, 0xdc, 0x92, 255);
+    static readonly string[] StampIds = { "bakery", "school", "lighthouse" };
+    static readonly string[] StampLabels = { "① 面包店", "② 学校", "③ 灯塔" };
+    float uiK = 1f;
+    float U(float v) => v * uiK;
+
     void OnGUI()
     {
         if (!IsOpen || player == null) return;
-        var old = GUI.skin.font;
-        var font = Resources.Load<Font>("Fonts/NotoSansSC-VF");
-        if (font != null) GUI.skin.font = font;
-
-        float w = Mathf.Min(Screen.width * 0.92f, 1180f);
-        float h = Mathf.Min(Screen.height * 0.92f, 700f);
-        var panel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
-        GUI.color = new Color(0.08f, 0.07f, 0.06f, 0.94f);
-        GUI.DrawTexture(panel, Texture2D.whiteTexture);
+        var oldFont = GUI.skin.font;
+        var oldColor = GUI.color;
+        GUI.skin.font = TideTownStyleUI.UiFont;
         GUI.color = Color.white;
+        float sw = Screen.width, sh = Screen.height;
+        uiK = Mathf.Clamp(Mathf.Min(sw / 1600f, sh / 900f), .72f, 2.6f);
 
-        GUI.Label(new Rect(panel.x + 18, panel.y + 10, panel.width - 36, 28),
-            "潮汐镇全图（带地标路牌与目标指引） · 按 M 或 Esc 关闭    已盖邮戳 " + Stamps() + "/3", Title(font));
+        // 1. 柔和暗角：整体只压一层很淡的暖褐，四周再叠暗角，不再是死黑大方块
+        Fill(new Rect(0f, 0f, sw, sh), new Color(.12f, .08f, .05f, .32f), 0f);
+        GUI.DrawTexture(new Rect(0f, 0f, sw, sh), TideTownStyleUI.SoftVignetteSprite.texture, ScaleMode.StretchToFill, true, 0f,
+            new Color(.09f, .055f, .03f, .9f), 0f, 0f);
 
-        // 背景预览图保持 1774:887
-        float pad = 16f;
-        var area = new Rect(panel.x + pad, panel.y + 44, panel.width - pad * 2, panel.height - 44 - pad - 24f);
+        // 2. 版面：按底图比例反推整本图册的大小
         float aspect = (float)imgW / imgH;
-        var img = new Rect(area.x, area.y, area.width, area.width / aspect);
-        if (img.height > area.height) { img.height = area.height; img.width = area.height * aspect; }
-        img.x = area.x + (area.width - img.width) * 0.5f;
-        img.y = area.y + (area.height - img.height) * 0.5f;
-        if (preview != null) GUI.DrawTexture(img, preview, ScaleMode.ScaleToFit);
+        float frame = U(13f), pad = U(16f), head = U(52f), foot = U(46f), gap = U(10f);
+        float chromeH = (frame + pad) * 2f;
+        float chromeV = frame * 2f + U(6f) + head + gap + U(6f) + foot + U(4f);
+        float mapW = sw * .94f - chromeH, mapH = mapW / aspect;
+        if (mapH + chromeV > sh * .93f) { mapH = sh * .93f - chromeV; mapW = mapH * aspect; }
+        var panel = new Rect((sw - mapW - chromeH) * .5f, (sh - mapH - chromeV) * .5f, mapW + chromeH, mapH + chromeV);
 
-        if (hasCam && preview != null)
+        for (int i = 1; i <= 4; i++)
+            Fill(Grow(new Rect(panel.x, panel.y + U(8f), panel.width, panel.height), U(i * 3.5f)), new Color(0f, 0f, 0f, .08f), U(22f + i * 3.5f));
+        Fill(panel, AtlasWalnut, U(20f));
+        Line(Grow(panel, -U(4f)), AtlasWalnutHi, Mathf.Max(1f, U(1.2f)), U(16f));
+        var page = Grow(panel, -frame);
+        Fill(page, AtlasParchment, U(10f));
+        Line(Grow(page, -U(5f)), AtlasRuleSoft, Mathf.Max(1f, U(1f)), U(7f));
+
+        // 3. 顶栏：眉题 + 3 枚邮戳槽 + 合上键帽
+        var headR = new Rect(page.x + pad, page.y + U(6f), page.width - pad * 2f, head);
+        DrawAtlasHeader(headR);
+        Fill(new Rect(headR.x, headR.yMax - U(1f), headR.width, Mathf.Max(1f, U(1.2f))), AtlasRule, 0f);
+
+        // 4. 地图画面：深褐细描边 + 羊皮纸暖调 + 内缩细线 + 右上航海罗盘
+        var img = new Rect(page.x + pad, headR.yMax + gap, mapW, mapH);
+        Fill(Grow(img, U(3f)), AtlasInk, U(6f));
+        if (preview != null) GUI.DrawTexture(img, preview, ScaleMode.StretchToFill, false, 0f, Color.white, 0f, U(3.5f));
+        else Fill(img, AtlasParchmentDeep, U(3.5f));
+        Fill(img, new Color(.98f, .88f, .70f, .10f), U(3.5f));
+        Line(Grow(img, -U(6f)), new Color(.99f, .96f, .88f, .5f), Mathf.Max(1f, U(1f)), U(3f));
+        DrawCompass(img);
+
+        if (hasCam && preview != null) DrawMapMarks(img);
+
+        // 5. 底栏：左当前任务，右图例
+        var footR = new Rect(page.x + pad, img.yMax + U(6f), page.width - pad * 2f, foot);
+        DrawAtlasFooter(footR);
+
+        GUI.color = oldColor;
+        GUI.skin.font = oldFont;
+    }
+
+    void DrawAtlasHeader(Rect r)
+    {
+        float cy = r.center.y - U(1f);
+        // 左：一枚淡朱砂邮戳环 + POSTAL ATLAS 眉题 + 中文大标题
+        float ring = U(32f);
+        var ringR = new Rect(r.x, cy - ring * .5f, ring, ring);
+        GUI.DrawTexture(ringR, TideTownStyleUI.PostmarkRingSprite.texture, ScaleMode.StretchToFill, true, 0f,
+            new Color(AtlasCinnabar.r, AtlasCinnabar.g, AtlasCinnabar.b, .6f), 0f, 0f);
+        var eyebrow = AtlasStyle(12f, AtlasInkMuted, true, TextAnchor.MiddleLeft);
+        var title = AtlasStyle(21f, AtlasInk, true, TextAnchor.MiddleLeft);
+        const string eb = "POSTAL ATLAS  ·";
+        float ebW = TextW(eyebrow, eb);
+        float x = ringR.xMax + U(10f);
+        GUI.Label(new Rect(x, cy - U(14f), ebW + U(4f), U(28f)), eb, eyebrow);
+        x += ebW + U(8f);
+        GUI.Label(new Rect(x, cy - U(16f), r.width * .45f, U(32f)), "潮汐镇航海投递全图", title);
+
+        // 右：合上键帽（Esc / M），一道竖细线，再从右往左排 3 枚邮戳槽
+        float right = r.xMax;
+        var hint = AtlasStyle(13f, AtlasInkMuted, false, TextAnchor.MiddleLeft);
+        float hintW = TextW(hint, "合上");
+        GUI.Label(new Rect(right - hintW, cy - U(12f), hintW + U(4f), U(24f)), "合上", hint);
+        right -= hintW + U(7f);
+        right = Keycap(right, cy, "M");
+        GUI.Label(new Rect(right - U(16f), cy - U(12f), U(16f), U(24f)), "/", AtlasStyle(13f, AtlasInkMuted, false, TextAnchor.MiddleCenter));
+        right -= U(16f);
+        right = Keycap(right, cy, "Esc");
+        right -= U(16f);
+        Fill(new Rect(right, cy - U(14f), Mathf.Max(1f, U(1.2f)), U(28f)), AtlasRule, 0f);
+        right -= U(16f);
+
+        var lab = AtlasStyle(13.5f, AtlasInk, true, TextAnchor.MiddleLeft);
+        var labOff = AtlasStyle(13.5f, AtlasInkMuted, false, TextAnchor.MiddleLeft);
+        var state = director != null ? director.State : null;
+        for (int i = StampIds.Length - 1; i >= 0; i--)
         {
-            var playerMapPos = WorldToMapScreen(player.transform.position, img);
-            var youRect = new Rect(playerMapPos.x + 10f, playerMapPos.y - 12f, 88f, 24f);
-            bool hasTargetRect = false;
-            Rect targetRect = default;
-            Vector2 targetMapPos = default;
-            string targetBadgeText = "";
+            bool done = state != null && state.stamps.Contains(StampIds[i]);
+            var st = done ? lab : labOff;
+            float lw = TextW(st, StampLabels[i]);
+            GUI.Label(new Rect(right - lw, cy - U(12f), lw + U(4f), U(24f)), StampLabels[i], st);
+            right -= lw + U(7f);
+            float d = U(34f);
+            DrawStampSlot(new Vector2(right - d * .5f, cy), d, done);
+            right -= d + U(18f);
+        }
+    }
 
-            // 1. 若有当前任务目标，画一条从「你在这里」沿可走路网指向「当前目标」的金色引导虚线
-            if (TryGetStepTarget(out var stepTargetWorld, out var stepTargetName))
+    float Keycap(float right, float cy, string label)
+    {
+        var st = AtlasStyle(11.5f, AtlasInk, true, TextAnchor.MiddleCenter);
+        float w = Mathf.Max(U(26f), TextW(st, label) + U(14f)), h = U(25f);
+        var r = new Rect(right - w, cy - h * .5f, w, h);
+        Fill(r, new Color(.36f, .24f, .15f, 1f), U(6f));
+        var face = new Rect(r.x + U(2f), r.y + U(1.5f), r.width - U(4f), r.height - U(6f));
+        Fill(face, new Color(.98f, .94f, .86f, 1f), U(5f));
+        GUI.Label(face, label, st);
+        return r.x;
+    }
+
+    void DrawStampSlot(Vector2 c, float d, bool done)
+    {
+        if (done)
+        {
+            // 已盖章：一圈淡朱砂邮戳环压在后面，前面一枚朱砂红火漆印，中间奶白 ✓
+            float pm = d * 1.32f;
+            GUI.DrawTexture(new Rect(c.x - pm * .5f + U(4f), c.y - pm * .5f - U(1f), pm, pm), TideTownStyleUI.PostmarkRingSprite.texture,
+                ScaleMode.StretchToFill, true, 0f, new Color(AtlasCinnabar.r, AtlasCinnabar.g, AtlasCinnabar.b, .42f), 0f, 0f);
+            GUI.DrawTexture(Circle(c, d * .5f), TideTownStyleUI.WaxSealSprite.texture, ScaleMode.StretchToFill, true, 0f, Color.white, 0f, 0f);
+            GUI.Label(Circle(c, d * .5f), "✓", AtlasStyle(16f, AtlasParchment, true, TextAnchor.MiddleCenter));
+        }
+        else
+        {
+            // 未盖章：浅褐虚线空槽
+            Fill(Circle(c, d * .5f - U(2f)), new Color(AtlasParchmentDeep.r, AtlasParchmentDeep.g, AtlasParchmentDeep.b, .85f), d * .5f);
+            const int dots = 18;
+            for (int i = 0; i < dots; i++)
             {
-                targetMapPos = WorldToMapScreen(stepTargetWorld, img);
-                targetBadgeText = "★ 当前目标：" + stepTargetName;
-                float tw = Mathf.Max(150f, targetBadgeText.Length * 14f + 20f);
-                targetRect = new Rect(targetMapPos.x - tw * 0.5f, targetMapPos.y + 10f, tw, 24f);
-                hasTargetRect = true;
-
-                BuildGuidePolyline(player.transform.position, stepTargetWorld, guidePath);
-                if (guidePath.Count >= 2)
-                {
-                    for (int k = 0; k + 1 < guidePath.Count; k++)
-                    {
-                        var pa = WorldToMapScreen(guidePath[k], img);
-                        var pb = WorldToMapScreen(guidePath[k + 1], img);
-                        int segs = Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(pa, pb) / 14f), 2, 16);
-                        DrawDottedLine(pa, pb, new Color(1f, 0.86f, 0.28f, 0.92f), segs);
-                    }
-                }
-                else
-                {
-                    DrawDottedLine(playerMapPos, targetMapPos, new Color(1f, 0.86f, 0.28f, 0.92f), 18);
-                }
+                float a = i * Mathf.PI * 2f / dots;
+                Fill(Circle(c + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (d * .5f - U(1.5f)), U(1.5f)), AtlasRule, U(1.5f));
             }
+        }
+    }
 
-            // 2. 绘制全镇所有建筑/地标名称标签（带 2D 防重叠排斥计算，仅在打开地图 M 时显示）
-            var tagStyle = MapTagStyle(font);
-            int lmCount = Landmarks.Length;
-            var pinPos = new Vector2[lmCount];
-            var tagRects = new Rect[lmCount];
-            var tagTexts = new string[lmCount];
-            var tagStamped = new bool[lmCount];
+    void DrawCompass(Rect img)
+    {
+        float s = Mathf.Clamp(img.height * .15f, U(58f), U(100f));
+        var r = new Rect(img.xMax - s - U(14f), img.y + U(12f), s, s);
+        GUI.DrawTexture(r, TideTownStyleUI.CompassRoseTexture, ScaleMode.StretchToFill, true, 0f, Color.white, 0f, 0f);
+        var n = AtlasStyle(Mathf.Max(10f, s / uiK * .16f), AtlasCinnabar, true, TextAnchor.MiddleCenter);
+        GUI.Label(new Rect(r.center.x - s * .2f, r.y + s * .06f, s * .4f, s * .17f), "N", n);
+    }
 
-            for (int i = 0; i < lmCount; i++)
-            {
-                var lm = Landmarks[i];
-                var lp = WorldToMapScreen(lm.worldPos, img);
-                bool stamped = !string.IsNullOrEmpty(lm.stampId) && director != null && director.State != null && director.State.stamps.Contains(lm.stampId);
-                string text = stamped ? (lm.name + " ✓") : lm.name;
-                float tw = Mathf.Max(84f, text.Length * 13.5f + 16f);
-                pinPos[i] = lp;
-                tagTexts[i] = text;
-                tagStamped[i] = stamped;
-                tagRects[i] = new Rect(lp.x - tw * 0.5f, lp.y - 26f, tw, 22f);
-            }
+    void DrawMapMarks(Rect img)
+    {
+        var playerPosition = player.transform.position;
+        var playerMapPos = WorldToMapScreen(playerPosition, img);
+        const string youText = "● 你在这里";
+        var youStyle = AtlasStyle(12.5f, AtlasParchment, true, TextAnchor.MiddleCenter);
+        var youRect = ClampRectToMap(new Rect(playerMapPos.x + U(15f), playerMapPos.y - U(11.5f), TextW(youStyle, youText) + U(22f), U(23f)), img);
+        bool hasTargetRect = false;
+        Rect targetRect = default;
+        Vector2 targetMapPos = default;
+        string targetBadgeText = "";
+        var targetStyle = AtlasStyle(13f, AtlasInk, true, TextAnchor.MiddleCenter);
 
-            // 迭代排斥重叠标签（同时避让「你在这里」和「当前目标」标签）
-            for (int iter = 0; iter < 6; iter++)
-            {
-                for (int i = 0; i < lmCount; i++)
-                {
-                    var ri = tagRects[i];
-                    if (hasTargetRect) SeparateRect(ref ri, targetRect, 4f);
-                    SeparateRect(ref ri, youRect, 4f);
-                    for (int j = i + 1; j < lmCount; j++)
-                    {
-                        var rj = tagRects[j];
-                        SeparatePair(ref ri, ref rj, 4f);
-                        tagRects[j] = ClampRectToMap(rj, img);
-                    }
-                    tagRects[i] = ClampRectToMap(ri, img);
-                }
-            }
+        // 1. 当前目标：沿可走路网画一串金色步道点（外沿一圈深褐，压在羊皮纸色底图上也看得清）
+        if (TryGetStepTarget(out var stepTargetWorld, out var stepTargetName))
+        {
+            targetMapPos = WorldToMapScreen(stepTargetWorld, img);
+            targetBadgeText = "★ 当前目标：" + stepTargetName;
+            float tw = Mathf.Min(img.width - U(8f), TextW(targetStyle, targetBadgeText) + U(26f));
+            targetRect = ClampRectToMap(new Rect(targetMapPos.x - tw * .5f, targetMapPos.y + U(13f), tw, U(25f)), img);
+            hasTargetRect = true;
 
-            for (int i = 0; i < lmCount; i++)
-            {
-                var lm = Landmarks[i];
-                var lp = pinPos[i];
-                var tagRect = tagRects[i];
-                bool stamped = tagStamped[i];
-
-                // 若标签因防重叠偏移较远，画一条细引线连回地标锚点
-                Vector2 badgeAnchor = new Vector2(Mathf.Clamp(lp.x, tagRect.xMin + 6f, tagRect.xMax - 6f), lp.y < tagRect.center.y ? tagRect.yMin : tagRect.yMax);
-                if (Vector2.Distance(lp, badgeAnchor) > 8f)
-                    DrawDottedLine(lp, badgeAnchor, new Color(0.95f, 0.88f, 0.68f, 0.65f), 4);
-
-                GUI.color = Color.black;
-                GUI.DrawTexture(new Rect(lp.x - 4f, lp.y - 4f, 8f, 8f), Texture2D.whiteTexture);
-                GUI.color = stamped ? new Color(0.35f, 0.88f, 0.48f, 1f) : new Color(0.98f, 0.90f, 0.72f, 1f);
-                GUI.DrawTexture(new Rect(lp.x - 3f, lp.y - 3f, 6f, 6f), Texture2D.whiteTexture);
-
-                GUI.color = new Color(0.06f, 0.05f, 0.04f, 0.88f);
-                GUI.DrawTexture(new Rect(tagRect.x - 1f, tagRect.y - 1f, tagRect.width + 2f, tagRect.height + 2f), Texture2D.whiteTexture);
-                GUI.color = stamped ? new Color(0.18f, 0.46f, 0.26f, 0.92f) : lm.badgeColor;
-                GUI.DrawTexture(tagRect, Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                GUI.Label(tagRect, tagTexts[i], tagStyle);
-            }
-
-            if (hasTargetRect)
-                DrawMapTargetPin(targetMapPos, targetBadgeText, font);
-
-            // 3. 玩家位置红点
-            GUI.color = new Color(1f, 0.18f, 0.12f, 1f);
-            GUI.DrawTexture(new Rect(playerMapPos.x - 6f, playerMapPos.y - 6f, 12f, 12f), Texture2D.whiteTexture);
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(playerMapPos.x - 8f, playerMapPos.y - 8f, 16f, 2f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(playerMapPos.x - 8f, playerMapPos.y + 6f, 16f, 2f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(playerMapPos.x - 8f, playerMapPos.y - 8f, 2f, 16f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(playerMapPos.x + 6f, playerMapPos.y - 8f, 2f, 16f), Texture2D.whiteTexture);
-
-            GUI.color = new Color(0.85f, 0.16f, 0.12f, 0.94f);
-            GUI.DrawTexture(youRect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(youRect, "● 你在这里", tagStyle);
+            BuildGuidePolyline(playerPosition, stepTargetWorld, mapPath);
+            if (mapPath.Count >= 2)
+                for (int s = 0; s + 1 < mapPath.Count; s++)
+                    DrawRouteDots(WorldToMapScreen(mapPath[s], img), WorldToMapScreen(mapPath[s + 1], img));
+            else DrawRouteDots(playerMapPos, targetMapPos);
         }
 
-        GUI.Label(new Rect(panel.x + 18, panel.yMax - 34, panel.width - 36, 26),
-            GoalText() + "   |   提示：平时走路时可跟随脚下的【金色地面引路微光】前往发光目标点", Label(font));
-        GUI.skin.font = old;
+        // 2. 地标路牌：羊皮纸胶囊 + 深褐描边；已盖章的描边换朱砂、名字后跟朱砂 ✓
+        var tagStyle = AtlasStyle(12.5f, AtlasInk, true, TextAnchor.MiddleCenter);
+        tagStyle.richText = true;
+        int lmCount = Landmarks.Length;
+        var pinPos = new Vector2[lmCount];
+        var tagRects = new Rect[lmCount];
+        var tagTexts = new string[lmCount];
+        var tagStamped = new bool[lmCount];
+        for (int i = 0; i < lmCount; i++)
+        {
+            var lm = Landmarks[i];
+            var lp = WorldToMapScreen(landmarkPositions[i], img);
+            bool stamped = !string.IsNullOrEmpty(lm.stampId) && director != null && director.State != null && director.State.stamps.Contains(lm.stampId);
+            float tw = Mathf.Min(img.width - U(8f), TextW(tagStyle, stamped ? lm.name + " ✓" : lm.name) + U(20f));
+            pinPos[i] = lp;
+            tagTexts[i] = stamped ? lm.name + " <color=#b23528>✓</color>" : lm.name;
+            tagStamped[i] = stamped;
+            tagRects[i] = new Rect(lp.x - tw * .5f, lp.y - U(29f), tw, U(22f));
+        }
+
+        // 迭代排斥重叠标签（同时避让「你在这里」和「当前目标」标签）
+        float sep = U(4f);
+        for (int iter = 0; iter < 6; iter++)
+        {
+            for (int i = 0; i < lmCount; i++)
+            {
+                var ri = tagRects[i];
+                if (hasTargetRect) SeparateRect(ref ri, targetRect, sep);
+                SeparateRect(ref ri, youRect, sep);
+                for (int j = i + 1; j < lmCount; j++)
+                {
+                    var rj = tagRects[j];
+                    SeparatePair(ref ri, ref rj, sep);
+                    tagRects[j] = ClampRectToMap(rj, img);
+                }
+                tagRects[i] = ClampRectToMap(ri, img);
+            }
+        }
+
+        for (int i = 0; i < lmCount; i++)
+        {
+            var lp = pinPos[i];
+            var tagRect = tagRects[i];
+            // 标签被挤远时，画一串深褐细点连回地标
+            var badgeAnchor = new Vector2(Mathf.Clamp(lp.x, tagRect.xMin + U(6f), tagRect.xMax - U(6f)), lp.y < tagRect.center.y ? tagRect.yMin : tagRect.yMax);
+            if (Vector2.Distance(lp, badgeAnchor) > U(8f))
+                DrawDottedLine(lp, badgeAnchor, AtlasInkSoft, 5, U(2.6f));
+            Fill(Circle(lp, U(5f)), AtlasInk, U(5f));
+            Fill(Circle(lp, U(3f)), AtlasParchment, U(3f));
+            DrawTag(tagRect, tagStamped[i] ? AtlasCinnabar : AtlasInk, new Color(AtlasParchment.r, AtlasParchment.g, AtlasParchment.b, .95f));
+            GUI.Label(tagRect, tagTexts[i], tagStyle);
+        }
+
+        if (hasTargetRect)
+        {
+            Fill(Circle(targetMapPos, U(10f)), AtlasInk, U(10f));
+            Fill(Circle(targetMapPos, U(8.5f)), AtlasGold, U(8.5f));
+            GUI.Label(Circle(targetMapPos + new Vector2(0f, -U(.5f)), U(9f)), "★", AtlasStyle(12f, AtlasInk, true, TextAnchor.MiddleCenter));
+            DrawTag(targetRect, AtlasInk, AtlasGoldSoft);
+            GUI.Label(targetRect, targetBadgeText, targetStyle);
+        }
+
+        DrawPlayerPin(playerPosition, playerMapPos, img);
+        DrawTag(youRect, AtlasInk, AtlasCinnabar);
+        GUI.Label(youRect, youText, youStyle);
+    }
+
+    void DrawAtlasFooter(Rect r)
+    {
+        float cy = r.center.y;
+        Fill(new Rect(r.x, r.y, r.width, Mathf.Max(1f, U(1.2f))), AtlasRule, 0f);
+
+        // 右侧图例（从右往左排）：┅ 推荐步道  ★ 当前目标  ● 你的位置
+        var leg = AtlasStyle(13f, AtlasInk, false, TextAnchor.MiddleLeft);
+        float right = r.xMax;
+        string[] names = { "推荐步道", "当前目标", "你的位置" };
+        for (int i = 0; i < names.Length; i++)
+        {
+            float w = TextW(leg, names[i]);
+            GUI.Label(new Rect(right - w, cy - U(12f), w + U(4f), U(24f)), names[i], leg);
+            right -= w + U(7f);
+            if (i == 0)
+            {
+                for (int d = 0; d < 3; d++) RouteDot(new Vector2(right - U(4f) - d * U(9f), cy));
+                right -= U(26f);
+            }
+            else if (i == 1)
+            {
+                // ★：深褐描一圈再盖金色，压在羊皮纸上也清楚
+                var star = new Rect(right - U(20f), cy - U(13f), U(20f), U(26f));
+                var ink = AtlasStyle(17f, AtlasInk, true, TextAnchor.MiddleCenter);
+                foreach (var o in new[] { new Vector2(-1f, 0f), new Vector2(1f, 0f), new Vector2(0f, -1f), new Vector2(0f, 1f) })
+                    GUI.Label(new Rect(star.x + o.x * U(1.1f), star.y + o.y * U(1.1f), star.width, star.height), "★", ink);
+                GUI.Label(star, "★", AtlasStyle(17f, AtlasGold, true, TextAnchor.MiddleCenter));
+                right -= U(20f);
+            }
+            else
+            {
+                var c = new Vector2(right - U(8f), cy);
+                Fill(Circle(c, U(8f)), AtlasInk, U(8f));
+                Fill(Circle(c, U(6.5f)), AtlasParchment, U(6.5f));
+                Fill(Circle(c, U(5f)), AtlasCinnabar, U(5f));
+                right -= U(16f);
+            }
+            right -= U(22f);
+        }
+
+        // 左侧：深褐「当前任务」小签 + 任务目标（太长就截断，不换行）
+        var ebSt = AtlasStyle(11.5f, AtlasParchment, true, TextAnchor.MiddleCenter);
+        var eb = new Rect(r.x, cy - U(11f), TextW(ebSt, "当前任务") + U(20f), U(22f));
+        Fill(eb, AtlasWalnut, eb.height * .5f);
+        GUI.Label(eb, "当前任务", ebSt);
+        var goal = AtlasStyle(15f, AtlasInk, false, TextAnchor.MiddleLeft);
+        goal.clipping = TextClipping.Clip;
+        GUI.Label(new Rect(eb.xMax + U(12f), r.y, Mathf.Max(0f, right - eb.xMax - U(16f)), r.height), GoalText().Replace('\n', ' '), goal);
+    }
+
+    void DrawRouteDots(Vector2 a, Vector2 b)
+    {
+        int segs = Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(a, b) / U(13f)), 2, 48);
+        for (int i = 0; i <= segs; i++) RouteDot(Vector2.Lerp(a, b, i / (float)segs));
+    }
+
+    void RouteDot(Vector2 p)
+    {
+        Fill(Circle(p, U(3.7f)), new Color(AtlasInk.r, AtlasInk.g, AtlasInk.b, .6f), U(3.7f));
+        Fill(Circle(p, U(2.5f)), AtlasGold, U(2.5f));
+    }
+
+    void DrawTag(Rect r, Color border, Color fill)
+    {
+        float b = Mathf.Max(1f, U(1.4f));
+        Fill(r, border, r.height * .5f);
+        Fill(Grow(r, -b), fill, r.height * .5f - b);
     }
 
     static void SeparatePair(ref Rect a, ref Rect b, float pad)
@@ -784,39 +1078,45 @@ public class TownMap : MonoBehaviour
         return r;
     }
 
-    static void DrawDottedLine(Vector2 a, Vector2 b, Color col, int segments)
+    static void DrawDottedLine(Vector2 a, Vector2 b, Color col, int segments, float size)
     {
-        var prev = GUI.color;
-        GUI.color = col;
         for (int i = 0; i <= segments; i++)
         {
-            float t = i / (float)segments;
-            var p = Vector2.Lerp(a, b, t);
-            GUI.DrawTexture(new Rect(p.x - 2.5f, p.y - 2.5f, 5f, 5f), Texture2D.whiteTexture);
+            var p = Vector2.Lerp(a, b, i / (float)segments);
+            Fill(Circle(p, size * .5f), col, size * .5f);
         }
-        GUI.color = prev;
     }
 
-    void DrawMapTargetPin(Vector2 p, string text, Font font)
+    static void Fill(Rect r, Color c, float radius)
     {
-        float pulse = 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 5f);
-        GUI.color = new Color(1f, 0.82f, 0.16f, pulse);
-        GUI.DrawTexture(new Rect(p.x - 8f, p.y - 8f, 16f, 16f), Texture2D.whiteTexture);
-        GUI.color = new Color(0.18f, 0.12f, 0.04f, 0.96f);
-        float w = Mathf.Max(150f, text.Length * 14f + 20f);
-        var r = new Rect(p.x - w * 0.5f, p.y + 10f, w, 24f);
-        GUI.DrawTexture(new Rect(r.x - 2f, r.y - 2f, r.width + 4f, r.height + 4f), Texture2D.whiteTexture);
-        GUI.color = new Color(0.96f, 0.74f, 0.18f, 0.96f);
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        var st = WorldSignStyle(font, 13, new Color32(0x1e, 0x14, 0x06, 255));
-        GUI.Label(r, text, st);
+        radius = Mathf.Min(radius, Mathf.Min(r.width, r.height) * .5f);
+        GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, c, 0f, radius);
     }
 
-    string Stamps()
+    static void Line(Rect r, Color c, float width, float radius)
     {
-        var d = FindObjectOfType<StoryDirector>();
-        return d != null && d.State != null ? d.State.stamps.Count.ToString() : "0";
+        radius = Mathf.Min(radius, Mathf.Min(r.width, r.height) * .5f);
+        GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, c, width, radius);
+    }
+
+    static Rect Grow(Rect r, float d) => new Rect(r.x - d, r.y - d, r.width + d * 2f, r.height + d * 2f);
+    static Rect Circle(Vector2 c, float r) => new Rect(c.x - r, c.y - r, r * 2f, r * 2f);
+    static float TextW(GUIStyle s, string t) => s.CalcSize(new GUIContent(t)).x;
+
+    void DrawPlayerPin(Vector3 position, Vector2 point, Rect img)
+    {
+        var direction = new Vector3(Mathf.Sin(player.yaw), 0f, Mathf.Cos(player.yaw));
+        Vector2 screenHeading = WorldToMapScreen(position + direction, img) - point;
+        var original = GUI.matrix;
+        float angle = Mathf.Atan2(screenHeading.x, -screenHeading.y) * Mathf.Rad2Deg;
+        GUIUtility.RotateAroundPivot(angle, point);
+        Fill(new Rect(point.x - U(3.2f), point.y - U(20f), U(6.4f), U(18f)), AtlasInk, U(3.2f));
+        Fill(new Rect(point.x - U(1.8f), point.y - U(18.5f), U(3.6f), U(16f)), AtlasCinnabar, U(1.8f));
+        GUI.matrix = original;
+        Fill(Circle(point, U(9.5f)), AtlasInk, U(9.5f));
+        Fill(Circle(point, U(8f)), AtlasParchment, U(8f));
+        Fill(Circle(point, U(6f)), AtlasCinnabar, U(6f));
+        Fill(Circle(point, U(2f)), AtlasParchment, U(2f));
     }
 
     string GoalText()
@@ -826,44 +1126,20 @@ public class TownMap : MonoBehaviour
         return string.IsNullOrEmpty(t) ? "自由逛逛 · 靠近发光的东西按 E" : t;
     }
 
-    GUIStyle Title(Font font)
+    GUIStyle AtlasStyle(float size, Color color, bool bold, TextAnchor anchor)
     {
-        var s = new GUIStyle(GUI.skin.label);
-        s.fontSize = 20;
-        s.fontStyle = FontStyle.Bold;
-        s.normal.textColor = new Color32(0xfb, 0xef, 0xd9, 255);
-        if (font != null) s.font = font;
-        return s;
-    }
-
-    GUIStyle Label(Font font)
-    {
-        var s = new GUIStyle(GUI.skin.label);
-        s.fontSize = 15;
-        s.normal.textColor = new Color32(0xe8, 0xd6, 0xb4, 255);
-        if (font != null) s.font = font;
-        return s;
-    }
-
-    static GUIStyle MapTagStyle(Font font)
-    {
-        var s = new GUIStyle(GUI.skin.label);
-        s.fontSize = 13;
-        s.fontStyle = FontStyle.Bold;
-        s.alignment = TextAnchor.MiddleCenter;
-        s.normal.textColor = Color.white;
-        if (font != null) s.font = font;
-        return s;
-    }
-
-    static GUIStyle WorldSignStyle(Font font, int size, Color32 textColor)
-    {
-        var s = new GUIStyle(GUI.skin.label);
-        s.fontSize = size;
-        s.fontStyle = FontStyle.Bold;
-        s.alignment = TextAnchor.MiddleCenter;
-        s.normal.textColor = textColor;
-        if (font != null) s.font = font;
+        var s = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = Mathf.Max(9, Mathf.RoundToInt(size * uiK)),
+            fontStyle = bold ? FontStyle.Bold : FontStyle.Normal,
+            alignment = anchor,
+            wordWrap = false,
+            clipping = TextClipping.Overflow,
+            padding = new RectOffset(0, 0, 0, 0),
+            margin = new RectOffset(0, 0, 0, 0),
+            font = TideTownStyleUI.UiFont,
+        };
+        s.normal.textColor = color;
         return s;
     }
 }

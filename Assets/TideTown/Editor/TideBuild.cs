@@ -22,6 +22,9 @@ public static class TideBuild
     // 预览版：打到 Build/Preview，正式包（Build/Main）开着游戏时也能出图调效果
     public static void WindowsPreview() => Build("Build/Preview/TideTown.exe", BuildTarget.StandaloneWindows64, "WINDOWSPREVIEW");
 
+    // 2026-11-16：验收用的第三份包（Build/Verify）。预览包正被人开着玩的时候，审计跑这一份，不覆盖正在运行的程序
+    public static void WindowsVerify() => Build("Build/Verify/TideTown.exe", BuildTarget.StandaloneWindows64, "WINDOWSVERIFY");
+
     public static void WebGL()
     {
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;

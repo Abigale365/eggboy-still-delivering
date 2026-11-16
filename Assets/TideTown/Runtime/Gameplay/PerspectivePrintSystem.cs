@@ -29,6 +29,8 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
     GameState state;
     ChaseCamera chase;
     Camera cam;
+    WorldMechanismDirector ferry;
+    int openedFrame;
 
     public bool IsViewfinderActive { get; private set; }
     int itemIndex;
@@ -42,6 +44,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
     public bool AimValid { get; private set; }
     public float AimScale { get; private set; }
     Vector3 aimCamPos;
+    bool aimBridgesFerry;
 
     readonly List<GameObject> prints = new List<GameObject>();
     public GameObject LastPrint { get; private set; }
@@ -49,6 +52,8 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
 
     RectTransform frame;
     readonly List<Image> corners = new List<Image>();
+    readonly Image[] bankMarkers = new Image[2];
+    readonly List<Renderer> hiddenPlayerParts = new List<Renderer>();
     Text label;
     Image flash;
     float flashT;
@@ -68,10 +73,12 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
     public void OpenViewfinder()
     {
         if (IsViewfinderActive || player == null || ui == null) return;
-        if (player.locked || ui.LetterOpen || ui.Paused || ui.TitleShowing) return;
+        if (player.locked || ui.LetterOpen || ui.Paused || ui.TitleShowing || ui.Cinematic || MenuController.OverlayOpen) return;
         cam = Camera.main;
         if (cam == null) return;
         IsViewfinderActive = true;
+        openedFrame = Time.frameCount;
+        if (ferry == null) ferry = FindObjectOfType<WorldMechanismDirector>();
         player.locked = true;
         player.vel = Vector3.zero;
         chase = FindObjectOfType<ChaseCamera>();
@@ -80,6 +87,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         viewYaw = player.yaw * Mathf.Rad2Deg;
         viewPitch = 10f;
         SetPlayerVisible(false);
+        ui.SetCinematic(true, "viewfinder");
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         EnsureUI();
@@ -100,6 +108,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         held = null; heldModel = null;
         if (frame != null) frame.gameObject.SetActive(false);
         SetPlayerVisible(true);
+        if (ui != null) ui.SetCinematic(false, "viewfinder");
         if (player != null) player.locked = false;
         if (restoreChase && chase != null) chase.enabled = true;
         restoreChase = false;
@@ -107,8 +116,20 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
 
     void SetPlayerVisible(bool on)
     {
-        if (player == null) return;
-        foreach (var r in player.GetComponentsInChildren<Renderer>(true)) r.enabled = on;
+        if (on)
+        {
+            foreach (var r in hiddenPlayerParts) if (r != null) r.enabled = true;
+            hiddenPlayerParts.Clear();
+        }
+        else if (player != null)
+        {
+            foreach (var r in player.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!r.enabled) continue;
+                hiddenPlayerParts.Add(r);
+                r.enabled = false;
+            }
+        }
     }
 
     int FirstUnlocked(int from)
@@ -169,10 +190,8 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
 
     void Update()
     {
-        if (!IsViewfinderActive) return;
+        if (!IsViewfinderActive || openedFrame == Time.frameCount) return;
         if (cam == null) { CloseViewfinder(); return; }
-        float dt = Time.unscaledDeltaTime;
-
         bool rotatingHeld = Input.GetMouseButton(1);
         float mx = Input.GetAxis("Mouse X"), my = Input.GetAxis("Mouse Y");
         if (rotatingHeld) heldYaw += mx * 4f;
@@ -189,7 +208,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         ApplyView();
         UpdateHeldPose();
         ComputeAim();
-        UpdateUI(dt);
+        UpdateUI();
 
         if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space)) Shutter();
         else if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.C)) CloseViewfinder();
@@ -209,11 +228,11 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
     // 从镜头穿过手持物底部中心打一条线，落到地面或水面上的距离 / 物件底部离镜头的距离 = 放大倍数
     void ComputeAim()
     {
-        AimValid = false; AimScale = 0f;
+        AimValid = false; AimScale = 0f; aimBridgesFerry = false;
         if (heldModel == null) return;
         aimCamPos = cam.transform.position;
-        var b = Lux3DModelFit.WorldBounds(heldModel);
-        Vector3 bottom = new Vector3(b.center.x, b.min.y, b.center.z);
+        var heldBounds = Lux3DModelFit.WorldBounds(heldModel);
+        Vector3 bottom = new Vector3(heldBounds.center.x, heldBounds.min.y, heldBounds.center.z);
         Vector3 dir = bottom - aimCamPos;
         float near = dir.magnitude;
         if (near < 1e-4f) return;
@@ -229,9 +248,14 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         }
         if (hitDist == float.MaxValue) return;
         float k = hitDist / near;
-        float size = Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)) * k;
+        float size = Mathf.Max(heldBounds.size.x, Mathf.Max(heldBounds.size.y, heldBounds.size.z)) * k;
         AimScale = k;
         AimValid = k >= MinScale && size <= MaxPrintSize;
+        if (AimValid && FerrySocket(out var a, out var b))
+        {
+            var projected = new Bounds(aimCamPos + (heldBounds.center - aimCamPos) * k, heldBounds.size * k);
+            aimBridgesFerry = CoversFerry(projected, a, b);
+        }
     }
 
     public GameObject Shutter()
@@ -268,13 +292,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
     // 拓印插座：渡口缺口。拍下的东西同时盖住缺口两端（放宽 0.6 m）就吸附摆正，变成能走的桥
     bool TrySnapToSocket(GameObject go)
     {
-        var mech = FindObjectOfType<WorldMechanismDirector>();
-        if (mech == null || !mech.GapActive || mech.CrossingSolved) return false;
-        if (!mech.GapEndpoints(out Vector3 a, out Vector3 b)) return false;
-        var bounds = Lux3DModelFit.WorldBounds(go);
-        bounds.Expand(new Vector3(1.2f, 4f, 1.2f));
-        Vector3 aT = new Vector3(a.x, bounds.center.y, a.z), bT = new Vector3(b.x, bounds.center.y, b.z);
-        if (!bounds.Contains(aT) || !bounds.Contains(bT)) return false;
+        if (!FerrySocket(out var a, out var b) || !CoversFerry(Lux3DModelFit.WorldBounds(go), a, b)) return false;
 
         // 摆正：最长的水平边顺着 A→B，中心放在缺口中点，底面略高于水面
         Vector3 ab = b - a; ab.y = 0f;
@@ -303,12 +321,23 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         Physics.SyncTransforms();
         prints[prints.Count - 1] = root;
         LastPrint = root;
-        mech.BridgeGapWithBoat("print_bridge");
+        ferry.BridgeGapWithBoat("print_bridge");
         ShadowAndChimeSystem.PlayProceduralChime(1046.5f, 0.4f);
         return true;
     }
 
-    // ---- 取景框界面：四个角 + 一行小字（物件名和倍数），对不上就变红 ----
+    bool FerrySocket(out Vector3 a, out Vector3 b)
+    {
+        a = b = Vector3.zero;
+        return ferry != null && ferry.GapActive && !ferry.CrossingSolved && ferry.GapEndpoints(out a, out b);
+    }
+
+    static bool CoversFerry(Bounds bounds, Vector3 a, Vector3 b)
+    {
+        bounds.Expand(new Vector3(1.2f, 4f, 1.2f));
+        return bounds.Contains(new Vector3(a.x, bounds.center.y, a.z)) &&
+               bounds.Contains(new Vector3(b.x, bounds.center.y, b.z));
+    }
 
     void EnsureUI()
     {
@@ -318,13 +347,13 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         go.transform.SetParent(root, false);
         frame = go.GetComponent<RectTransform>();
         frame.anchorMin = Vector2.zero; frame.anchorMax = Vector2.one;
-        frame.offsetMin = new Vector2(70f, 60f); frame.offsetMax = new Vector2(-70f, -60f);
+        frame.offsetMin = new Vector2(100f, 72f); frame.offsetMax = new Vector2(-100f, -72f);
         for (int i = 0; i < 4; i++)
         {
             Vector2 anchor = new Vector2(i % 2, i / 2);
             for (int j = 0; j < 2; j++)
             {
-                var bar = TideTownStyleUI.CreatePanel(frame, "Corner", j == 0 ? 70f : 4f, j == 0 ? 4f : 70f, TideTownStyleUI.CreamText, false);
+                var bar = TideTownStyleUI.CreatePanel(frame, "Corner", j == 0 ? 44f : 2f, j == 0 ? 2f : 44f, TideTownStyleUI.CreamText, false);
                 bar.raycastTarget = false;
                 var rt = bar.rectTransform;
                 rt.anchorMin = rt.anchorMax = rt.pivot = anchor;
@@ -332,15 +361,33 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
                 corners.Add(bar);
             }
         }
-        var dot = TideTownStyleUI.CreatePanel(frame, "CenterDot", 6f, 6f, TideTownStyleUI.CreamText, true);
+        var dot = TideTownStyleUI.CreatePanel(frame, "CenterDot", 4f, 4f, TideTownStyleUI.CreamText, true);
         dot.raycastTarget = false;
         corners.Add(dot);
-        label = TideTownStyleUI.CreateText(frame, "", 15, TideTownStyleUI.CreamText, TextAnchor.LowerCenter,
-            new Vector2(0f, 0f), new Vector2(400f, 26f), true);
-        var lrt = label.rectTransform;
-        lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0f);
-        lrt.pivot = new Vector2(0.5f, 0f);
-        lrt.anchoredPosition = new Vector2(0f, 10f);
+        for (int i = 0; i < bankMarkers.Length; i++)
+        {
+            var marker = TideTownStyleUI.CreatePanel(frame, "FerryBank_" + i, 10f, 10f, TideTownStyleUI.CreamText, false);
+            marker.raycastTarget = false;
+            marker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            bankMarkers[i] = marker;
+        }
+        // 2026-11-16 取景提示条换成和 HUD 教学条同一套：胡桃木底 + 内缩金细线 + 投影
+        var caption = TideTownStyleUI.CreatePanel(frame, "ViewfinderCaption", 410f, 36f, new Color32(0x4a, 0x30, 0x1c, 232));
+        caption.sprite = TideTownStyleUI.RoundedBorderSprite;
+        caption.raycastTarget = false;
+        var capShadow = caption.gameObject.AddComponent<Shadow>();
+        capShadow.effectColor = new Color32(0x1a, 0x10, 0x08, 90);
+        capShadow.effectDistance = new Vector2(3f, -5f);
+        var cr = caption.rectTransform;
+        cr.anchorMin = cr.anchorMax = new Vector2(.5f, 0f);
+        cr.anchoredPosition = new Vector2(0f, 18f);
+        var capLine = TideTownStyleUI.CreatePanel(cr, "CaptionFrame", 0f, 0f, new Color32(0xe0, 0xb4, 0x72, 150), true);
+        capLine.sprite = TideTownStyleUI.RoundedFrameSprite;
+        capLine.raycastTarget = false;
+        var clr = capLine.rectTransform;
+        clr.anchorMin = Vector2.zero; clr.anchorMax = Vector2.one; clr.offsetMin = new Vector2(3f, 3f); clr.offsetMax = new Vector2(-3f, -3f);
+        label = TideTownStyleUI.CreateText(cr, "", 15, TideTownStyleUI.CreamText, TextAnchor.MiddleCenter,
+            Vector2.zero, new Vector2(374f, 30f), false);
         var fgo = new GameObject("ShutterFlash", typeof(RectTransform), typeof(Image));
         fgo.transform.SetParent(root, false);
         var frt = fgo.GetComponent<RectTransform>();
@@ -350,13 +397,29 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         flash.raycastTarget = false;
     }
 
-    void UpdateUI(float dt)
+    void UpdateUI()
     {
         if (frame == null) return;
-        Color c = AimValid ? (Color)TideTownStyleUI.CreamText : new Color(0.95f, 0.42f, 0.35f);
+        Color c = aimBridgesFerry ? new Color(1f, .82f, .39f) :
+            AimValid ? (Color)TideTownStyleUI.CreamText : new Color(.86f, .77f, .67f, .78f);
         foreach (var im in corners) im.color = c;
-        if (label != null)
-            label.text = Items[itemIndex].title + (AimValid ? "　×" + AimScale.ToString("F1") : "　够不着");
+        bool nearbyFerry = FerrySocket(out var a, out var b) &&
+            Vector3.Distance(player.transform.position, (a + b) * .5f) <= 9f;
+        SetBankMarker(bankMarkers[0], a, nearbyFerry, c);
+        SetBankMarker(bankMarkers[1], b, nearbyFerry, c);
+        label.text = Items[itemIndex].title + (aimBridgesFerry ? "　可以接上两岸" :
+            nearbyFerry ? "　让物件搭住两枚岸标" :
+            AimValid ? "　空格拓印" : "　把物件底边对向地面");
+    }
+
+    void SetBankMarker(Image marker, Vector3 bank, bool visible, Color color)
+    {
+        bank.y = Mathf.Max(bank.y, WaterLevel.StaticY) + .10f;
+        var point = cam.WorldToScreenPoint(bank);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(frame, point, null, out var local);
+        marker.enabled = visible && point.z > 0f && frame.rect.Contains(local);
+        marker.rectTransform.anchoredPosition = local;
+        marker.color = color;
     }
 
     void LateUpdate()

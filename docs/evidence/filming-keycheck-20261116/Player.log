@@ -1,0 +1,56 @@
+Mono path[0] = 'G:/1 business/02 项目工作区/2026.09.05 ai赛事/2026.11.19 群核aholo全球3d ai黑客松/04_游戏产品/eggboy-still-delivering-latest/build/main/tidetown_Data/Managed'
+Mono config path = 'G:/1 business/02 项目工作区/2026.09.05 ai赛事/2026.11.19 群核aholo全球3d ai黑客松/04_游戏产品/eggboy-still-delivering-latest/build/main/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+Initialize engine version: 2022.3.62f2c1 (92e6e6be66dc)
+[Subsystems] Discovering subsystems at path G:/1 business/02 项目工作区/2026.09.05 ai赛事/2026.11.19 群核aholo全球3d ai黑客松/04_游戏产品/eggboy-still-delivering-latest/build/main/tidetown_Data/UnitySubsystems
+GfxDevice: creating device client; threaded=1; jobified=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce RTX 3060 Laptop GPU (ID=0x2520)
+    Vendor:   NVIDIA
+    VRAM:     5994 MB
+    Driver:   32.0.16.1062
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  1.751 seconds
+- Finished resetting the current domain, in  0.003 seconds
+<RI> Initializing input.
+<RI> Input initialized.
+<RI> Initialized touch support.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+UnloadTime: 7.120300 ms
+RESGUARD window source=display native=1920x1080 selected=1600x900 mode=Windowed
+RESGUARD quality=High reason=hardware gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+TOWNTOON roofs houses=17 B6_house_l2=原色 B6_house_l4=砖红 B6_house_m1=鼠尾草绿 B6_house_m2=雾蓝 B6_house_m5=原色 B6_house_r2=原色 B6_house_r3=雾蓝 B6_market_l1=原色 B6_market_r1=暖灰瓦 B7_house_l1=鼠尾草绿 B7_house_l3=暖灰瓦 B7_house_m3=暖灰瓦 B7_house_m4=鼠尾草绿 B7_house_r1=原色 B7_house_r4=暖灰瓦 B7_market_l2=原色 B7_market_r2=原色 
+TOWNTOON materials=191 renderers=2450 skipped=1 noFade=48 roofMats=6 roofRenderers=10 glassMats=5 glassParts=41
+FEEL trail 256x256 ARGBHalf size=25.6m
+TOWNLOOK gfxTier=normal gpu="NVIDIA GeForce RTX 3060 Laptop GPU" lampLights=6
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+URP 金属度/粗糙度贴图已接入：2048x2048
+角色图集已接入：2048x2048
+EGGBOY skin: shell 26344, leather 8729, visor 2743; gait True, antiClip True, bones 17
+NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=33923 hull=50 x=-0.238..0.212 y=0.489..0.780
+UI canvas 1600x900 screen 1600x900 scale 1
+FEEL bushes 1143
+LUX3D mode=offline library=14
+RESGUARD quality=Medium reason=fps<48/4s gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+RESGUARD quality=Low reason=fps<48/4s gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+BAKERYFIRE lit
+FILMING_STAGE F9 at=(34.19, 10.96, 10.21) lamp=(33.59, 11.33, 9.62)
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+TUTORIAL_ONCE tab_letter
+TUTORIAL_ONCE map_town
+TUTORIAL_ONCE pocketwatch_r
+TUTORIAL_ONCE viewfinder_c
+FILMING_STAGE F5 at=(-21.93, 3.00, -7.74) lamp=(-21.93, 0.00, -10.74)
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+FILMING_STAGE F9 at=(34.19, 10.96, 10.21) lamp=(33.59, 11.33, 9.62)
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+TUTORIAL_ONCE wishlist_v
+FILMING_STAGE F6 at=(-10.55, 3.02, -7.34) lamp=(-10.55, 3.00, -5.84)
+TOWNMUSIC track=bakery seconds=196.3636 playing=True
+MIC_DEVICE sampling=麦克风 (BYOM-Media)
+MIC_DEVICE sampling=麦克风阵列 (适用于数字麦克风的英特尔® 智音技术)
+MIC_DEVICE sampling=麦克风 (NVIDIA Broadcast)
+MIC_DEVICE sampling=麦克风 (BYOM-Media)
+MIC_DEVICE sampling=麦克风阵列 (适用于数字麦克风的英特尔® 智音技术)

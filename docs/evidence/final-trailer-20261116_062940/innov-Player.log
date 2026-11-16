@@ -1,0 +1,574 @@
+Mono path[0] = 'G:/1 business/02 项目工作区/2026.09.05 AI赛事/2026.11.19 群核Aholo全球3D AI黑客松/04_游戏产品/eggboy-still-delivering-latest/Build/Main/TideTown_Data/Managed'
+Mono config path = 'G:/1 business/02 项目工作区/2026.09.05 AI赛事/2026.11.19 群核Aholo全球3D AI黑客松/04_游戏产品/eggboy-still-delivering-latest/Build/Main/MonoBleedingEdge/etc'
+Input System module state changed to: Initialized.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+Initialize engine version: 2022.3.62f2c1 (92e6e6be66dc)
+[Subsystems] Discovering subsystems at path G:/1 business/02 项目工作区/2026.09.05 AI赛事/2026.11.19 群核Aholo全球3D AI黑客松/04_游戏产品/eggboy-still-delivering-latest/Build/Main/TideTown_Data/UnitySubsystems
+GfxDevice: creating device client; threaded=1; jobified=1
+Direct3D:
+    Version:  Direct3D 11.0 [level 11.1]
+    Renderer: NVIDIA GeForce RTX 3060 Laptop GPU (ID=0x2520)
+    Vendor:   NVIDIA
+    VRAM:     5994 MB
+    Driver:   32.0.16.1062
+Begin MonoManager ReloadAssembly
+- Loaded All Assemblies, in  6.213 seconds
+- Finished resetting the current domain, in  0.002 seconds
+<RI> Initializing input.
+<RI> Input initialized.
+<RI> Initialized touch support.
+[PhysX] Initialized MultithreadedTaskDispatcher with 16 workers.
+UnloadTime: 2.156400 ms
+RESGUARD window source=command-line
+RESGUARD quality=High reason=hardware gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+TOWNTOON roofs houses=17 B6_house_l2=原色 B6_house_l4=砖红 B6_house_m1=鼠尾草绿 B6_house_m2=雾蓝 B6_house_m5=原色 B6_house_r2=原色 B6_house_r3=雾蓝 B6_market_l1=原色 B6_market_r1=暖灰瓦 B7_house_l1=鼠尾草绿 B7_house_l3=暖灰瓦 B7_house_m3=暖灰瓦 B7_house_m4=鼠尾草绿 B7_house_r1=原色 B7_house_r4=暖灰瓦 B7_market_l2=原色 B7_market_r2=原色 
+TOWNTOON materials=191 renderers=2450 skipped=1 noFade=48 roofMats=6 roofRenderers=10 glassMats=5 glassParts=41
+FEEL trail 256x256 ARGBHalf size=25.6m
+TOWNLOOK gfxTier=normal gpu="NVIDIA GeForce RTX 3060 Laptop GPU" lampLights=6
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+URP 金属度/粗糙度贴图已接入：2048x2048
+角色图集已接入：2048x2048
+EGGBOY skin: shell 26344, leather 8729, visor 2743; gait True, antiClip True, bones 17
+NATIVE_FACE originalRenderer=true originalSubmeshes=3 screenPixels=33923 hull=50 x=-0.238..0.212 y=0.489..0.780
+UI canvas 1920x1080 screen 1920x1080 scale 1
+RESGUARD quality=Medium reason=fps<48/4s gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+FEEL bushes 1143
+LUX3D mode=mock library=14
+RESGUARD quality=Low reason=fps<48/4s gpu=NVIDIA GeForce RTX 3060 Laptop GPU
+INNOVAUDIT wood_open=True
+INNOVAUDIT easyinput_ring_selection_persists=True
+INNOVAUDIT easyinput_ring_selection_restores=True
+INNOVAUDIT wood_only_small_note=True
+INNOVAUDIT wood_numbers_match_rings_at_open=True r0=5/5 r1=2/2 r2=6/6 
+INNOVAUDIT wood_locked_by_latches=True
+INNOVAUDIT wood_push_while_locked_free=True
+INNOVAUDIT wood_latch_b_opens_all=True
+INNOVAUDIT wood_drag_outer_couples_middle=True 526->636
+INNOVAUDIT wood_small_drag_ignored=True
+INNOVAUDIT wood_numbers_follow_rotation=True r0=6/6 r1=3/3 r2=6/6 
+INNOVAUDIT wood_wrong_push_costs_one=True
+INNOVAUDIT wood_note_shows_attempts=True 邮差笔记　●●○外环 · 翻开的书页 · ？ / 中环 · 黄铜秤砣 · ？ / 内环 · 藤编提篮 · ？
+INNOVAUDIT wood_rebound_needs_new_order=True
+INNOVAUDIT wood_rebound_solvable=True
+INNOVAUDIT wood_aligned=True
+INNOVAUDIT wood_solves=True
+INNOVAUDIT wood_callback_and_closes=True
+TOWNMUSIC track=bakery seconds=196.3636 playing=True
+INNOVAUDIT wood_third_failure_jams=True step=B1_matches
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+INNOVAUDIT wind_present=True
+INNOVAUDIT wind_calm_inland=True
+TOWNMUSIC track=bakery seconds=196.3636 playing=True
+INNOVAUDIT wind_zone_on_coast=True mid=(15.6, 0.0, -16.1)
+INNOVAUDIT wind_blows_from_sea=True wind=(0.29, 0.00, 0.96)
+INNOVAUDIT wind_gust_brace_crouches=True phase=gust
+INNOVAUDIT wind_brace_survives=True phase=boost
+INNOVAUDIT wind_fail_happens=True
+INNOVAUDIT wind_fail_short_stumble=True moved=3.6
+INNOVAUDIT wind_fail_drops_item_nearby=True carry= step=B1_matches drop=(16.4, 1.4, -14.1)
+INNOVAUDIT wind_fail_no_text_banner=True
+INNOVAUDIT wind_pickup_restores=True step=B3_load
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+INNOVAUDIT wind_exit_setup=True zone=True phase=gust crouched=True expr=nervous
+INNOVAUDIT wind_exit_restores_pose=True expr=curious
+INNOVAUDIT dog_present=True
+TOWNMUSIC track=school seconds=192 playing=True
+TUTORIAL_ONCE dog_command
+INNOVAUDIT dog_sniff_command=True sniff:blackboard
+INNOVAUDIT dog_sniff_runs_and_marks=True id=blackboard ran=0.0
+INNOVAUDIT dog_mark_shows_ring_number=True 内环 6
+INNOVAUDIT dog_stays_at_school=True home=True inSchool=True at=(10.5, 3.0, -4.6)
+INNOVAUDIT dog_pet_when_nothing_near=True pet
+INNOVAUDIT dog_plate_dry_at_L2=True plate=(20.3, 3.0, 3.4)
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+INNOVAUDIT dog_plate_not_yet=True
+INNOVAUDIT dog_plate_command=True plate
+INNOVAUDIT dog_steps_on_plate=True
+INNOVAUDIT dog_chest_rises=True
+INNOVAUDIT dog_chest_reachable_dry=True chest=(19.57, 3.02, 2.59) stand=(20.17, 3.02, 2.59) water=1.15
+INNOVAUDIT dog_chest_gives_lighthouse_code=True
+INNOVAUDIT dog_code_in_lighthouse_note=True 邮差笔记　●●●守塔人帽 · 外环 6 / 黄铜望远镜 · 中环 2 / 航海日志 · 内环 3
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+INNOVAUDIT print_present=True
+INNOVAUDIT print_open=True
+INNOVAUDIT print_hides_player_in_fp=True
+INNOVAUDIT print_aim_valid=True k=2.05
+INNOVAUDIT print_screen_rect_unchanged=True before=(x:694.66, y:331.05, width:530.68, height:186.48) after=(x:694.66, y:331.05, width:530.68, height:186.48)
+INNOVAUDIT print_scaled_up=True scale=2.05
+INNOVAUDIT print_not_bridge_inland=True
+INNOVAUDIT print_sky_invalid=True
+INNOVAUDIT print_close_restores=True
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+INNOVAUDIT print_gap_blocks=True
+INNOVAUDIT print_gap_aim_found=True heldYaw=0 hold=0.35 pitch=6.5 k=6.6
+INNOVAUDIT print_snaps_to_gap=True snapped=True
+INNOVAUDIT print_bridge_walkable=True ground=1.45 water=1.15
+TOWNMUSIC track=theme seconds=164.2105 playing=True
+INNOVAUDIT shadow_present=True
+INNOVAUDIT shadow_off_route=True turntable=(20.50, 1.40, -11.70)
+INNOVAUDIT shadow_start_unsolved=True
+INNOVAUDIT shadow_turn_solves=True angle=0.0
+INNOVAUDIT shadow_screen_shows_key=True holeLit=True rimDark=True shaftDark=True belowLit=True hole=(0.29, 0.50) shaft=(0.66, 0.50)
+INNOVAUDIT shadow_gives_bottle=True
+INNOVAUDIT sound_all_four=True count=4
+INNOVAUDIT music_box_starts=True houses=17
+INNOVAUDIT music_box_houses_move=True lift=0.22
+INNOVAUDIT music_box_restores_exactly=True err=0.00000
+INNOVAUDIT hint_system_present=True
+TOWNMUSIC track=bakery seconds=196.3636 playing=True
+TUTORIAL_ONCE tab_letter
+INNOVAUDIT hint_quiet_before_45s=True node=bakery_fire tier=0
+HINT node=bakery_fire tier=1 stuck=46s
+INNOVAUDIT hint_tier1_at_45s=True
+HINT node=bakery_fire tier=2 stuck=91s
+INNOVAUDIT hint_tier2_at_90s=True
+TUTORIAL_ONCE map_town
+TUTORIAL_ONCE pocketwatch_r
+TUTORIAL_ONCE viewfinder_c
+TUTORIAL_ONCE wishlist_v
+HINT node=bakery_fire tier=3 stuck=151s
+INNOVAUDIT hint_tier3_letter=True lin_oven/后院的木柴
+INNOVAUDIT hint_tier3_phrase_marked=True
+HINT node=bakery_fire tier=4 stuck=241s
+INNOVAUDIT hint_tier4_at_240s=True stuck=241
+INNOVAUDIT hint_reset_on_progress=True
+INNOVAUDIT hint_silent_when_away=True node= tier=0
+LUX3D mode=mock library=14
+INNOVAUDIT word_system_present=True
+INNOVAUDIT word_no_slips_before_letters=True count=0
+INNOVAUDIT word_pocket_has_three_letters=True count=8
+INNOVAUDIT word_all_in_letter_text=True
+INNOVAUDIT word_fire_gives_matches=True step=B2_wood
+INNOVAUDIT word_wet_wood_loaded=True step=B4_light
+INNOVAUDIT word_wet_wood_spawn=True generating
+INNOVAUDIT word_wet_wood_wont_light=True puffs=1
+INNOVAUDIT word_reread_no_skip=True before=B4_light after=B4_light
+INNOVAUDIT word_letter_highlight=True
+LUX3D swapped prompt=一捆被雨淋湿的木柴，用麻绳捆着 seconds=3.0 state=swapped
+INNOVAUDIT word_single_char_noop=True
+INNOVAUDIT word_combo_dry_wood=True
+INNOVAUDIT word_combo_in_pocket=True count=9
+INNOVAUDIT word_dry_wood_replaces_wet=True
+BAKERYFIRE lit
+WATER set 0.00->0.45 in 4.0s
+INNOVAUDIT word_oven_lights_with_dry_wood=True step=S0_arrive
+TOWNMUSIC track=school seconds=192 playing=True
+INNOVAUDIT word_free_combo=True 暖球
+INNOVAUDIT word_free_combo_keepsake=True
+LUX3D swapped prompt=一捆晒得干透的木柴，用麻绳捆着 seconds=3.0 state=swapped
+LUX3D swapped prompt=暖球 seconds=3.0 state=swapped
+INNOVAUDIT word_swaps_done=True swapped
+INNOVAUDIT echo_system_present=True
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+INNOVAUDIT echo_gap_blocks=True gap=True
+INNOVAUDIT echo_winch_on_dry_land=True winch=(13.40, 1.40, -13.10)
+INNOVAUDIT echo_alone_cannot_crank=True holders=1 solved=False
+INNOVAUDIT echo_needs_buffer=True buffered=1.0
+URP 金属度/粗糙度贴图已接入：2048x2048
+角色图集已接入：2048x2048
+EGGBOY skin: shell 26344, leather 8729, visor 2743; gait True, antiClip True, bones 17
+INNOVAUDIT echo_summon=True
+INNOVAUDIT echo_walks=True moved=2.50 speed=1.25
+INNOVAUDIT echo_legs_move=True footSwing=0.077
+INNOVAUDIT echo_ghost_material=True
+INNOVAUDIT echo_holds_winch=True
+INNOVAUDIT echo_two_holders=True holders=2
+INNOVAUDIT echo_crank_raises_bridge=True crank=1.00
+INNOVAUDIT echo_bridge_walkable=True ground=1.42 water=1.15
+INNOVAUDIT echo_fades_out=True
+LUX3D mode=mock library=14
+INNOVAUDIT lux_mock_mode=True
+INNOVAUDIT lux_library_loaded=True entries=14
+INNOVAUDIT lux_library_all_models=True
+INNOVAUDIT wish_system_present=True
+TOWNMUSIC track=school seconds=192 playing=True
+INNOVAUDIT wish_food_kind=True food
+INNOVAUDIT wish_food_fallback_instant=True
+INNOVAUDIT wish_food_generating=True generating
+INNOVAUDIT wish_food_story=True
+LUX3D swapped prompt=香喷喷的烤肉骨头 seconds=3.1 state=swapped
+INNOVAUDIT wish_food_swapped=True swapped 3.1s
+INNOVAUDIT wish_food_same_root=True
+INNOVAUDIT wish_food_size_fit=True max=0.42 want=0.42
+INNOVAUDIT wish_food_on_ground=True minY=3.02 rootY=3.02
+INNOVAUDIT wish_food_has_mesh=True
+INNOVAUDIT wish_food_story_kept=True
+TOWNMUSIC track=lighthouse seconds=189.0909 playing=True
+INNOVAUDIT wish_boat_water_L2=True waterY=1.15
+INNOVAUDIT word_boat_combo=True
+INNOVAUDIT word_boat_gap_before=True
+INNOVAUDIT word_boat_walkable=True applied=True ground=1.42 water=1.15
+INNOVAUDIT word_boat_solved=True
+INNOVAUDIT wish_boat_kind=True boat
+INNOVAUDIT crossing_gap_blocks_at_L2=True channel=(14.02, 1.00, -15.50)
+INNOVAUDIT wish_boat_walkable=True before=False after=True ground=1.39 water=1.15
+INNOVAUDIT wish_boat_flag=True
+LUX3D swapped prompt=戴草帽的海龟船 seconds=3.0 state=swapped
+INNOVAUDIT wish_boat_swapped=True swapped
+INNOVAUDIT wish_boat_still_walkable=True
+INNOVAUDIT wish_keepsake_kind=True keepsake
+LUX3D swapped prompt=星空海螺八音盒 seconds=3.0 state=swapped
+INNOVAUDIT wish_keepsake_swapped=True swapped
+INNOVAUDIT wish_cache_hit=True cached
+INNOVAUDIT wish_session_count=True 6->7
+LUX3D mode=offline library=14
+INNOVAUDIT wish_offline_fallback_only=True offline
+LUX3D mode=mock library=14
+INNOVAUDIT pause_guard_present=True
+LUX3D swapped prompt=星空海螺八音盒 seconds=0.0 state=cached
+INNOVAUDIT pause_guard_idle_esc_pauses=True
+INNOVAUDIT pause_guard_idle_unexpected_unlock_pauses=True
+INNOVAUDIT pause_guard_script_unlock_is_not_unexpected=True
+INNOVAUDIT pause_guard_unexpected_unlock_after_grace=True
+INNOVAUDIT pause_guard_inspect_opened=True
+INNOVAUDIT pause_guard_inspect_unlock_does_not_pause=True paused=False
+INNOVAUDIT pause_guard_inspect_esc_does_not_pause=True
+INNOVAUDIT pause_guard_inspect_closed=True
+INNOVAUDIT pause_guard_inspect_closing_esc_does_not_pause=True
+INNOVAUDIT pause_guard_inspect_esc_works_again=True letterOpen=False overlayOpen=False overlayBusy=False blocked=False
+INNOVAUDIT pause_guard_inspect_never_paused=True
+INNOVAUDIT pause_guard_wooden_opened=True
+INNOVAUDIT pause_guard_wooden_unlock_does_not_pause=True paused=False
+INNOVAUDIT pause_guard_wooden_esc_does_not_pause=True
+INNOVAUDIT pause_guard_wooden_closed=True
+INNOVAUDIT pause_guard_wooden_closing_esc_does_not_pause=True
+INNOVAUDIT pause_guard_wooden_esc_works_again=True letterOpen=False overlayOpen=False overlayBusy=False blocked=False
+INNOVAUDIT pause_guard_wooden_never_paused=True
+INNOVAUDIT pause_guard_wish_opened=True
+INNOVAUDIT pause_guard_wish_unlock_does_not_pause=True paused=False
+INNOVAUDIT pause_guard_wish_esc_does_not_pause=True
+INNOVAUDIT pause_guard_wish_closed=True
+INNOVAUDIT pause_guard_wish_closing_esc_does_not_pause=True
+INNOVAUDIT pause_guard_wish_esc_works_again=True letterOpen=False overlayOpen=False overlayBusy=False blocked=False
+INNOVAUDIT pause_guard_wish_never_paused=True
+INNOVAUDIT status=passed
+Input System module state changed to: ShutdownInProgress.
+Input System polling thread exited.
+Input System module state changed to: Shutdown.
+Memory Statistics:
+[ALLOC_TEMP_TLS] TLS Allocator
+  StackAllocators : 
+    [ALLOC_TEMP_MAIN]
+      Peak usage frame count: [8.0 KB-16.0 KB]: 363 frames, [16.0 KB-32.0 KB]: 475 frames, [64.0 KB-128.0 KB]: 2 frames, [128.0 KB-256.0 KB]: 5853 frames, [256.0 KB-0.5 MB]: 6 frames, [2.0 MB-4.0 MB]: 1 frames
+      Initial Block Size 4.0 MB
+      Current Block Size 4.0 MB
+      Peak Allocated Bytes 3.4 MB
+      Overflow Count 0
+    [ALLOC_TEMP_Loading.AsyncRead]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 0.5 KB
+      Overflow Count 0
+    [ALLOC_TEMP_Loading.PreloadManager]
+      Initial Block Size 256.0 KB
+      Current Block Size 0.5 MB
+      Peak Allocated Bytes 508.9 KB
+      Overflow Count 28
+    [ALLOC_TEMP_Background Job.Worker 8]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 6]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 58.2 KB
+      Overflow Count 578
+    [ALLOC_TEMP_Job.Worker 0]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.6 KB
+      Overflow Count 164
+    [ALLOC_TEMP_Background Job.Worker 10]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 9]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 5]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 63.2 KB
+      Overflow Count 746
+    [ALLOC_TEMP_Background Job.Worker 14]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 6]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 4]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 63.2 KB
+      Overflow Count 899
+    [ALLOC_TEMP_Job.Worker 14]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.5 KB
+      Overflow Count 8
+    [ALLOC_TEMP_Job.Worker 3]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 97.8 KB
+      Overflow Count 29
+    [ALLOC_TEMP_Job.Worker 13]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.6 KB
+      Overflow Count 15
+    [ALLOC_TEMP_Background Job.Worker 12]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_EnlightenWorker] x 16
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_] x 30
+      Initial Block Size 64.0 KB
+      Current Block Size 92.0 KB
+      Peak Allocated Bytes 91.6 KB
+      Overflow Count 8
+    [ALLOC_TEMP_Background Job.Worker 1]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 2]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 7]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 15]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_UnityGfxDeviceWorker]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 43.9 KB
+      Overflow Count 2
+    [ALLOC_TEMP_AssetGarbageCollectorHelper] x 15
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 138 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 5]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 9]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.2 KB
+      Overflow Count 605
+    [ALLOC_TEMP_Background Job.Worker 13]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 8]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 58.2 KB
+      Overflow Count 866
+    [ALLOC_TEMP_Job.Worker 7]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 78.9 KB
+      Overflow Count 745
+    [ALLOC_TEMP_Job.Worker 1]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 75.0 KB
+      Overflow Count 329
+    [ALLOC_TEMP_Job.Worker 2]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 64.8 KB
+      Overflow Count 119
+    [ALLOC_TEMP_Background Job.Worker 3]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Background Job.Worker 11]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 10]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 57.0 KB
+      Overflow Count 297
+    [ALLOC_TEMP_Background Job.Worker 0]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_Job.Worker 11]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 56.9 KB
+      Overflow Count 133
+    [ALLOC_TEMP_Job.Worker 12]
+      Initial Block Size 256.0 KB
+      Current Block Size 256.0 KB
+      Peak Allocated Bytes 58.2 KB
+      Overflow Count 41
+    [ALLOC_TEMP_Background Job.Worker 4]
+      Initial Block Size 32.0 KB
+      Current Block Size 32.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+    [ALLOC_TEMP_BatchDeleteObjects]
+      Initial Block Size 64.0 KB
+      Current Block Size 64.0 KB
+      Peak Allocated Bytes 54 B
+      Overflow Count 0
+[ALLOC_DEFAULT] Dual Thread Allocator
+  Peak main deferred allocation count 1283
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 10 Subsections = 10240 buckets. Failed count: 662211
+        32B: 20 Subsections = 10240 buckets. Failed count: 404249
+        48B: 61 Subsections = 20821 buckets. Failed count: 71958
+        64B: 51 Subsections = 13056 buckets. Failed count: 25300
+        80B: 22 Subsections = 4505 buckets. Failed count: 27916
+        96B: 17 Subsections = 2901 buckets. Failed count: 174315
+        112B: 38 Subsections = 5558 buckets. Failed count: 1662
+        128B: 37 Subsections = 4736 buckets. Failed count: 9028
+    [ALLOC_DEFAULT_MAIN]
+      Peak usage frame count: [64.0 MB-128.0 MB]: 1138 frames, [128.0 MB-256.0 MB]: 5562 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 3
+      Peak Allocated memory 174.5 MB
+      Peak Large allocation bytes 132.8 MB
+    [ALLOC_DEFAULT_THREAD]
+      Peak usage frame count: [16.0 MB-32.0 MB]: 5679 frames, [32.0 MB-64.0 MB]: 1020 frames, [64.0 MB-128.0 MB]: 1 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 2
+      Peak Allocated memory 72.5 MB
+      Peak Large allocation bytes 64.8 MB
+[ALLOC_TEMP_JOB_1_FRAME]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_2_FRAMES]
+  Initial Block Size 2.0 MB
+  Used Block Count 0
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_4_FRAMES (JobTemp)]
+  Initial Block Size 2.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 0
+  Overflow Count (full) 0
+[ALLOC_TEMP_JOB_ASYNC (Background)]
+  Initial Block Size 1.0 MB
+  Used Block Count 1
+  Overflow Count (too large) 1
+  Overflow Count (full) 0
+[ALLOC_GFX] Dual Thread Allocator
+  Peak main deferred allocation count 16
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 10 Subsections = 10240 buckets. Failed count: 662211
+        32B: 20 Subsections = 10240 buckets. Failed count: 404249
+        48B: 61 Subsections = 20821 buckets. Failed count: 71958
+        64B: 51 Subsections = 13056 buckets. Failed count: 25300
+        80B: 22 Subsections = 4505 buckets. Failed count: 27916
+        96B: 17 Subsections = 2901 buckets. Failed count: 174315
+        112B: 38 Subsections = 5558 buckets. Failed count: 1662
+        128B: 37 Subsections = 4736 buckets. Failed count: 9028
+    [ALLOC_GFX_MAIN]
+      Peak usage frame count: [128.0 MB-256.0 MB]: 6700 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 14
+      Peak Allocated memory 209.3 MB
+      Peak Large allocation bytes 0 B
+    [ALLOC_GFX_THREAD]
+      Peak usage frame count: [128.0 MB-256.0 MB]: 6700 frames
+      Requested Block Size 16.0 MB
+      Peak Block count 11
+      Peak Allocated memory 195.3 MB
+      Peak Large allocation bytes 38.8 MB
+[ALLOC_CACHEOBJECTS] Dual Thread Allocator
+  Peak main deferred allocation count 15
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 10 Subsections = 10240 buckets. Failed count: 662211
+        32B: 20 Subsections = 10240 buckets. Failed count: 404249
+        48B: 61 Subsections = 20821 buckets. Failed count: 71958
+        64B: 51 Subsections = 13056 buckets. Failed count: 25300
+        80B: 22 Subsections = 4505 buckets. Failed count: 27916
+        96B: 17 Subsections = 2901 buckets. Failed count: 174315
+        112B: 38 Subsections = 5558 buckets. Failed count: 1662
+        128B: 37 Subsections = 4736 buckets. Failed count: 9028
+    [ALLOC_CACHEOBJECTS_MAIN]
+      Peak usage frame count: [16.0 MB-32.0 MB]: 1 frames, [32.0 MB-64.0 MB]: 6699 frames
+      Requested Block Size 4.0 MB
+      Peak Block count 8
+      Peak Allocated memory 43.4 MB
+      Peak Large allocation bytes 13.9 MB
+    [ALLOC_CACHEOBJECTS_THREAD]
+      Peak usage frame count: [128.0 MB-256.0 MB]: 6700 frames
+      Requested Block Size 4.0 MB
+      Peak Block count 16
+      Peak Allocated memory 148.7 MB
+      Peak Large allocation bytes 87.7 MB
+[ALLOC_TYPETREE] Dual Thread Allocator
+  Peak main deferred allocation count 0
+    [ALLOC_BUCKET]
+      Large Block size 4.0 MB
+      Used Block count 1
+      Peak Allocated bytes 4.0 MB
+      Failed Allocations. Bucket layout:
+        16B: 10 Subsections = 10240 buckets. Failed count: 662211
+        32B: 20 Subsections = 10240 buckets. Failed count: 404249
+        48B: 61 Subsections = 20821 buckets. Failed count: 71958
+        64B: 51 Subsections = 13056 buckets. Failed count: 25300
+        80B: 22 Subsections = 4505 buckets. Failed count: 27916
+        96B: 17 Subsections = 2901 buckets. Failed count: 174315
+        112B: 38 Subsections = 5558 buckets. Failed count: 1662
+        128B: 37 Subsections = 4736 buckets. Failed count: 9028
+    [ALLOC_TYPETREE_MAIN]
+      Peak usage frame count: [4.0 KB-8.0 KB]: 1 frames, [16.0 KB-32.0 KB]: 3304 frames, [32.0 KB-64.0 KB]: 3395 frames
+      Requested Block Size 2.0 MB
+      Peak Block count 1
+      Peak Allocated memory 52.7 KB
+      Peak Large allocation bytes 0 B
+    [ALLOC_TYPETREE_THREAD]
+      Peak usage frame count: [0-1.0 KB]: 6699 frames, [1.0 KB-2.0 KB]: 1 frames
+      Requested Block Size 2.0 MB
+      Peak Block count 1
+      Peak Allocated memory 1.1 KB
+      Peak Large allocation bytes 0 B

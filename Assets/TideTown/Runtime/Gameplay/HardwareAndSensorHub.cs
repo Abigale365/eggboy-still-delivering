@@ -70,6 +70,8 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
     public bool MicActive { get; private set; }
     public float MicLoudness { get; private set; }
     IMicLevel inspectMicrophone;
+    float nextBellows;
+    Vector3 stovePosition;
 
     // 外部稳定加成（供 TidalWindChallenge 读取）
     public float ExternalWindStabilizeBoost { get; private set; }
@@ -88,6 +90,8 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         director = d;
         state = s;
         interactionSvc = FindObjectOfType<InteractionService>();
+        var stove = Array.Find(BakeryData.Load(), item => item.id == "stove");
+        if (stove != null) stovePosition = new Vector3(stove.x, stove.y, stove.z);
 
         StartBackgroundUdpThread();
     }
@@ -215,9 +219,23 @@ public sealed class HardwareAndSensorHub : MonoBehaviour
         // 2. 轮询单游戏手柄（1P 手柄与键鼠无缝双轨共存）
         PollSingleGamepad(dt);
 
+        bool nearOven = player != null && state != null && state.flags.Contains("oven_lit") &&
+            Vector3.Distance(player.transform.position, stovePosition) < 5f && !ui.Paused;
+        if (inspectMicrophone == null && (ObjectInspectModal.IsOpen || nearOven))
+        {
+            inspectMicrophone = new PlatformMicLevel();
+            inspectMicrophone.Start();
+        }
+        else if (inspectMicrophone != null && !ObjectInspectModal.IsOpen && !nearOven) StopInspectMicrophone();
         float rms = inspectMicrophone?.ReadRms() ?? -1f;
         MicActive = rms >= 0f;
         MicLoudness = MicActive ? Mathf.Clamp01(rms * 14f) : 0f;
+        if (nearOven && MicLoudness > 0.28f && Time.unscaledTime >= nextBellows)
+        {
+            nextBellows = Time.unscaledTime + 1f;
+            var fx = FindObjectOfType<BakeryEffects>();
+            if (fx != null && director != null) director.BoostOvenBellows(fx);
+        }
     }
 
     void UpdateBuiltInWebcamMotion(float dt)

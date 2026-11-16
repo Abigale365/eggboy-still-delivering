@@ -4,8 +4,10 @@ using UnityEngine;
 
 public sealed class SaveStore
 {
-    static readonly string Key = Array.Exists(Environment.GetCommandLineArgs(), IsAudit)
+    static readonly bool Trailer = Array.Exists(Environment.GetCommandLineArgs(), a => a == "-trailerRecord");
+    static readonly string NormalKey = Array.Exists(Environment.GetCommandLineArgs(), IsAudit)
         ? "tidetown.qa.save.v1" : "tidetown.save.v1";
+    static string Key => Trailer || FilmingStageJumper.ActiveSession ? "tidetown.filming.save.v1" : NormalKey;
 
     static bool IsAudit(string arg)
     {
@@ -28,6 +30,7 @@ public sealed class SaveStore
 
     public GameState Load()
     {
+        if (Trailer) return null;
         var json = PlayerPrefs.GetString(Key, "");
         if (string.IsNullOrEmpty(json)) return null;
         try

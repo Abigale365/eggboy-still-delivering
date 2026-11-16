@@ -34,7 +34,7 @@ internal sealed class TownMusicPlayer : MonoBehaviour
         music = new[] { MakeSource(true), MakeSource(true) };
         effects = MakeSource(false);
         ambience = MakeSource(true);
-        foreach (string name in new[] { "theme", "bakery", "school", "lighthouse", "ending",
+        foreach (string name in new[] { "theme", "bakery", "school", "lighthouse", "ending", "ambient_explore",
             "sfx_letter", "sfx_mechanism", "sfx_achievement", "sfx_tide" })
         {
             clips[name] = Resources.Load<AudioClip>("Music/" + name);
@@ -70,6 +70,11 @@ internal sealed class TownMusicPlayer : MonoBehaviour
             var step = state.step ?? "";
             string wanted = step.StartsWith("B") ? "bakery" : step.StartsWith("S") ? "school" :
                 step.StartsWith("L") ? "lighthouse" : step.StartsWith("E") ? "ending" : "theme";
+            // 通关后解除剧情、开放寄件处即进入自由探索，继续沿用等功率交叉淡化。
+            if (state.flags.Contains("ending_done") && !bootstrap.ui.LetterOpen &&
+                (current != "ending" || !music[active].isPlaying ||
+                 music[active].time >= music[active].clip.length - FadeSeconds))
+                wanted = "ambient_explore";
             if (wanted != current) SwitchTo(wanted);
             if (!ReferenceEquals(observedState, state))
             {
@@ -102,6 +107,7 @@ internal sealed class TownMusicPlayer : MonoBehaviour
         active = 1 - active;
         music[active].Stop();
         music[active].clip = clip;
+        music[active].loop = name != "ending";
         music[active].volume = 0f;
         music[active].Play();
         blend = 0f;

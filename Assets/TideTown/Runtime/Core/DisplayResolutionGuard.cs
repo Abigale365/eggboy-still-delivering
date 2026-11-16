@@ -87,6 +87,7 @@ public static class DisplayResolutionGuard
     static bool TryReadTier(string[] args, out Tier result)
     {
         result = Tier.High;
+        if (HasArg(args, "-trailerRecord") && !FilmingStageJumper.AuditArguments()) return true;
         int index = Array.FindIndex(args, a => string.Equals(a, "-quality", StringComparison.OrdinalIgnoreCase));
         if (index < 0) return false;
         switch (index + 1 < args.Length ? args[index + 1].ToLowerInvariant() : "")

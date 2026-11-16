@@ -201,6 +201,9 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
             viewPitch = Mathf.Clamp(viewPitch - my * 2.2f, -35f, 55f);
         }
         float wheel = Input.GetAxis("Mouse ScrollWheel");
+        // HID 旋钮与键盘 A/D 共用输入；取景框已锁角色，不会同时移动。
+        if (EasyInputBridge.Held(KeyCode.A)) viewYaw -= 18f * Time.unscaledDeltaTime;
+        if (EasyInputBridge.Held(KeyCode.D)) viewYaw += 18f * Time.unscaledDeltaTime;
         if (Mathf.Abs(wheel) > 0.001f) holdDist = Mathf.Clamp(holdDist - wheel * 0.5f, 0.35f, 1.1f);
         if (Input.GetKeyDown(KeyCode.Q)) CycleItem(-1);
         if (Input.GetKeyDown(KeyCode.Z)) CycleItem(+1);
@@ -210,7 +213,7 @@ public sealed class PerspectivePrintSystem : MonoBehaviour
         ComputeAim();
         UpdateUI();
 
-        if (Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space)) Shutter();
+        if (Input.GetMouseButtonDown(0) || EasyInputBridge.Down(KeyCode.Space) || EasyInputBridge.Down(KeyCode.E)) Shutter();
         else if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.C)) CloseViewfinder();
     }
 

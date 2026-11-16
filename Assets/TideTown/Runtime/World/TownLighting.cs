@@ -287,6 +287,14 @@ public sealed class TownLighting : MonoBehaviour
     float probeDirtyAt = -1f;
 
     public static float Phase => instance != null ? instance.phase : -1f;
+    // 只由明确进入的实拍/录制入口调用，正常剧情和审计仍走原来的光照状态机。
+    public static void SetFilmingPhase(float value)
+    {
+        if (instance == null) return;
+        instance.frozen = true;
+        instance.phase = instance.phaseTarget = Mathf.Clamp01(value);
+        instance.ApplyLook();
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics() { instance = null; duskRequested = false; }

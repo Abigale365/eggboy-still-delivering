@@ -11,9 +11,18 @@ internal sealed class EasyInputReportDecoder
     bool functionHeld;
     bool functionUsed;
 
+    public static bool IsFnHeld { get; private set; }
+    static bool externalFnUsed;
+
+    public static void MarkFnUsed()
+    {
+        if (IsFnHeld) externalFnUsed = true;
+    }
+
     public void Reset()
     {
         functionHeld = functionUsed = false;
+        IsFnHeld = externalFnUsed = false;
     }
 
     public string Decode(byte[] report, int count)
@@ -34,9 +43,11 @@ internal sealed class EasyInputReportDecoder
             {
                 functionHeld = true;
                 functionUsed = false;
+                IsFnHeld = true;
+                externalFnUsed = false;
             }
             if (report[5] != 2) return null;
-            bool tap = functionHeld && !functionUsed;
+            bool tap = functionHeld && !functionUsed && !externalFnUsed;
             Reset();
             return tap ? "dial-press" : null;
         }
@@ -47,7 +58,11 @@ internal sealed class EasyInputReportDecoder
         int index = "123456789ab".IndexOf(char.ToLowerInvariant(uuid[35]));
         if (index < 0) return null;
         if (!functionHeld) return Actions[index];
-        if (index < 10) functionUsed = true;
+        if (index < 10)
+        {
+            functionUsed = true;
+            externalFnUsed = true;
+        }
         return index < 8 ? "combo-" + Actions[index] : Actions[index];
     }
 }

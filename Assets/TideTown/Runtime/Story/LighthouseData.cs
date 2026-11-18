@@ -1,33 +1,39 @@
-// WP-14：灯塔的油壶/塔顶三件回忆位置，以及塔门、塔顶落点和灯头点。
-using System;
 using UnityEngine;
-
-[Serializable] public class LighthouseItem { public string id, label, text; public float x, y, z; }
-[Serializable] public class LighthousePoint { public float x, y, z; }
-[Serializable] public class LighthouseList
-{
-    public LighthouseItem[] items;
-    public LighthousePoint door, deck, lamp;
-}
 
 public static class LighthouseData
 {
-    public static LighthouseList Load()
-    {
-        var asset = Resources.Load<TextAsset>("Story/lighthouse");
-        if (asset == null)
-        {
-            Debug.LogError("找不到 Resources/Story/lighthouse.json");
-            return new LighthouseList { items = new LighthouseItem[0] };
-        }
-        var list = JsonUtility.FromJson<LighthouseList>(asset.text);
-        if (list == null) return new LighthouseList { items = new LighthouseItem[0] };
-        if (list.items == null) list.items = new LighthouseItem[0];
-        return list;
-    }
+	public static LighthouseList Load()
+	{
+		TextAsset textAsset = Resources.Load<TextAsset>("Story/lighthouse");
+		if (textAsset == null)
+		{
+			Debug.LogError("找不到 Resources/Story/lighthouse.json");
+			return new LighthouseList
+			{
+				items = new LighthouseItem[0]
+			};
+		}
+		LighthouseList lighthouseList = JsonUtility.FromJson<LighthouseList>(textAsset.text);
+		if (lighthouseList == null)
+		{
+			return new LighthouseList
+			{
+				items = new LighthouseItem[0]
+			};
+		}
+		if (lighthouseList.items == null)
+		{
+			lighthouseList.items = new LighthouseItem[0];
+		}
+		return lighthouseList;
+	}
 
-    public static Vector3 Point(LighthousePoint p)
-    {
-        return p != null ? new Vector3(p.x, p.y, p.z) : Vector3.zero;
-    }
+	public static Vector3 Point(LighthousePoint p)
+	{
+		if (p == null)
+		{
+			return Vector3.zero;
+		}
+		return new Vector3(p.x, p.y, p.z);
+	}
 }

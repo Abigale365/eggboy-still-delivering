@@ -1,131 +1,158 @@
-// 邮差随身互动中枢（AvantGardeGameplayHub）。
-// 严格遵循去标签化沉浸设计：不在屏幕上方挂载任何常驻的“四种游戏模式标签栏”，
-// 所有能力均有机融入剧情与场景交互中（读信时直接揭下字签抛空成物、按 Tab 翻看当前信件、在涨潮渡口或站点按 R 唤出潮汐回声协力）。
 using UnityEngine;
 
 public sealed class AvantGardeGameplayHub : MonoBehaviour
 {
-    EggboyPlayer player;
-    EggboyUI ui;
-    IslandWorld world;
-    StoryDirector director;
-    GameState state;
+	private EggboyPlayer player;
 
-    WordMaterializerSystem wordSys;
-    PerspectivePrintSystem perspSys;
-    TidalEchoCloneSystem echoSys;
-    ShadowAndChimeSystem shadowSys;
+	private EggboyUI ui;
 
-    public static bool AnyModalOpen { get; private set; }
+	private IslandWorld world;
 
-    public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
-    {
-        player = p;
-        ui = u;
-        world = w;
-        director = d;
-        state = s;
+	private StoryDirector director;
 
-        wordSys = gameObject.AddComponent<WordMaterializerSystem>();
-        wordSys.Init(p, u, w, d, s);
+	private GameState state;
 
-        perspSys = gameObject.AddComponent<PerspectivePrintSystem>();
-        perspSys.Init(p, u, w, s);
+	private WordMaterializerSystem wordSys;
 
-        echoSys = gameObject.AddComponent<TidalEchoCloneSystem>();
-        echoSys.Init(p, u, w, d, s);
+	private PerspectivePrintSystem perspSys;
 
-        shadowSys = gameObject.AddComponent<ShadowAndChimeSystem>();
-        shadowSys.Init(p, u, s);
+	private TidalEchoCloneSystem echoSys;
 
-        var achieveSys = gameObject.AddComponent<TideTownAchievementSystem>();
-        achieveSys.Init(u, s);
+	private ShadowAndChimeSystem shadowSys;
 
-        var worldMech = gameObject.AddComponent<WorldMechanismDirector>();
-        worldMech.Init(p, u, w, d, s);
+	public static bool AnyModalOpen { get; private set; }
 
-        var hwHub = gameObject.AddComponent<HardwareAndSensorHub>();
-        hwHub.Init(p, u, w, d, s);
+	public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
+	{
+		player = p;
+		ui = u;
+		world = w;
+		director = d;
+		state = s;
+		wordSys = base.gameObject.AddComponent<WordMaterializerSystem>();
+		wordSys.Init(p, u, w, d, s);
+		perspSys = base.gameObject.AddComponent<PerspectivePrintSystem>();
+		perspSys.Init(p, u, w, s);
+		echoSys = base.gameObject.AddComponent<TidalEchoCloneSystem>();
+		echoSys.Init(p, u, w, d, s);
+		shadowSys = base.gameObject.AddComponent<ShadowAndChimeSystem>();
+		shadowSys.Init(p, u, s);
+		base.gameObject.AddComponent<TideTownAchievementSystem>().Init(u, s);
+		base.gameObject.AddComponent<WorldMechanismDirector>().Init(p, u, w, d, s);
+		base.gameObject.AddComponent<HardwareAndSensorHub>().Init(p, u, w, d, s);
+		base.gameObject.AddComponent<AIAgentCalibrationDirector>().Init(p, u, w, d, s);
+		base.gameObject.AddComponent<DogPawPlate>().Init(w, s, u);
+		base.gameObject.AddComponent<ShadowLanternPuzzle>().Init(p, u, w, s);
+		base.gameObject.AddComponent<SoundBottleSystem>().Init(p, u, w, s);
+		base.gameObject.AddComponent<HintDirector>().Init(p, u, w, d, s);
+	}
 
-        var aiDir = gameObject.AddComponent<AIAgentCalibrationDirector>();
-        aiDir.Init(p, u, w, d, s);
+	public void CloseForFilming()
+	{
+		if (perspSys != null)
+		{
+			perspSys.CloseViewfinder();
+		}
+		if (shadowSys != null)
+		{
+			shadowSys.CloseStudio();
+		}
+		if (ui != null)
+		{
+			ui.CloseLetter();
+		}
+		AnyModalOpen = false;
+	}
 
-        // 小黑的浅滩爪印踏板（WP-C）
-        gameObject.AddComponent<DogPawPlate>().Init(w, s, u);
-        // 影子钥匙 + 装声音的瓶子 + 广场八音盒（WP-G）
-        gameObject.AddComponent<ShadowLanternPuzzle>().Init(p, u, w, s);
-        gameObject.AddComponent<SoundBottleSystem>().Init(p, u, w, s);
+	private void TriggerMode(int mode)
+	{
+		switch (mode)
+		{
+		case 1:
+			if (perspSys != null && perspSys.IsViewfinderActive)
+			{
+				perspSys.CloseViewfinder();
+			}
+			if (shadowSys != null && shadowSys.IsStudioOpen)
+			{
+				shadowSys.CloseStudio();
+			}
+			if (wordSys != null)
+			{
+				wordSys.OpenLetterWithSlips();
+			}
+			break;
+		case 2:
+			if (ui != null && ui.LetterOpen)
+			{
+				ui.CloseLetter();
+			}
+			if (shadowSys != null && shadowSys.IsStudioOpen)
+			{
+				shadowSys.CloseStudio();
+			}
+			if (perspSys != null)
+			{
+				perspSys.ToggleViewfinder();
+			}
+			break;
+		case 3:
+			if (echoSys != null)
+			{
+				echoSys.TriggerEchoButton();
+			}
+			break;
+		case 4:
+			if (ui != null && ui.LetterOpen)
+			{
+				ui.CloseLetter();
+			}
+			if (perspSys != null && perspSys.IsViewfinderActive)
+			{
+				perspSys.CloseViewfinder();
+			}
+			if (shadowSys != null)
+			{
+				shadowSys.ToggleStudio();
+			}
+			break;
+		}
+	}
 
-        // 卡住才给提示（要放在最后：它要找到上面这些系统）
-        gameObject.AddComponent<HintDirector>().Init(p, u, w, d, s);
-    }
-
-    void TriggerMode(int mode)
-    {
-        if (mode == 1)
-        {
-            if (perspSys != null && perspSys.IsViewfinderActive) perspSys.CloseViewfinder();
-            if (shadowSys != null && shadowSys.IsStudioOpen) shadowSys.CloseStudio();
-            if (wordSys != null) wordSys.OpenLetterWithSlips();
-        }
-        else if (mode == 2)
-        {
-            if (ui != null && ui.LetterOpen) ui.CloseLetter();
-            if (shadowSys != null && shadowSys.IsStudioOpen) shadowSys.CloseStudio();
-            if (perspSys != null) perspSys.ToggleViewfinder();
-        }
-        else if (mode == 3)
-        {
-            if (echoSys != null) echoSys.TriggerEchoButton();
-        }
-        else if (mode == 4)
-        {
-            if (ui != null && ui.LetterOpen) ui.CloseLetter();
-            if (perspSys != null && perspSys.IsViewfinderActive) perspSys.CloseViewfinder();
-            if (shadowSys != null) shadowSys.ToggleStudio();
-        }
-    }
-
-    void Update()
-    {
-        if (ui == null || !ui.inputClose)
-        {
-            AnyModalOpen = false;
-            return;
-        }
-
-        AnyModalOpen = (perspSys != null && perspSys.IsViewfinderActive) ||
-                       (shadowSys != null && shadowSys.IsStudioOpen);
-
-        if (ui.TitleShowing || ui.Paused || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen)
-            return;
-        if (ui.Cinematic && !ui.LetterOpen && !AnyModalOpen) return;
-
-        // 按 Tab 或 L 键可随时翻阅邮包里的当前信件（在信纸上直接揭下字签抛向空中化为实物）
-        // 按键表见 docs/controls.md：Tab 读信揭字，R 潮汐怀表。数字键切"模式"的做法已去掉。
-        if (EasyInputBridge.Down(KeyCode.Tab))
-        {
-            TriggerMode(1);
-        }
-        // C：举起取景框（透视拓印）。放下由取景框自己处理（C / Esc），这里只负责打开
-        else if (Input.GetKeyDown(KeyCode.C) && !ui.LetterOpen && perspSys != null && !perspSys.IsViewfinderActive)
-        {
-            perspSys.OpenViewfinder();
-        }
-        else if (EasyInputBridge.Down(KeyCode.R))
-        {
-            if (!ui.LetterOpen && !AnyModalOpen && !player.locked && !AIAgentCalibrationDirector.IsOpen)
-                TriggerMode(3);
-        }
-        // 透视拓印（WP-E）和光影声音（WP-G）的 v3 旧版是弹窗假玩法，重做完成前不给玩家入口；
-        // 开发时加 -oldmodes 命令行还能用 2 / 4 键打开看
-        else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            TriggerMode(2);
-        }
-        else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha4))
-        {
-            TriggerMode(4);
-        }
-    }
+	private void Update()
+	{
+		if (ui == null || !ui.inputClose)
+		{
+			AnyModalOpen = false;
+			return;
+		}
+		AnyModalOpen = (perspSys != null && perspSys.IsViewfinderActive) || (shadowSys != null && shadowSys.IsStudioOpen);
+		if (ui.TitleShowing || ui.Paused || ObjectInspectModal.IsOpen || WoodenMechanismPuzzleModal.IsOpen || (ui.Cinematic && !ui.LetterOpen && !AnyModalOpen))
+		{
+			return;
+		}
+		if (EasyInputBridge.Down(KeyCode.Tab))
+		{
+			TriggerMode(1);
+		}
+		else if (Input.GetKeyDown(KeyCode.C) && !ui.LetterOpen && perspSys != null && !perspSys.IsViewfinderActive)
+		{
+			perspSys.OpenViewfinder();
+		}
+		else if (EasyInputBridge.Down(KeyCode.R))
+		{
+			if (!ui.LetterOpen && !AnyModalOpen && !player.locked && !AIAgentCalibrationDirector.IsOpen)
+			{
+				TriggerMode(3);
+			}
+		}
+		else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha2))
+		{
+			TriggerMode(2);
+		}
+		else if (Features.oldModes && Input.GetKeyDown(KeyCode.Alpha4))
+		{
+			TriggerMode(4);
+		}
+	}
 }

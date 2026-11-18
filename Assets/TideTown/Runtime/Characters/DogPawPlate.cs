@@ -1,308 +1,404 @@
-// 创新方向 C：小黑踩踏板（工程书 INNOVATION_BOOK_20261110 的 WP-C）。
-// 2026-11-16 起踏板在学校草坪上（小黑只在学校周边活动），木匣从土里拱出来；下面是原来的设定：
-// 船棚旁的浅滩边有一块橙色爪印踏板。人踩上去没反应（太重了，踏板只认小爪子）；
-// 按 F 让小黑跑过去站上去，水里升起一只旧木匣，打开里面是老陈留下的星盘刻度（灯塔站密码的另一种解法）。
+using System;
 using System.Collections;
 using UnityEngine;
 
 public sealed class DogPawPlate : MonoBehaviour
 {
-    public static DogPawPlate Instance { get; private set; }
+	private GameState state;
 
-    public Vector3 Center { get; private set; }
-    public Vector3 ChestRest { get; private set; }
-    public bool Done => state != null && state.flags.Contains("paw_plate_done");
-    public bool ChestOpened => state != null && state.flags.Contains("paw_chest_opened");
-    // 小黑跟着你以后才用得上
-    public bool Available => dog != null && dog.Following && dog.Visible;
+	private DogFollower dog;
 
-    GameState state;
-    DogFollower dog;
-    EggboyUI ui;
-    IslandWorld world;
-    Transform plateTop, chest;
-    bool rising;
+	private EggboyUI ui;
 
-    public void Init(IslandWorld w, GameState s, EggboyUI u)
-    {
-        Instance = this;
-        world = w; state = s; ui = u;
-        dog = FindObjectOfType<DogFollower>();
-        Place();
-        BuildPlate();
-        BuildChest();
-        var svc = FindObjectOfType<InteractionService>();
-        if (svc != null) svc.Register(new PawChestInteractable(this));
-    }
+	private IslandWorld world;
 
-    // 2026-11-16：小黑只在学校周边活动（用户定），踏板从船棚挪到学校草坪上：狗窝附近 2–5 m、能站、不压在小路上、
-    // 离别的东西至少 0.9 m；木匣从踏板旁边的土里拱出来
-    void Place()
-    {
-        if (DogFollower.StayNearSchool && dog != null && PlaceAtSchool()) return;
-        PlaceAtShed();
-    }
+	private Transform plateTop;
 
-    bool PlaceAtSchool()
-    {
-        Vector3 anchor = Vector3.zero;
-        foreach (var it in SchoolData.Load().items) if (it.id == "doghouse") anchor = new Vector3(it.x, it.y, it.z);
-        if (anchor == Vector3.zero) anchor = dog.PeekPoint;
-        if (anchor == Vector3.zero) return false;
-        for (float r = 2.0f; r <= 5.0f; r += 0.5f)
-            for (int a = 0; a < 24; a++)
-            {
-                float ang = a * Mathf.PI / 12f;
-                var q = anchor + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
-                // 学校草坪本身就在可走区数据里，所以这里不用 InWalkArea 判断"是不是路"，改成离主线路线 1.2 m 以外
-                if (!dog.InSchool(q) || !world.Walkable(q.x, q.z) || WishToy.RouteDistance(new Vector2(q.x, q.z)) < 1.2f || !Clear(q, 0.9f)) continue;
-                var side = new Vector3(-Mathf.Sin(ang), 0f, Mathf.Cos(ang));
-                Vector3 rest = q + side * 1.1f;
-                if (!dog.InSchool(rest) || !world.Walkable(rest.x, rest.z) || !Clear(rest, 0.8f)) { rest = q - side * 1.1f; if (!dog.InSchool(rest) || !world.Walkable(rest.x, rest.z) || !Clear(rest, 0.8f)) continue; }
-                float gy = world.GroundAt(q.x, q.z, anchor.y + 1f);
-                Center = new Vector3(q.x, gy, q.z);
-                rest.y = world.GroundAt(rest.x, rest.z, gy + 1f);
-                ChestRest = rest;
-                seaDirection = Vector3.zero;
-                return true;
-            }
-        return false;
-    }
+	private Transform chest;
 
-    bool Clear(Vector3 q, float d)
-    {
-        foreach (var c in world.Colliders)
-        {
-            if (c.water) continue;
-            float ex = c.r ?? Mathf.Max(c.hw ?? 0f, c.hd ?? 0f);
-            if (new Vector2(q.x - c.x, q.z - c.z).magnitude < ex + d) return false;
-        }
-        return true;
-    }
+	private bool rising;
 
-    // 原来的位置：船棚的油壶附近，找一块涨到 L2 也不会淹、但旁边就是水的地方
-    void PlaceAtShed()
-    {
-        Vector3 oil = Vector3.zero;
-        foreach (var it in LighthouseData.Load().items) if (it.id == "oil") oil = new Vector3(it.x, it.y, it.z);
-        float dry = WaterLevel.LevelYs[2] + 0.12f;
-        Vector3 best = oil; float bestScore = float.MaxValue; Vector3 seaDir = Vector3.forward;
-        for (float r = 1.5f; r <= 6f; r += 0.5f)
-            for (int a = 0; a < 24; a++)
-            {
-                float ang = a * Mathf.PI / 12f;
-                var q = oil + new Vector3(Mathf.Cos(ang) * r, 0f, Mathf.Sin(ang) * r);
-                if (!world.InWalkArea(q.x, q.z)) continue;
-                float gy = world.GroundAt(q.x, q.z, oil.y + 2f);
-                if (gy < dry) continue;
-                // 往外 1.6 m 就是水（不在可走区里，或地面低于 L2）
-                for (int b = 0; b < 8; b++)
-                {
-                    float bang = b * Mathf.PI / 4f;
-                    var w = q + new Vector3(Mathf.Cos(bang), 0f, Mathf.Sin(bang)) * 1.6f;
-                    bool wet = !world.InWalkArea(w.x, w.z) || world.GroundAt(w.x, w.z, gy + 1f) < WaterLevel.LevelYs[2] - 0.05f;
-                    if (!wet) continue;
-                    float score = r;
-                    if (score < bestScore) { bestScore = score; best = new Vector3(q.x, gy, q.z); seaDir = (w - q).normalized; }
-                }
-            }
-        Center = best;
-        // 木匣浮上来以后搁在踏板旁边的岸上
-        Vector3 side = new Vector3(-seaDir.z, 0f, seaDir.x);
-        Vector3 rest = best + side * 1.1f;
-        if (!world.Walkable(rest.x, rest.z)) rest = best - side * 1.1f;
-        if (!world.Walkable(rest.x, rest.z)) rest = best - seaDir * 1.0f;
-        rest.y = world.GroundAt(rest.x, rest.z, best.y + 1f);
-        ChestRest = rest;
-        seaDirection = seaDir;
-    }
-    Vector3 seaDirection;
+	private Vector3 seaDirection;
 
-    static Material Mat(Color c)
-    {
-        var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-        var m = new Material(sh);
-        m.color = c;
-        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
-        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.25f);
-        return m;
-    }
+	public static DogPawPlate Instance { get; private set; }
 
-    void BuildPlate()
-    {
-        var root = new GameObject("DogPawPlate");
-        root.transform.SetParent(transform, false);
-        root.transform.position = Center;
-        var wood = Mat(new Color(0.55f, 0.36f, 0.2f));
-        var orange = Mat(new Color(0.95f, 0.5f, 0.18f));
-        var baseGo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        Destroy(baseGo.GetComponent<Collider>());
-        baseGo.transform.SetParent(root.transform, false);
-        baseGo.transform.localScale = new Vector3(0.7f, 0.03f, 0.7f);
-        baseGo.transform.localPosition = new Vector3(0f, 0.02f, 0f);
-        baseGo.GetComponent<Renderer>().sharedMaterial = wood;
-        var top = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        Destroy(top.GetComponent<Collider>());
-        top.transform.SetParent(root.transform, false);
-        top.transform.localScale = new Vector3(0.6f, 0.02f, 0.6f);
-        top.transform.localPosition = new Vector3(0f, 0.06f, 0f);
-        top.GetComponent<Renderer>().sharedMaterial = orange;
-        plateTop = top.transform;
-        // 爪印：一个大肉垫 + 四个小趾头
-        void Pad(Vector3 p, float s)
-        {
-            var g = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            Destroy(g.GetComponent<Collider>());
-            g.transform.SetParent(top.transform, false);
-            g.transform.localPosition = p;
-            g.transform.localScale = new Vector3(s, 0.9f, s);
-            g.GetComponent<Renderer>().sharedMaterial = wood;
-        }
-        Pad(new Vector3(0f, 0.6f, -0.08f), 0.32f);
-        Pad(new Vector3(-0.2f, 0.6f, 0.16f), 0.13f);
-        Pad(new Vector3(-0.07f, 0.6f, 0.24f), 0.13f);
-        Pad(new Vector3(0.07f, 0.6f, 0.24f), 0.13f);
-        Pad(new Vector3(0.2f, 0.6f, 0.16f), 0.13f);
-    }
+	public Vector3 Center { get; private set; }
 
-    void BuildChest()
-    {
-        var holder = TideTownStyleUI.CloneSceneLux3D("S2_木箱_分享包版", 0.55f, false);
-        if (holder == null) holder = new GameObject("PawChest");
-        holder.name = "PawChest";
-        holder.transform.SetParent(transform, true);
-        chest = holder.transform;
-        // 黄铜包角的感觉：整体往暖铜色偏一点
-        foreach (var r in holder.GetComponentsInChildren<Renderer>())
-            foreach (var m in r.materials)
-                foreach (var p in new[] { "_BaseColor", "_Color", "baseColorFactor" })
-                    if (m.HasProperty(p)) m.SetColor(p, Color.Lerp(m.GetColor(p), new Color(0.85f, 0.62f, 0.3f), 0.35f));
-        if (Done) chest.position = ChestRest;
-        else chest.position = ChestRest + seaDirection * 1.4f + Vector3.down * (seaDirection == Vector3.zero ? 0.7f : 1.4f);
-        chest.gameObject.SetActive(Done);
-    }
+	public Vector3 ChestRest { get; private set; }
 
-    void Update()
-    {
-        if (state == null || dog == null || Done) return;
-        bool dogOn = dog.Visible && Vector2.Distance(new Vector2(dog.transform.position.x, dog.transform.position.z), new Vector2(Center.x, Center.z)) < 0.6f;
-        if (plateTop != null) plateTop.localPosition = Vector3.Lerp(plateTop.localPosition, new Vector3(0f, dogOn ? 0.035f : 0.06f, 0f), Time.deltaTime * 10f);
-        if (dogOn && !rising)
-        {
-            state.flags.Add("paw_plate_done");
-            StartCoroutine(RiseChest());
-        }
-    }
+	public bool Done
+	{
+		get
+		{
+			if (state != null)
+			{
+				return state.flags.Contains("paw_plate_done");
+			}
+			return false;
+		}
+	}
 
-    IEnumerator RiseChest()
-    {
-        rising = true;
-        ShadowAndChimeSystem.PlayProceduralChime(330f, 0.3f);
-        yield return new WaitForSeconds(0.4f);
-        chest.gameObject.SetActive(true);
-        Vector3 from = chest.position;
-        if (seaDirection == Vector3.zero)
-        {
-            // 学校草坪：木匣从土里一顿一顿拱出来，最后蹦一下坐稳
-            for (float t = 0f; t < 1.4f; t += Time.deltaTime)
-            {
-                float k = Mathf.SmoothStep(0f, 1f, t / 1.4f) + Mathf.Sin(t * 22f) * 0.015f * (1f - t / 1.4f);
-                chest.position = Vector3.LerpUnclamped(from, ChestRest, k);
-                yield return null;
-            }
-            ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
-            for (float t = 0f; t < 0.35f; t += Time.deltaTime) { chest.position = ChestRest + Vector3.up * Mathf.Sin(t / 0.35f * Mathf.PI) * 0.12f; yield return null; }
-            chest.position = ChestRest;
-            rising = false;
-            yield break;
-        }
-        // 先从水下冒出来，再被浪推到岸上
-        Vector3 surface = new Vector3(from.x, Mathf.Max(WaterLevel.StaticY, ChestRest.y) - 0.1f, from.z);
-        for (float t = 0f; t < 1.2f; t += Time.deltaTime)
-        {
-            chest.position = Vector3.Lerp(from, surface, Mathf.SmoothStep(0f, 1f, t / 1.2f));
-            yield return null;
-        }
-        ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
-        for (float t = 0f; t < 1.0f; t += Time.deltaTime)
-        {
-            float k = Mathf.SmoothStep(0f, 1f, t);
-            chest.position = Vector3.Lerp(surface, ChestRest, k) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.2f;
-            yield return null;
-        }
-        chest.position = ChestRest;
-        rising = false;
-    }
+	public bool ChestOpened
+	{
+		get
+		{
+			if (state != null)
+			{
+				return state.flags.Contains("paw_chest_opened");
+			}
+			return false;
+		}
+	}
 
-    public bool ChestReady => Done && !rising && chest != null && chest.gameObject.activeSelf;
+	public bool Available
+	{
+		get
+		{
+			if (dog != null && dog.Following)
+			{
+				return dog.Visible;
+			}
+			return false;
+		}
+	}
 
-    public void OpenChest()
-    {
-        if (!ChestReady || ChestOpened) return;
-        state.flags.Add("paw_chest_opened");
-        foreach (var id in new[] { "hat", "scope", "log" })
-            if (!state.flags.Contains("dog_sniff_" + id)) state.flags.Add("dog_sniff_" + id);
-        TideTownAchievementSystem.Unlock("dog_detective");
-        ShadowAndChimeSystem.PlayProceduralChime(880f, 0.4f);
-        if (chest != null) chest.localRotation *= Quaternion.Euler(0f, 0f, 8f);
-        if (ui != null)
-            ui.ShowMemory("匣子里的一张航标纸",
-                (seaDirection == Vector3.zero ? "纸边沾着土，有点潮，字还看得清：" : "纸被海水泡软了，字还看得清：")
-                + "\n\n白檐帽　6\n单筒镜　2\n航海日志　3\n\n底下一行小字：给小黑留着，它鼻子比我灵。");
-    }
-}
+	public bool ChestReady
+	{
+		get
+		{
+			if (Done && !rising && chest != null)
+			{
+				return chest.gameObject.activeSelf;
+			}
+			return false;
+		}
+	}
 
-public sealed class PawChestInteractable : IInteractable
-{
-    readonly DogPawPlate plate;
-    public PawChestInteractable(DogPawPlate p) { plate = p; }
-    public string EntityId => "paw_chest";
-    public Vector3 Position => plate.ChestRest;
-    public string Prompt(GameState s) => plate.ChestReady && !plate.ChestOpened ? "E　打开木匣" : "";
-    public bool CanInteract(GameState s) => plate.ChestReady && !plate.ChestOpened;
-    public void Interact(GameState s, InteractionService svc) => plate.OpenChest();
-}
+	public void Init(IslandWorld w, GameState s, EggboyUI u)
+	{
+		Instance = this;
+		world = w;
+		state = s;
+		ui = u;
+		dog = UnityEngine.Object.FindObjectOfType<DogFollower>();
+		Place();
+		BuildPlate();
+		BuildChest();
+		InteractionService interactionService = UnityEngine.Object.FindObjectOfType<InteractionService>();
+		if (interactionService != null)
+		{
+			interactionService.Register(new PawChestInteractable(this));
+		}
+	}
 
-// 地上的粉笔爪印 + 一行字（"外环 3"），平躺在地面上
-public static class ChalkMark
-{
-    static Font font;
-    public static GameObject Spawn(Vector3 at, string text, string id)
-    {
-        var root = new GameObject("DogClueMark_" + id);
-        root.transform.position = at + Vector3.up * 0.015f;
-        var chalk = new Color(0.98f, 0.95f, 0.86f);
-        var sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-        var mat = new Material(sh); mat.color = chalk;
-        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", chalk);
-        void Dot(Vector3 p, float s)
-        {
-            var g = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Object.Destroy(g.GetComponent<Collider>());
-            g.transform.SetParent(root.transform, false);
-            g.transform.localPosition = p;
-            g.transform.localScale = new Vector3(s, 0.002f, s);
-            g.GetComponent<Renderer>().sharedMaterial = mat;
-        }
-        Dot(new Vector3(0f, 0f, 0f), 0.14f);
-        Dot(new Vector3(-0.08f, 0f, 0.1f), 0.05f);
-        Dot(new Vector3(-0.03f, 0f, 0.13f), 0.05f);
-        Dot(new Vector3(0.03f, 0f, 0.13f), 0.05f);
-        Dot(new Vector3(0.08f, 0f, 0.1f), 0.05f);
-        if (font == null) font = Resources.Load<Font>("Fonts/NotoSansSC-VF");
-        var tgo = new GameObject("Label");
-        tgo.transform.SetParent(root.transform, false);
-        tgo.transform.localPosition = new Vector3(0f, 0.004f, -0.2f);
-        // 平躺、字头朝着镜头一般所在的方向（玩家身后）
-        var cam = Camera.main;
-        Vector3 toCam = cam != null ? cam.transform.position - at : Vector3.back;
-        toCam.y = 0f;
-        if (toCam.sqrMagnitude < 1e-4f) toCam = Vector3.back;
-        tgo.transform.rotation = Quaternion.LookRotation(Vector3.down, -toCam.normalized);
-        var tm = tgo.AddComponent<TextMesh>();
-        tm.font = font; tm.text = text; tm.fontSize = 64; tm.characterSize = 0.012f;
-        tm.anchor = TextAnchor.MiddleCenter; tm.color = chalk;
-        if (font != null) tgo.GetComponent<MeshRenderer>().sharedMaterial = font.material;
-        return root;
-    }
+	private void Place()
+	{
+		if (!DogFollower.StayNearSchool || !(dog != null) || !PlaceAtSchool())
+		{
+			PlaceAtShed();
+		}
+	}
+
+	private bool PlaceAtSchool()
+	{
+		Vector3 vector = Vector3.zero;
+		SchoolItem[] items = SchoolData.Load().items;
+		foreach (SchoolItem schoolItem in items)
+		{
+			if (schoolItem.id == "doghouse")
+			{
+				vector = new Vector3(schoolItem.x, schoolItem.y, schoolItem.z);
+			}
+		}
+		if (vector == Vector3.zero)
+		{
+			vector = dog.PeekPoint;
+		}
+		if (vector == Vector3.zero)
+		{
+			return false;
+		}
+		for (float num = 2f; num <= 5f; num += 0.5f)
+		{
+			for (int j = 0; j < 24; j++)
+			{
+				float f = (float)j * MathF.PI / 12f;
+				Vector3 vector2 = vector + new Vector3(Mathf.Cos(f) * num, 0f, Mathf.Sin(f) * num);
+				if (!dog.InSchool(vector2) || !world.Walkable(vector2.x, vector2.z) || WishToy.RouteDistance(new Vector2(vector2.x, vector2.z)) < 1.2f || !Clear(vector2, 0.9f))
+				{
+					continue;
+				}
+				Vector3 vector3 = new Vector3(0f - Mathf.Sin(f), 0f, Mathf.Cos(f));
+				Vector3 vector4 = vector2 + vector3 * 1.1f;
+				if (!dog.InSchool(vector4) || !world.Walkable(vector4.x, vector4.z) || !Clear(vector4, 0.8f))
+				{
+					vector4 = vector2 - vector3 * 1.1f;
+					if (!dog.InSchool(vector4) || !world.Walkable(vector4.x, vector4.z) || !Clear(vector4, 0.8f))
+					{
+						continue;
+					}
+				}
+				float num2 = world.GroundAt(vector2.x, vector2.z, vector.y + 1f);
+				Center = new Vector3(vector2.x, num2, vector2.z);
+				vector4.y = world.GroundAt(vector4.x, vector4.z, num2 + 1f);
+				ChestRest = vector4;
+				seaDirection = Vector3.zero;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private bool Clear(Vector3 q, float d)
+	{
+		foreach (EggboyCollider collider in world.Colliders)
+		{
+			if (!collider.water)
+			{
+				float num = collider.r ?? Mathf.Max(collider.hw.GetValueOrDefault(), collider.hd.GetValueOrDefault());
+				if (new Vector2(q.x - collider.x, q.z - collider.z).magnitude < num + d)
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	private void PlaceAtShed()
+	{
+		Vector3 vector = Vector3.zero;
+		LighthouseItem[] items = LighthouseData.Load().items;
+		foreach (LighthouseItem lighthouseItem in items)
+		{
+			if (lighthouseItem.id == "oil")
+			{
+				vector = new Vector3(lighthouseItem.x, lighthouseItem.y, lighthouseItem.z);
+			}
+		}
+		float num = WaterLevel.LevelYs[2] + 0.12f;
+		Vector3 vector2 = vector;
+		float num2 = float.MaxValue;
+		Vector3 vector3 = Vector3.forward;
+		for (float num3 = 1.5f; num3 <= 6f; num3 += 0.5f)
+		{
+			for (int j = 0; j < 24; j++)
+			{
+				float f = (float)j * MathF.PI / 12f;
+				Vector3 vector4 = vector + new Vector3(Mathf.Cos(f) * num3, 0f, Mathf.Sin(f) * num3);
+				if (!world.InWalkArea(vector4.x, vector4.z))
+				{
+					continue;
+				}
+				float num4 = world.GroundAt(vector4.x, vector4.z, vector.y + 2f);
+				if (num4 < num)
+				{
+					continue;
+				}
+				for (int k = 0; k < 8; k++)
+				{
+					float f2 = (float)k * MathF.PI / 4f;
+					Vector3 vector5 = vector4 + new Vector3(Mathf.Cos(f2), 0f, Mathf.Sin(f2)) * 1.6f;
+					if (!world.InWalkArea(vector5.x, vector5.z) || world.GroundAt(vector5.x, vector5.z, num4 + 1f) < WaterLevel.LevelYs[2] - 0.05f)
+					{
+						float num5 = num3;
+						if (num5 < num2)
+						{
+							num2 = num5;
+							vector2 = new Vector3(vector4.x, num4, vector4.z);
+							vector3 = (vector5 - vector4).normalized;
+						}
+					}
+				}
+			}
+		}
+		Center = vector2;
+		Vector3 vector6 = new Vector3(0f - vector3.z, 0f, vector3.x);
+		Vector3 chestRest = vector2 + vector6 * 1.1f;
+		if (!world.Walkable(chestRest.x, chestRest.z))
+		{
+			chestRest = vector2 - vector6 * 1.1f;
+		}
+		if (!world.Walkable(chestRest.x, chestRest.z))
+		{
+			chestRest = vector2 - vector3 * 1f;
+		}
+		chestRest.y = world.GroundAt(chestRest.x, chestRest.z, vector2.y + 1f);
+		ChestRest = chestRest;
+		seaDirection = vector3;
+	}
+
+	private static Material Mat(Color c)
+	{
+		Material material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+		material.color = c;
+		if (material.HasProperty("_BaseColor"))
+		{
+			material.SetColor("_BaseColor", c);
+		}
+		if (material.HasProperty("_Smoothness"))
+		{
+			material.SetFloat("_Smoothness", 0.25f);
+		}
+		return material;
+	}
+
+	private void BuildPlate()
+	{
+		GameObject gameObject = new GameObject("DogPawPlate");
+		gameObject.transform.SetParent(base.transform, worldPositionStays: false);
+		gameObject.transform.position = Center;
+		Material wood = Mat(new Color(0.55f, 0.36f, 0.2f));
+		Material sharedMaterial = Mat(new Color(0.95f, 0.5f, 0.18f));
+		GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+		UnityEngine.Object.Destroy(obj.GetComponent<Collider>());
+		obj.transform.SetParent(gameObject.transform, worldPositionStays: false);
+		obj.transform.localScale = new Vector3(0.7f, 0.03f, 0.7f);
+		obj.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+		obj.GetComponent<Renderer>().sharedMaterial = wood;
+		GameObject top = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+		UnityEngine.Object.Destroy(top.GetComponent<Collider>());
+		top.transform.SetParent(gameObject.transform, worldPositionStays: false);
+		top.transform.localScale = new Vector3(0.6f, 0.02f, 0.6f);
+		top.transform.localPosition = new Vector3(0f, 0.06f, 0f);
+		top.GetComponent<Renderer>().sharedMaterial = sharedMaterial;
+		plateTop = top.transform;
+		Pad(new Vector3(0f, 0.6f, -0.08f), 0.32f);
+		Pad(new Vector3(-0.2f, 0.6f, 0.16f), 0.13f);
+		Pad(new Vector3(-0.07f, 0.6f, 0.24f), 0.13f);
+		Pad(new Vector3(0.07f, 0.6f, 0.24f), 0.13f);
+		Pad(new Vector3(0.2f, 0.6f, 0.16f), 0.13f);
+		void Pad(Vector3 p, float s)
+		{
+			GameObject obj2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			UnityEngine.Object.Destroy(obj2.GetComponent<Collider>());
+			obj2.transform.SetParent(top.transform, worldPositionStays: false);
+			obj2.transform.localPosition = p;
+			obj2.transform.localScale = new Vector3(s, 0.9f, s);
+			obj2.GetComponent<Renderer>().sharedMaterial = wood;
+		}
+	}
+
+	private void BuildChest()
+	{
+		GameObject gameObject = TideTownStyleUI.CloneSceneLux3D("S2_木箱_分享包版", 0.55f);
+		if (gameObject == null)
+		{
+			gameObject = new GameObject("PawChest");
+		}
+		gameObject.name = "PawChest";
+		gameObject.transform.SetParent(base.transform, worldPositionStays: true);
+		chest = gameObject.transform;
+		Renderer[] componentsInChildren = gameObject.GetComponentsInChildren<Renderer>();
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			Material[] materials = componentsInChildren[i].materials;
+			foreach (Material material in materials)
+			{
+				string[] array = new string[3] { "_BaseColor", "_Color", "baseColorFactor" };
+				foreach (string text in array)
+				{
+					if (material.HasProperty(text))
+					{
+						material.SetColor(text, Color.Lerp(material.GetColor(text), new Color(0.85f, 0.62f, 0.3f), 0.35f));
+					}
+				}
+			}
+		}
+		if (Done)
+		{
+			chest.position = ChestRest;
+		}
+		else
+		{
+			chest.position = ChestRest + seaDirection * 1.4f + Vector3.down * ((seaDirection == Vector3.zero) ? 0.7f : 1.4f);
+		}
+		chest.gameObject.SetActive(Done);
+	}
+
+	private void Update()
+	{
+		if (state != null && !(dog == null) && !Done)
+		{
+			bool flag = dog.Visible && Vector2.Distance(new Vector2(dog.transform.position.x, dog.transform.position.z), new Vector2(Center.x, Center.z)) < 0.6f;
+			if (plateTop != null)
+			{
+				plateTop.localPosition = Vector3.Lerp(plateTop.localPosition, new Vector3(0f, flag ? 0.035f : 0.06f, 0f), Time.deltaTime * 10f);
+			}
+			if (flag && !rising)
+			{
+				state.flags.Add("paw_plate_done");
+				StartCoroutine(RiseChest());
+			}
+		}
+	}
+
+	private IEnumerator RiseChest()
+	{
+		rising = true;
+		ShadowAndChimeSystem.PlayProceduralChime(330f, 0.3f);
+		yield return new WaitForSeconds(0.4f);
+		chest.gameObject.SetActive(value: true);
+		Vector3 from = chest.position;
+		if (seaDirection == Vector3.zero)
+		{
+			for (float t2 = 0f; t2 < 1.4f; t2 += Time.deltaTime)
+			{
+				float t5 = Mathf.SmoothStep(0f, 1f, t2 / 1.4f) + Mathf.Sin(t2 * 22f) * 0.015f * (1f - t2 / 1.4f);
+				chest.position = Vector3.LerpUnclamped(from, ChestRest, t5);
+				yield return null;
+			}
+			ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
+			for (float t2 = 0f; t2 < 0.35f; t2 += Time.deltaTime)
+			{
+				chest.position = ChestRest + Vector3.up * Mathf.Sin(t2 / 0.35f * MathF.PI) * 0.12f;
+				yield return null;
+			}
+			chest.position = ChestRest;
+			rising = false;
+			yield break;
+		}
+		Vector3 surface = new Vector3(from.x, Mathf.Max(WaterLevel.StaticY, ChestRest.y) - 0.1f, from.z);
+		for (float t2 = 0f; t2 < 1.2f; t2 += Time.deltaTime)
+		{
+			chest.position = Vector3.Lerp(from, surface, Mathf.SmoothStep(0f, 1f, t2 / 1.2f));
+			yield return null;
+		}
+		ShadowAndChimeSystem.PlayProceduralChime(587.33f, 0.25f);
+		for (float t2 = 0f; t2 < 1f; t2 += Time.deltaTime)
+		{
+			float num = Mathf.SmoothStep(0f, 1f, t2);
+			chest.position = Vector3.Lerp(surface, ChestRest, num) + Vector3.up * Mathf.Sin(num * MathF.PI) * 0.2f;
+			yield return null;
+		}
+		chest.position = ChestRest;
+		rising = false;
+	}
+
+	public void OpenChest()
+	{
+		if (!ChestReady || ChestOpened)
+		{
+			return;
+		}
+		state.flags.Add("paw_chest_opened");
+		string[] array = new string[3] { "hat", "scope", "log" };
+		foreach (string text in array)
+		{
+			if (!state.flags.Contains("dog_sniff_" + text))
+			{
+				state.flags.Add("dog_sniff_" + text);
+			}
+		}
+		TideTownAchievementSystem.Unlock("dog_detective");
+		ShadowAndChimeSystem.PlayProceduralChime(880f, 0.4f);
+		if (chest != null)
+		{
+			chest.localRotation *= Quaternion.Euler(0f, 0f, 8f);
+		}
+		if (ui != null)
+		{
+			ui.ShowMemory("匣子里的一张航标纸", ((seaDirection == Vector3.zero) ? "纸边沾着土，有点潮，字还看得清：" : "纸被海水泡软了，字还看得清：") + "\n\n白檐帽\u30006\n单筒镜\u30002\n航海日志\u30003\n\n底下一行小字：给小黑留着，它鼻子比我灵。");
+		}
+	}
 }

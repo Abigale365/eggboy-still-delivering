@@ -1,501 +1,1160 @@
-// WP-06 场景世界：地面走 Ground 层射线，阻挡读 TownObstacle，可走区域用多边形 + 水位。
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
-
-[System.Serializable]
-public class WalkPoly
-{
-    public string id;
-    public float y;
-    public Vector2[] points;
-}
+using UnityEngine.Rendering;
 
 public class IslandWorld : MonoBehaviour, IEggboyWorld
 {
-    public LayerMask groundMask;
-    public LayerMask obstacleMask;
-    public Transform mailboxMarker;
-    public Transform spawnMarker;
-    public GameObject mailboxTrail;
-    public GameObject endingDesk;
-    public GameObject woodModel, oilModel;
-    public float waterLevel;
+	[Serializable]
+	public class RoamBlock
+	{
+		public string id;
 
-    public List<WalkPoly> walkPolys = new List<WalkPoly>();
-    public List<WalkPoly> lawnPolys = new List<WalkPoly>();
-    public WalkPoly beachPoly;
+		public string when;
 
-    readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
-    const float SpatialCell = 2.0f;
-    readonly Dictionary<long, List<EggboyCollider>> spatialBuckets = new Dictionary<long, List<EggboyCollider>>();
-    bool spatialDirty = true;
-    EggboyCollider endingDeskCollider;
+		public float minY = -10f;
 
-    public IReadOnlyList<EggboyCollider> Colliders => colliders;
+		public float maxY = 100f;
 
-    // WP-08：水位由 WaterLevel 管，IslandWorld 只读它
-    public float WaterY => WaterLevel.Main != null ? WaterLevel.Main.Y : waterLevel;
-    public void AddCollider(EggboyCollider c)
-    {
-        if (c != null && !colliders.Contains(c))
-        {
-            colliders.Add(c);
-            spatialDirty = true;
-        }
-    }
-    public void RemoveCollider(EggboyCollider c)
-    {
-        if (c != null && colliders.Remove(c))
-            spatialDirty = true;
-    }
+		public float[] x;
 
-    public void SyncEndingDeskCollider()
-    {
-        if (endingDesk == null) return;
-        if (endingDesk.activeInHierarchy)
-        {
-            if (endingDeskCollider == null)
-            {
-                var p = endingDesk.transform.position;
-                endingDeskCollider = new EggboyCollider
-                {
-                    x = p.x,
-                    z = p.z,
-                    r = 0.20f,
-                    top = p.y + 0.76f
-                };
-            }
-            AddCollider(endingDeskCollider);
-        }
-        else if (endingDeskCollider != null)
-        {
-            RemoveCollider(endingDeskCollider);
-        }
-    }
+		public float[] z;
 
-    void RebuildSpatialGrid()
-    {
-        spatialDirty = false;
-        spatialBuckets.Clear();
-        const float Margin = 0.60f; // 大于 EggboyPlayer.Radius (0.42m)，保证单格查询即可覆盖全部可能接触的碰撞体
-        for (int i = 0; i < colliders.Count; i++)
-        {
-            var c = colliders[i];
-            float ex = (c.hw ?? c.r ?? 0.5f) + Margin;
-            float ez = (c.hd ?? c.r ?? 0.5f) + Margin;
-            int x0 = Mathf.FloorToInt((c.x - ex) / SpatialCell);
-            int x1 = Mathf.FloorToInt((c.x + ex) / SpatialCell);
-            int z0 = Mathf.FloorToInt((c.z - ez) / SpatialCell);
-            int z1 = Mathf.FloorToInt((c.z + ez) / SpatialCell);
-            for (int gz = z0; gz <= z1; gz++)
-            {
-                for (int gx = x0; gx <= x1; gx++)
-                {
-                    long key = ((long)gx << 32) | (uint)gz;
-                    if (!spatialBuckets.TryGetValue(key, out var list))
-                    {
-                        list = new List<EggboyCollider>(8);
-                        spatialBuckets[key] = list;
-                    }
-                    list.Add(c);
-                }
-            }
-        }
-    }
+		[NonSerialized]
+		public Vector2[] pts;
 
-    public void QueryColliders(float x, float z, List<EggboyCollider> results)
-    {
-        results.Clear();
-        if (spatialDirty) RebuildSpatialGrid();
-        int gx = Mathf.FloorToInt(x / SpatialCell);
-        int gz = Mathf.FloorToInt(z / SpatialCell);
-        long key = ((long)gx << 32) | (uint)gz;
-        if (spatialBuckets.TryGetValue(key, out var list))
-            results.AddRange(list);
-    }
-    public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
-    readonly List<EggboyCollider> cameraCandidates = new List<EggboyCollider>();
-    readonly HashSet<EggboyCollider> cameraSeen = new HashSet<EggboyCollider>();
+		[NonSerialized]
+		public float waterMin = float.NaN;
+	}
 
-    // 覆盖整条相机射线跨过的空间桶，去重后做解析相交，避免末端单格漏墙。
-    public void QueryCollidersRange(Vector3 a, Vector3 b, float margin, List<EggboyCollider> results)
-    {
-        results.Clear(); cameraSeen.Clear();
-        if (spatialDirty) RebuildSpatialGrid();
-        int x0 = Mathf.FloorToInt((Mathf.Min(a.x,b.x)-margin)/SpatialCell), x1 = Mathf.FloorToInt((Mathf.Max(a.x,b.x)+margin)/SpatialCell);
-        int z0 = Mathf.FloorToInt((Mathf.Min(a.z,b.z)-margin)/SpatialCell), z1 = Mathf.FloorToInt((Mathf.Max(a.z,b.z)+margin)/SpatialCell);
-        for (int z=z0;z<=z1;z++) for(int x=x0;x<=x1;x++)
-            if(spatialBuckets.TryGetValue(((long)x<<32)|(uint)z,out var list))
-                foreach(var c in list) if(cameraSeen.Add(c)) results.Add(c);
-    }
-    public float CameraBlockDistance(Vector3 pivot, Vector3 direction, float maxDistance)
-    {
-        direction.Normalize();
-        QueryCollidersRange(pivot,pivot+direction*maxDistance,.35f,cameraCandidates);
-        float allowed=maxDistance;
-        foreach(var c in cameraCandidates)
-            if(CameraIntersection(c,pivot,direction,allowed,.30f,out float enter)) allowed=Mathf.Min(allowed,Mathf.Max(0f,enter-.08f));
-        return allowed;
-    }
-    public bool CameraPointBlocked(Vector3 point)
-    {
-        QueryCollidersRange(point,point,.01f,cameraCandidates);
-        foreach(var c in cameraCandidates) if(CameraIntersection(c,point,Vector3.forward,0f,0f,out _)) return true;
-        return false;
-    }
-    static bool CameraIntersection(EggboyCollider c,Vector3 p,Vector3 d,float max,float radius,out float enter)
-    {
-        enter=0f;float exit=max;
-        // 细杆和轮廓采样圆交给前景消融，避免逐柱前缩抖动。
-        if(c.water || (c.r.HasValue && c.r.Value<.24f)) return false;
-        if(c.r.HasValue){
-            float x=p.x-c.x,z=p.z-c.z,r=c.r.Value+radius;
-            float a=d.x*d.x+d.z*d.z,b=x*d.x+z*d.z,q=x*x+z*z-r*r;
-            if(a<1e-8f){if(q>0f)return false;}
-            else {float disc=b*b-a*q;if(disc<0)return false;float s=Mathf.Sqrt(disc);enter=Mathf.Max(enter,(-b-s)/a);exit=Mathf.Min(exit,(-b+s)/a);}
-        } else if(c.hw.HasValue && c.hd.HasValue){
-            if(!CameraSlab(p.x,d.x,c.x-c.hw.Value-radius,c.x+c.hw.Value+radius,ref enter,ref exit)
-                ||!CameraSlab(p.z,d.z,c.z-c.hd.Value-radius,c.z+c.hd.Value+radius,ref enter,ref exit))return false;
-        } else return false;
-        // top == null 是完整垂直阻挡柱；仅显式 top 才允许越过。
-        float low=c.minY>0f?c.minY-radius:float.NegativeInfinity;
-        float high=c.top.HasValue?c.top.Value+.08f+radius:float.PositiveInfinity;
-        return CameraSlab(p.y,d.y,low,high,ref enter,ref exit)&&exit>=enter&&exit>=0f&&enter<=max;
-    }
-    static bool CameraSlab(float p,float d,float low,float high,ref float enter,ref float exit)
-    {
-        if(Mathf.Abs(d)<1e-8f)return p>=low&&p<=high;
-        float a=(low-p)/d,b=(high-p)/d;if(a>b){float t=a;a=b;b=t;}
-        enter=Mathf.Max(enter,a);exit=Mathf.Min(exit,b);return exit>=enter;
-    }
-    public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
+	[Serializable]
+	private class RoamBlockDoc
+	{
+		public RoamBlock[] blocks;
+	}
 
-    void Awake()
-    {
-        if (groundMask == 0) groundMask = LayerMask.GetMask("Ground");
-        if (obstacleMask == 0) obstacleMask = LayerMask.GetMask("TownObstacle");
-        CollectObstacles();
-        CleanVisualRoadAndTierSeams();
-    }
+	public LayerMask groundMask;
 
-    // 仅调整视觉 MeshFilter（绝不改动 MeshCollider 物理碰撞，保证寻路与审计 100% 一致）：
-    // 1. 移除坡道 Road_* 外扩 93cm 的凸起碎石边/路缘/悬空裙边（避免切穿石板路和栅栏造成穿模）；
-    // 2. 将 Road_* 与 3.0m 主街交界处的顶面微压 2.5cm，避免与石板路 Z-fighting 闪烁；
-    // 3. 消除 Tier_pad_grass_3_0_0（操场草坪 y=3.02）与 Tier_pad_stone_3_0_0（石板路 y=3.02）同高重叠导致的草坪三角穿模。
-    void CleanVisualRoadAndTierSeams()
-    {
-        Material cobbleMat = null;
-        var stoneTier = GameObject.Find("Tier_pad_stone_3_0_0");
-        if (stoneTier != null)
-        {
-            var stoneMr = stoneTier.GetComponent<MeshRenderer>();
-            if (stoneMr != null) cobbleMat = stoneMr.sharedMaterial;
-        }
+	public LayerMask obstacleMask;
 
-        var grassTier = GameObject.Find("Tier_pad_grass_3_0_0");
-        if (grassTier != null)
-        {
-            var gmf = grassTier.GetComponent<MeshFilter>();
-            if (gmf != null && gmf.sharedMesh != null)
-            {
-                var m = Instantiate(gmf.sharedMesh);
-                var v = m.vertices;
-                for (int i = 0; i < v.Length; i++)
-                {
-                    // 操场草坪整体微降 0.8cm（仍高于 Tier_main 3.00m），但在秋千/滑梯操场内部区域略抬高以盖住石板多边形凹角
-                    if (v[i].x > 8.2f && v[i].x < 23.2f && v[i].z > -7.1f && v[i].z < 8.5f)
-                        v[i].y = 3.028f;
-                    else
-                        v[i].y = 3.012f;
-                }
-                m.vertices = v;
-                m.RecalculateBounds();
-                gmf.sharedMesh = m;
-            }
-        }
+	public Transform mailboxMarker;
 
-        if (stoneTier != null)
-        {
-            var smf = stoneTier.GetComponent<MeshFilter>();
-            if (smf != null && smf.sharedMesh != null)
-            {
-                var m = Instantiate(smf.sharedMesh);
-                var v = m.vertices;
-                for (int i = 0; i < v.Length; i++)
-                {
-                    // 石板路在操场护栏内侧的折角顶点压到草坪下方，消除草坪里的斜三角石板穿模
-                    if (v[i].x > 8.5f && v[i].x < 23.8f && v[i].z > -7.9f && v[i].z < -4.5f)
-                        v[i].y = 3.005f;
-                    else
-                        v[i].y = 3.024f;
-                }
-                m.vertices = v;
-                m.RecalculateBounds();
-                smf.sharedMesh = m;
-            }
-        }
+	public Transform spawnMarker;
 
-        foreach (var mf in FindObjectsOfType<MeshFilter>())
-        {
-            if (mf == null || mf.sharedMesh == null) continue;
-            string goName = mf.gameObject.name;
-            if (!goName.StartsWith("Road_")) continue;
-            // The finished surfaces are authored against their platform joins and roadbeds.
-            if (mf.sharedMesh.name.StartsWith("Finished Road ", System.StringComparison.Ordinal)) continue;
+	public GameObject mailboxTrail;
 
-            var mesh = Instantiate(mf.sharedMesh);
-            if (mesh.subMeshCount >= 4)
-            {
-                // 只保留主路面（subMesh 0），去掉两侧外扩 93cm 穿入石板路/栅栏/悬空的路缘、碎石边和裙边
-                mesh.SetTriangles(new int[0], 1);
-                mesh.SetTriangles(new int[0], 2);
-                mesh.SetTriangles(new int[0], 3);
-            }
+	public GameObject endingDesk;
 
-            var verts = mesh.vertices;
-            for (int i = 0; i < verts.Length; i++)
-            {
-                // 坡道与各层台地（3.0m 主街、5.0m 灯塔台地、5.5m 住宅石板台地、6.5m 山顶邮局台地）交界处微压，彻底消除路面接缝 Z-fighting
-                if (verts[i].y >= 2.95f && verts[i].y <= 3.05f)
-                    verts[i].y = 3.010f;
-                else if (verts[i].y >= 4.96f && verts[i].y <= 5.05f)
-                    verts[i].y = 4.992f;
-                else if (verts[i].y >= 5.46f && verts[i].y <= 5.55f)
-                    verts[i].y = 5.510f;
-                else if (verts[i].y >= 6.46f && verts[i].y <= 6.55f)
-                    verts[i].y = 6.492f;
-            }
-            mesh.vertices = verts;
-            mesh.RecalculateBounds();
-            mf.sharedMesh = mesh;
+	public GameObject woodModel;
 
-            if (cobbleMat != null && goName != "Road_to_dock")
-            {
-                var mr = mf.GetComponent<MeshRenderer>();
-                if (mr != null && mr.sharedMaterials != null && mr.sharedMaterials.Length > 0)
-                {
-                    var mats = mr.sharedMaterials;
-                    mats[0] = cobbleMat;
-                    mr.sharedMaterials = mats;
-                }
-            }
-        }
-    }
+	public GameObject oilModel;
 
-    void CollectObstacles()
-    {
-        colliders.Clear();
-        foreach (var o in FindObjectsOfType<TownObstacle>())
-        {
-            var box = o.GetComponent<BoxCollider>();
-            if (box == null) continue;
-            var t = o.transform;
-            Vector3 c = t.TransformPoint(box.center);
-            Vector3 s = Vector3.Scale(box.size, t.lossyScale);
-            var ec = new EggboyCollider
-            {
-                x = c.x,
-                z = c.z,
-                hw = s.x * 0.5f,
-                hd = s.z * 0.5f,
-                water = o.kind == TownObstacle.Kind.Water,
-                minY = o.minY,
-            };
-            if (o.kind == TownObstacle.Kind.WalkableTop)
-                ec.top = c.y + s.y * 0.5f;
-            colliders.Add(ec);
-        }
-        // 按模型外轮廓的小圆（TownObstacleSet）
-        foreach (var set in FindObjectsOfType<TownObstacleSet>())
-            for (int i = 0; i < set.x.Length; i++)
-                colliders.Add(new EggboyCollider { x = set.x[i], z = set.z[i], r = set.r[i], top = set.top[i] });
-        spatialDirty = true;
-    }
+	public float waterLevel;
 
-    // 2026-11-14 沙滩上能涉多深的水（米）。原来到处都是 0.05：水一没过脚面就算走不了，EGGBOY 永远碰不到水。
-    // 沙滩（0.3）在 L1（0.45）没过脚 15 厘米，可以下去踩水；L2（1.15）就太深了。
-    // 只放开沙滩，路面照旧 0.05：渡口缺口那段路的河床在 L2 时水深只有 12 厘米，路面也放开的话人直接蹚过去，
-    // 木箱 / 绞盘 / 心愿船这些过海的办法就全被绕开了（创新审计 print_gap_blocks 等 4 项会不过）。
-    public const float WadeDepth = 0.18f;
-    public const float RoadWadeDepth = 0.05f;
+	public List<WalkPoly> walkPolys = new List<WalkPoly>();
 
-    // 站在这儿、地面这么高，水最多能没过脚多少还算能走
-    public float WadeLimit(float x, float z, float ground) => IsBeachSurface(x, z, ground) ? WadeDepth : RoadWadeDepth;
+	public List<WalkPoly> lawnPolys = new List<WalkPoly>();
 
-    public bool Walkable(float x, float z) => walkPolys.Count == 0 || TryWalkableGround(x, z, out _);
+	public WalkPoly beachPoly;
 
-    bool TryWalkableGround(float x, float z, out float ground)
-    {
-        ground = 0f;
-        bool road = InWalkArea(x, z);
-        bool lawn = !road && InLawnArea(x, z);
-        bool sand = beachPoly != null && Contains(beachPoly.points, x, z);
-        if (!road && !lawn && !sand) return false;
-        ground = GroundAt(x, z);
-        if (ground < WaterY - WadeLimit(x, z, ground)) return false;
-        return sand && Mathf.Abs(ground - beachPoly.y) <= 0.12f || (road ? ground > 0.22f : lawn && ground >= 2.5f);
-    }
+	private readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
 
-    public bool IsBeachSurface(float x, float z, float height) =>
-        beachPoly != null && Mathf.Abs(height - beachPoly.y) <= 0.12f && Contains(beachPoly.points, x, z);
+	private const float SpatialCell = 2f;
 
-    // ---------------- 2026-11-16 自由漫游（用户议题 2） ----------------
-    // 原来主角只能走在 walkPolys / lawnPolys / beachPoly 三种白名单多边形里，台地上大片草地、山顶、海岸都是空气墙。
-    // 现在只看真实的东西：
-    //   1. 地形高低：从身体顶部（脚 + 1.3 m）往下打 Ground 射线，落点比脚高出 Step（0.23 m，空中 0.28 m）就是墙 / 崖面，挡住；
-    //      从身体顶部往下打，所以头顶上方的平台（灯塔顶）不会把人吸上去。
-    //   2. 跳落：按跳往下最多 MaxDrop（3 m，用户定的）；走路只下 0.6 m 以内的坎，更高的边停住（要跳才下去）。
-    //   3. 水：照旧，没过脚超过可涉深度（沙滩 0.18，别处 0.05）就不能走——渡口缺口在 L2 时靠这条挡住。
-    //   4. 少量禁区（Resources/World/roam_blocks.json）：需要硬边界、又没有真实墙体的地方（比如从别处绕过渡口缺口）。
-    //   5. 墙体、护栏、建筑、树干、岩块照旧由轮廓碰撞圆挡（EggboyPlayer 里）。
-    // walkPolys 保留，只表示"铺装路面"（狗爪印、海风、地图、谜题摆放这些地方还在用 InWalkArea / Walkable 判断）。
-    public const float MaxDrop = 3.0f;
-    public const float WalkDrop = 0.6f;
-    public const float BodyTop = 1.3f;
-    public const float StepUp = 0.23f;
-    // 空中只认比当前脚高 0.28 m 以内的落点：GroundAt 只看脚上方 0.3 m，再高的落点"看不见"，会从台子侧面钻进去
-    // （起跳 0.42 m + 0.28 m，跳起来最高能上 0.7 m 的台子）
-    public const float JumpUp = 0.28f;
-    public bool FreeRoam => Features.freeRoam && walkPolys.Count > 0;
+	private readonly Dictionary<long, List<EggboyCollider>> spatialBuckets = new Dictionary<long, List<EggboyCollider>>();
 
-    [System.Serializable] public class RoamBlock { public string id, when; public float minY = -10f, maxY = 100f; public float[] x, z; [System.NonSerialized] public Vector2[] pts; }
-    [System.Serializable] class RoamBlockDoc { public RoamBlock[] blocks; }
-    RoamBlock[] roamBlocks;
-    public System.Func<string, bool> RoamCondition;   // when 条件（比如 "gap"）由别的系统回答；没人回答当作成立
-    public IReadOnlyList<RoamBlock> RoamBlocks { get { LoadRoamBlocks(); return roamBlocks; } }
+	private bool spatialDirty = true;
 
-    void LoadRoamBlocks()
-    {
-        if (roamBlocks != null) return;
-        var asset = Resources.Load<TextAsset>("World/roam_blocks");
-        var doc = asset != null ? JsonUtility.FromJson<RoamBlockDoc>(asset.text) : null;
-        roamBlocks = doc != null && doc.blocks != null ? doc.blocks : new RoamBlock[0];
-        foreach (var b in roamBlocks)
-        {
-            b.pts = new Vector2[Mathf.Min(b.x?.Length ?? 0, b.z?.Length ?? 0)];
-            for (int i = 0; i < b.pts.Length; i++) b.pts[i] = new Vector2(b.x[i], b.z[i]);
-        }
-    }
+	private EggboyCollider endingDeskCollider;
 
-    public bool InRoamBlock(float x, float z, float ground)
-    {
-        LoadRoamBlocks();
-        foreach (var b in roamBlocks)
-        {
-            if (ground < b.minY || ground > b.maxY || !Contains(b.pts, x, z)) continue;
-            if (!string.IsNullOrEmpty(b.when) && b.when != "always" && RoamCondition != null && !RoamCondition(b.when)) continue;
-            return true;
-        }
-        return false;
-    }
+	private readonly List<EggboyCollider> cameraCandidates = new List<EggboyCollider>();
 
-    // 从 fromY 往下最高的 Ground 面；没有返回 NaN（海面以外、地图边外）
-    public float SurfaceBelow(float x, float z, float fromY)
-    {
-        float best = float.NaN;
-        var hits = Physics.RaycastAll(new Vector3(x, fromY, z), Vector3.down, fromY + 60f, groundMask, QueryTriggerInteraction.Ignore);
-        foreach (var hit in hits) if (float.IsNaN(best) || hit.point.y > best) best = hit.point.y;
-        return best;
-    }
+	private readonly HashSet<EggboyCollider> cameraSeen = new HashSet<EggboyCollider>();
 
-    // 自由漫游下从 from 走一步到 (x, z) 行不行（只看地形 / 水 / 禁区；碰撞圆在 EggboyPlayer 里另算）
-    public bool RoamStep(Vector3 from, float x, float z, bool jumping)
-    {
-        float g = SurfaceBelow(x, z, from.y + BodyTop);
-        if (float.IsNaN(g)) return false;
-        float rise = g - from.y;
-        if (rise > (jumping ? JumpUp : StepUp)) return false;                 // 墙 / 崖面 / 太高的台子
-        // 走路只往下迈 0.6 m 以内（路缘、小台阶）；更高的台地边要按跳才下得去（最多 3 m）——不会一不留神走下崖
-        if (from.y - g > (jumping ? MaxDrop + 0.45f : WalkDrop)) return false;
-        if (g < WaterY - WadeLimit(x, z, g)) return false;                   // 深水
-        if (InRoamBlock(x, z, g)) return false;
-        return true;
-    }
+	public const float WadeDepth = 0.18f;
 
-    // 自由漫游下这一点能不能站（给安全点、拾取站位这类"找一个能站的地方"用）
-    public bool RoamStandable(float x, float z, float nearY)
-    {
-        float g = SurfaceBelow(x, z, nearY + BodyTop);
-        return !float.IsNaN(g) && g >= WaterY - WadeLimit(x, z, g) && !InRoamBlock(x, z, g);
-    }
+	public const float RoadWadeDepth = 0.05f;
 
-    public bool CanTraverse(Vector3 from, float x, float z, bool jumping)
-    {
-        if (walkPolys.Count == 0) return true;
-        if (FreeRoam) return RoamStep(from, x, z, jumping);
-        if (!TryWalkableGround(x, z, out float ground)) return jumping && beachPoly != null && from.y >= beachPoly.y + 0.55f && IsDryBeachApproach(x, z);
-        if (beachPoly == null) return true;
-        // 跳下沙滩才进入低层。沙滩上的人不能从崖壁底部穿进上层地形。
-        bool onBeach = from.y < beachPoly.y + 0.65f && Contains(beachPoly.points, from.x, from.z);
-        if (IsBeachSurface(x, z, ground)) return onBeach || jumping;
-        return !onBeach || ground <= from.y + 0.30f;
-    }
+	public const int RockGroundLayer = 8;
 
-    bool IsDryBeachApproach(float x, float z)
-    {
-        // 2026-11-14：原来水位一过 0.05 就不让跳下沙滩；现在沙滩只要还涉得过去（没过脚不超过 WadeDepth）就能下
-        if (beachPoly?.points == null || beachPoly.points.Length < 3 || WaterY > beachPoly.y + WadeDepth) return false;
-        // 北侧坡道与沙滩之间有一条低矮的干岸带，允许角色在空中越过这段间隙。
-        const float MaxGap = 0.90f;
-        var point = new Vector2(x, z);
-        var vertices = beachPoly.points;
-        for (int i = 0, j = vertices.Length - 1; i < vertices.Length; j = i++)
-        {
-            var edge = vertices[i] - vertices[j];
-            float t = Mathf.Clamp01(Vector2.Dot(point - vertices[j], edge) / Mathf.Max(edge.sqrMagnitude, 0.0001f));
-            if ((point - vertices[j] - t * edge).sqrMagnitude >= MaxGap * MaxGap) continue;
-            float ground = GroundAt(x, z);
-            return ground > 0.05f && ground <= beachPoly.y + 0.10f;
-        }
-        return false;
-    }
+	public const int RockGroundMask = 256;
 
-    public bool InWalkArea(float x, float z)
-    {
-        foreach (var p in walkPolys)
-            if (Contains(p.points, x, z)) return true;
-        return false;
-    }
+	public const float MaxDrop = 3f;
 
-    public bool InLawnArea(float x, float z)
-    {
-        if (lawnPolys == null) return false;
-        foreach (var p in lawnPolys)
-            if (Contains(p.points, x, z)) return true;
-        return false;
-    }
+	public const float WalkDrop = 0.6f;
 
-    public float GroundAt(float x, float z)
-    {
-        return GroundAt(x, z, float.PositiveInfinity);
-    }
+	public const float BodyTop = 1.3f;
 
-    // aboveY：只认这个高度附近及以下的地面。塔顶平台在塔门正上方，
-    // 不带上限的话从塔下打射线会直接打到 12 米高的平台，把人抬上去。
-    public float GroundAt(float x, float z, float aboveY)
-    {
-        float best = -1f;
-        var hits = Physics.RaycastAll(new Vector3(x, 200f, z), Vector3.down, 400f, groundMask, QueryTriggerInteraction.Ignore);
-        foreach (var hit in hits)
-        {
-            float y = hit.point.y;
-            if (y <= aboveY + 0.3f && y > best) best = y;
-        }
-        return best < -0.5f ? 0f : best;
-    }
+	public const float StepUp = 0.23f;
 
-    static bool Contains(Vector2[] poly, float x, float z)
-    {
-        if (poly == null || poly.Length < 3) return false;
-        bool inside = false;
-        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
-        {
-            var a = poly[i];
-            var b = poly[j];
-            if ((a.y > z) != (b.y > z) &&
-                x < (b.x - a.x) * (z - a.y) / (b.y - a.y) + a.x)
-                inside = !inside;
-        }
-        return inside;
-    }
+	public const float JumpUp = 0.28f;
+
+	private RoamBlock[] roamBlocks;
+
+	public Func<string, bool> RoamCondition;
+
+	private static readonly RaycastHit[] rockWallHits = new RaycastHit[16];
+
+	public IReadOnlyList<EggboyCollider> Colliders => colliders;
+
+	public float WaterY
+	{
+		get
+		{
+			if (!(WaterLevel.Main != null))
+			{
+				return waterLevel;
+			}
+			return WaterLevel.Main.Y;
+		}
+	}
+
+	public Vector3 MailboxPos
+	{
+		get
+		{
+			if (!(mailboxMarker != null))
+			{
+				return Vector3.zero;
+			}
+			return mailboxMarker.position;
+		}
+	}
+
+	public Vector3 SpawnPos
+	{
+		get
+		{
+			if (!(spawnMarker != null))
+			{
+				return Vector3.zero;
+			}
+			return spawnMarker.position;
+		}
+	}
+
+	public bool FreeRoam
+	{
+		get
+		{
+			if (Features.freeRoam)
+			{
+				return walkPolys.Count > 0;
+			}
+			return false;
+		}
+	}
+
+	public IReadOnlyList<RoamBlock> RoamBlocks
+	{
+		get
+		{
+			LoadRoamBlocks();
+			return roamBlocks;
+		}
+	}
+
+	public void AddCollider(EggboyCollider c)
+	{
+		if (c != null && !colliders.Contains(c))
+		{
+			colliders.Add(c);
+			spatialDirty = true;
+		}
+	}
+
+	public void RemoveCollider(EggboyCollider c)
+	{
+		if (c != null && colliders.Remove(c))
+		{
+			spatialDirty = true;
+		}
+	}
+
+	public void SyncEndingDeskCollider()
+	{
+		if (endingDesk == null)
+		{
+			return;
+		}
+		if (endingDesk.activeInHierarchy)
+		{
+			if (endingDeskCollider == null)
+			{
+				Vector3 position = endingDesk.transform.position;
+				endingDeskCollider = new EggboyCollider
+				{
+					x = position.x,
+					z = position.z,
+					r = 0.2f,
+					top = position.y + 0.76f
+				};
+			}
+			AddCollider(endingDeskCollider);
+		}
+		else if (endingDeskCollider != null)
+		{
+			RemoveCollider(endingDeskCollider);
+		}
+	}
+
+	private void RebuildSpatialGrid()
+	{
+		spatialDirty = false;
+		spatialBuckets.Clear();
+		for (int i = 0; i < colliders.Count; i++)
+		{
+			EggboyCollider eggboyCollider = colliders[i];
+			float num = (eggboyCollider.hw ?? eggboyCollider.r ?? 0.5f) + 0.6f;
+			float num2 = (eggboyCollider.hd ?? eggboyCollider.r ?? 0.5f) + 0.6f;
+			int num3 = Mathf.FloorToInt((eggboyCollider.x - num) / 2f);
+			int num4 = Mathf.FloorToInt((eggboyCollider.x + num) / 2f);
+			int num5 = Mathf.FloorToInt((eggboyCollider.z - num2) / 2f);
+			int num6 = Mathf.FloorToInt((eggboyCollider.z + num2) / 2f);
+			for (int j = num5; j <= num6; j++)
+			{
+				for (int k = num3; k <= num4; k++)
+				{
+					long key = ((long)k << 32) | (uint)j;
+					if (!spatialBuckets.TryGetValue(key, out var value))
+					{
+						value = new List<EggboyCollider>(8);
+						spatialBuckets[key] = value;
+					}
+					value.Add(eggboyCollider);
+				}
+			}
+		}
+	}
+
+	public void QueryColliders(float x, float z, List<EggboyCollider> results)
+	{
+		results.Clear();
+		if (spatialDirty)
+		{
+			RebuildSpatialGrid();
+		}
+		int num = Mathf.FloorToInt(x / 2f);
+		int num2 = Mathf.FloorToInt(z / 2f);
+		long key = ((long)num << 32) | (uint)num2;
+		if (spatialBuckets.TryGetValue(key, out var value))
+		{
+			results.AddRange(value);
+		}
+	}
+
+	public void QueryCollidersRange(Vector3 a, Vector3 b, float margin, List<EggboyCollider> results)
+	{
+		results.Clear();
+		cameraSeen.Clear();
+		if (spatialDirty)
+		{
+			RebuildSpatialGrid();
+		}
+		int num = Mathf.FloorToInt((Mathf.Min(a.x, b.x) - margin) / 2f);
+		int num2 = Mathf.FloorToInt((Mathf.Max(a.x, b.x) + margin) / 2f);
+		int num3 = Mathf.FloorToInt((Mathf.Min(a.z, b.z) - margin) / 2f);
+		int num4 = Mathf.FloorToInt((Mathf.Max(a.z, b.z) + margin) / 2f);
+		for (int i = num3; i <= num4; i++)
+		{
+			for (int j = num; j <= num2; j++)
+			{
+				if (!spatialBuckets.TryGetValue(((long)j << 32) | (uint)i, out var value))
+				{
+					continue;
+				}
+				foreach (EggboyCollider item in value)
+				{
+					if (cameraSeen.Add(item))
+					{
+						results.Add(item);
+					}
+				}
+			}
+		}
+	}
+
+	public float CameraBlockDistance(Vector3 pivot, Vector3 direction, float maxDistance)
+	{
+		direction.Normalize();
+		QueryCollidersRange(pivot, pivot + direction * maxDistance, 0.35f, cameraCandidates);
+		float num = maxDistance;
+		foreach (EggboyCollider cameraCandidate in cameraCandidates)
+		{
+			if (CameraIntersection(cameraCandidate, pivot, direction, num, 0.3f, out var enter))
+			{
+				num = Mathf.Min(num, Mathf.Max(0f, enter - 0.08f));
+			}
+		}
+		return num;
+	}
+
+	public bool CameraPointBlocked(Vector3 point)
+	{
+		QueryCollidersRange(point, point, 0.01f, cameraCandidates);
+		foreach (EggboyCollider cameraCandidate in cameraCandidates)
+		{
+			if (CameraIntersection(cameraCandidate, point, Vector3.forward, 0f, 0f, out var _))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static bool CameraIntersection(EggboyCollider c, Vector3 p, Vector3 d, float max, float radius, out float enter)
+	{
+		enter = 0f;
+		float exit = max;
+		if (c.water || (c.r.HasValue && c.r.Value < 0.24f))
+		{
+			return false;
+		}
+		if (c.r.HasValue)
+		{
+			float num = p.x - c.x;
+			float num2 = p.z - c.z;
+			float num3 = c.r.Value + radius;
+			float num4 = d.x * d.x + d.z * d.z;
+			float num5 = num * d.x + num2 * d.z;
+			float num6 = num * num + num2 * num2 - num3 * num3;
+			if (num4 < 1E-08f)
+			{
+				if (num6 > 0f)
+				{
+					return false;
+				}
+			}
+			else
+			{
+				float num7 = num5 * num5 - num4 * num6;
+				if (num7 < 0f)
+				{
+					return false;
+				}
+				float num8 = Mathf.Sqrt(num7);
+				enter = Mathf.Max(enter, (0f - num5 - num8) / num4);
+				exit = Mathf.Min(exit, (0f - num5 + num8) / num4);
+			}
+		}
+		else
+		{
+			if (!c.hw.HasValue || !c.hd.HasValue)
+			{
+				return false;
+			}
+			if (!CameraSlab(p.x, d.x, c.x - c.hw.Value - radius, c.x + c.hw.Value + radius, ref enter, ref exit) || !CameraSlab(p.z, d.z, c.z - c.hd.Value - radius, c.z + c.hd.Value + radius, ref enter, ref exit))
+			{
+				return false;
+			}
+		}
+		float low = ((c.minY > 0f) ? (c.minY - radius) : float.NegativeInfinity);
+		float high = (c.top.HasValue ? (c.top.Value + 0.08f + radius) : float.PositiveInfinity);
+		if (CameraSlab(p.y, d.y, low, high, ref enter, ref exit) && exit >= enter && exit >= 0f)
+		{
+			return enter <= max;
+		}
+		return false;
+	}
+
+	private static bool CameraSlab(float p, float d, float low, float high, ref float enter, ref float exit)
+	{
+		if (Mathf.Abs(d) < 1E-08f)
+		{
+			if (p >= low)
+			{
+				return p <= high;
+			}
+			return false;
+		}
+		float num = (low - p) / d;
+		float num2 = (high - p) / d;
+		if (num > num2)
+		{
+			float num3 = num;
+			num = num2;
+			num2 = num3;
+		}
+		enter = Mathf.Max(enter, num);
+		exit = Mathf.Min(exit, num2);
+		return exit >= enter;
+	}
+
+	private void Awake()
+	{
+		if ((int)groundMask == 0)
+		{
+			groundMask = LayerMask.GetMask("Ground");
+		}
+		groundMask = (int)groundMask | 0x100;
+		if ((int)obstacleMask == 0)
+		{
+			obstacleMask = LayerMask.GetMask("TownObstacle");
+		}
+		CollectObstacles();
+		CleanVisualRoadAndTierSeams();
+	}
+
+	private void CleanVisualRoadAndTierSeams()
+	{
+		Material material = null;
+		GameObject gameObject = GameObject.Find("Tier_pad_stone_3_0_0");
+		if (gameObject != null)
+		{
+			MeshRenderer component = gameObject.GetComponent<MeshRenderer>();
+			if (component != null)
+			{
+				material = component.sharedMaterial;
+			}
+		}
+		GameObject gameObject2 = GameObject.Find("Tier_pad_grass_3_0_0");
+		if (gameObject2 != null)
+		{
+			MeshFilter component2 = gameObject2.GetComponent<MeshFilter>();
+			if (component2 != null && component2.sharedMesh != null)
+			{
+				Mesh mesh = UnityEngine.Object.Instantiate(component2.sharedMesh);
+				Vector3[] vertices = mesh.vertices;
+				for (int i = 0; i < vertices.Length; i++)
+				{
+					if (vertices[i].x > 8.2f && vertices[i].x < 23.2f && vertices[i].z > -7.1f && vertices[i].z < 8.5f)
+					{
+						vertices[i].y = 3.028f;
+					}
+					else
+					{
+						vertices[i].y = 3.012f;
+					}
+				}
+				mesh.vertices = vertices;
+				mesh.RecalculateBounds();
+				component2.sharedMesh = mesh;
+			}
+		}
+		if (gameObject != null)
+		{
+			MeshFilter component3 = gameObject.GetComponent<MeshFilter>();
+			if (component3 != null && component3.sharedMesh != null)
+			{
+				Mesh mesh2 = UnityEngine.Object.Instantiate(component3.sharedMesh);
+				Vector3[] vertices2 = mesh2.vertices;
+				for (int j = 0; j < vertices2.Length; j++)
+				{
+					if (vertices2[j].x > 8.5f && vertices2[j].x < 23.8f && vertices2[j].z > -7.9f && vertices2[j].z < -4.5f)
+					{
+						vertices2[j].y = 3.005f;
+					}
+					else
+					{
+						vertices2[j].y = 3.024f;
+					}
+				}
+				mesh2.vertices = vertices2;
+				mesh2.RecalculateBounds();
+				component3.sharedMesh = mesh2;
+			}
+		}
+		MeshFilter[] array = UnityEngine.Object.FindObjectsOfType<MeshFilter>();
+		foreach (MeshFilter meshFilter in array)
+		{
+			if (meshFilter == null || meshFilter.sharedMesh == null)
+			{
+				continue;
+			}
+			string text = meshFilter.gameObject.name;
+			if (!text.StartsWith("Road_") || meshFilter.sharedMesh.name.StartsWith("Finished Road ", StringComparison.Ordinal))
+			{
+				continue;
+			}
+			Mesh mesh3 = UnityEngine.Object.Instantiate(meshFilter.sharedMesh);
+			if (mesh3.subMeshCount >= 4)
+			{
+				mesh3.SetTriangles(new int[0], 1);
+				mesh3.SetTriangles(new int[0], 2);
+				mesh3.SetTriangles(new int[0], 3);
+			}
+			Vector3[] vertices3 = mesh3.vertices;
+			for (int l = 0; l < vertices3.Length; l++)
+			{
+				if (vertices3[l].y >= 2.95f && vertices3[l].y <= 3.05f)
+				{
+					vertices3[l].y = 3.01f;
+				}
+				else if (vertices3[l].y >= 4.96f && vertices3[l].y <= 5.05f)
+				{
+					vertices3[l].y = 4.992f;
+				}
+				else if (vertices3[l].y >= 5.46f && vertices3[l].y <= 5.55f)
+				{
+					vertices3[l].y = 5.51f;
+				}
+				else if (vertices3[l].y >= 6.46f && vertices3[l].y <= 6.55f)
+				{
+					vertices3[l].y = 6.492f;
+				}
+			}
+			mesh3.vertices = vertices3;
+			mesh3.RecalculateBounds();
+			meshFilter.sharedMesh = mesh3;
+			if (material != null && text != "Road_to_dock")
+			{
+				MeshRenderer component4 = meshFilter.GetComponent<MeshRenderer>();
+				if (component4 != null && component4.sharedMaterials != null && component4.sharedMaterials.Length != 0)
+				{
+					Material[] sharedMaterials = component4.sharedMaterials;
+					sharedMaterials[0] = material;
+					component4.sharedMaterials = sharedMaterials;
+				}
+			}
+		}
+		GameObject gameObject3 = GameObject.Find("exp_mountain_curbs");
+		if (gameObject3 != null)
+		{
+			MeshFilter component5 = gameObject3.GetComponent<MeshFilter>();
+			if (component5 != null && component5.sharedMesh != null)
+			{
+				component5.sharedMesh = ExpandOuterEdge(component5.sharedMesh, 0.03f);
+			}
+		}
+		SinkUnderRoad("Cliff_houses", "Road_mountain", 0.03f);
+		array = UnityEngine.Object.FindObjectsOfType<MeshFilter>();
+		foreach (MeshFilter meshFilter2 in array)
+		{
+			if (meshFilter2 == null || meshFilter2.sharedMesh == null || meshFilter2.gameObject.name != "Rock roadbed")
+			{
+				continue;
+			}
+			Transform parent = meshFilter2.transform.parent;
+			if (!(parent == null) && parent.name.StartsWith("Road_"))
+			{
+				Mesh mesh4 = UnityEngine.Object.Instantiate(meshFilter2.sharedMesh);
+				mesh4.name = meshFilter2.sharedMesh.name;
+				Vector3[] vertices4 = mesh4.vertices;
+				float num = Mathf.Max(0.0001f, meshFilter2.transform.lossyScale.y);
+				for (int m = 0; m < vertices4.Length; m++)
+				{
+					vertices4[m].y -= 0.03f / num;
+				}
+				mesh4.vertices = vertices4;
+				mesh4.RecalculateBounds();
+				meshFilter2.sharedMesh = mesh4;
+			}
+		}
+	}
+
+	private static void SinkUnderRoad(string meshName, string roadName, float depth)
+	{
+		GameObject gameObject = GameObject.Find(meshName);
+		GameObject gameObject2 = GameObject.Find(roadName);
+		if (gameObject == null || gameObject2 == null)
+		{
+			return;
+		}
+		MeshFilter component = gameObject.GetComponent<MeshFilter>();
+		MeshFilter component2 = gameObject2.GetComponent<MeshFilter>();
+		if (component == null || component.sharedMesh == null || component2 == null || component2.sharedMesh == null)
+		{
+			return;
+		}
+		Mesh sharedMesh = component.sharedMesh;
+		Vector3[] vertices = sharedMesh.vertices;
+		Vector2[] uv = sharedMesh.uv;
+		int[] triangles = sharedMesh.triangles;
+		if (vertices.Length % 4 != 0 || triangles.Length != vertices.Length / 4 * 6 || uv.Length != vertices.Length)
+		{
+			return;
+		}
+		GameObject gameObject3 = new GameObject("RoadSinkProbe");
+		gameObject3.transform.SetPositionAndRotation(gameObject2.transform.position, gameObject2.transform.rotation);
+		gameObject3.transform.localScale = gameObject2.transform.lossyScale;
+		MeshCollider mc = gameObject3.AddComponent<MeshCollider>();
+		mc.sharedMesh = component2.sharedMesh;
+		Physics.SyncTransforms();
+		Bounds rb = mc.bounds;
+		Transform transform = gameObject.transform;
+		List<Vector3> list = new List<Vector3>();
+		List<Vector2> list2 = new List<Vector2>();
+		List<int> list3 = new List<int>();
+		int num = 0;
+		for (int i = 0; i < vertices.Length; i += 4)
+		{
+			bool flag = triangles[i / 4 * 6 + 1] != i + 1;
+			Vector3 vector = vertices[i];
+			Vector3 vector2 = vertices[i + 1];
+			Vector3 vector3 = vertices[i + 2];
+			Vector3 vector4 = vertices[i + 3];
+			Vector3 a = transform.TransformPoint(vector);
+			Vector3 b = transform.TransformPoint(vector2);
+			float magnitude = new Vector2(b.x - a.x, b.z - a.z).magnitude;
+			int num2 = Mathf.Max(1, Mathf.CeilToInt(magnitude / 0.1f));
+			float[] array = new float[num2 + 1];
+			bool flag2 = false;
+			for (int j = 0; j <= num2; j++)
+			{
+				Vector3 w2 = Vector3.Lerp(a, b, (float)j / (float)num2);
+				float num3 = Sunk(w2);
+				array[j] = (float.IsNaN(num3) ? w2.y : num3);
+				flag2 |= !float.IsNaN(num3);
+			}
+			if (!flag2 || num2 == 1)
+			{
+				int count = list.Count;
+				list.Add(vector);
+				list.Add(vector2);
+				list.Add(vector3);
+				list.Add(vector4);
+				list2.Add(uv[i]);
+				list2.Add(uv[i + 1]);
+				list2.Add(uv[i + 2]);
+				list2.Add(uv[i + 3]);
+				for (int k = 0; k < 6; k++)
+				{
+					list3.Add(triangles[i / 4 * 6 + k] - i + count);
+				}
+				continue;
+			}
+			num++;
+			for (int l = 0; l < num2; l++)
+			{
+				float t = (float)l / (float)num2;
+				float t2 = (float)(l + 1) / (float)num2;
+				Vector3 position = Vector3.Lerp(a, b, t);
+				position.y = array[l];
+				Vector3 position2 = Vector3.Lerp(a, b, t2);
+				position2.y = array[l + 1];
+				int count2 = list.Count;
+				list.Add(transform.InverseTransformPoint(position));
+				list.Add(transform.InverseTransformPoint(position2));
+				list.Add(Vector3.Lerp(vector4, vector3, t2));
+				list.Add(Vector3.Lerp(vector4, vector3, t));
+				list2.Add(new Vector2(Mathf.Lerp(uv[i].x, uv[i + 1].x, t), array[l]));
+				list2.Add(new Vector2(Mathf.Lerp(uv[i].x, uv[i + 1].x, t2), array[l + 1]));
+				list2.Add(Vector2.Lerp(uv[i + 3], uv[i + 2], t2));
+				list2.Add(Vector2.Lerp(uv[i + 3], uv[i + 2], t));
+				if (!flag)
+				{
+					list3.AddRange(new int[6]
+					{
+						count2,
+						count2 + 1,
+						count2 + 2,
+						count2,
+						count2 + 2,
+						count2 + 3
+					});
+				}
+				else
+				{
+					list3.AddRange(new int[6]
+					{
+						count2,
+						count2 + 2,
+						count2 + 1,
+						count2,
+						count2 + 3,
+						count2 + 2
+					});
+				}
+			}
+		}
+		UnityEngine.Object.Destroy(gameObject3);
+		if (num != 0)
+		{
+			Mesh mesh = new Mesh
+			{
+				name = sharedMesh.name,
+				indexFormat = ((list.Count > 65000) ? IndexFormat.UInt32 : IndexFormat.UInt16)
+			};
+			mesh.SetVertices(list);
+			mesh.SetUVs(0, list2);
+			mesh.SetTriangles(list3, 0);
+			mesh.RecalculateNormals();
+			mesh.RecalculateTangents();
+			mesh.RecalculateBounds();
+			component.sharedMesh = mesh;
+			Debug.Log($"ROAD_SINK {meshName} under {roadName} quads_split={num} verts {vertices.Length}->{list.Count}");
+		}
+		float Sunk(Vector3 w)
+		{
+			if (w.x < rb.min.x || w.x > rb.max.x || w.z < rb.min.z || w.z > rb.max.z)
+			{
+				return float.NaN;
+			}
+			if (!mc.Raycast(new Ray(new Vector3(w.x, w.y + 0.5f, w.z), Vector3.down), out var hitInfo, 0.8f))
+			{
+				return float.NaN;
+			}
+			if (w.y < hitInfo.point.y - depth || w.y > hitInfo.point.y + 0.12f)
+			{
+				return float.NaN;
+			}
+			return hitInfo.point.y - depth;
+		}
+	}
+
+	private static Mesh ExpandOuterEdge(Mesh src, float amount)
+	{
+		Mesh mesh = UnityEngine.Object.Instantiate(src);
+		mesh.name = src.name;
+		Vector3[] vertices = mesh.vertices;
+		int[] triangles = mesh.GetTriangles(0);
+		Dictionary<(Vector3Int, Vector3Int), int> dictionary = new Dictionary<(Vector3Int, Vector3Int), int>();
+		for (int i = 0; i < triangles.Length; i += 3)
+		{
+			for (int j = 0; j < 3; j++)
+			{
+				(Vector3Int, Vector3Int) key = E(Key(vertices[triangles[i + j]]), Key(vertices[triangles[i + (j + 1) % 3]]));
+				dictionary[key] = ((!dictionary.TryGetValue(key, out var value)) ? 1 : (value + 1));
+			}
+		}
+		Dictionary<Vector3Int, Vector2> dictionary2 = new Dictionary<Vector3Int, Vector2>();
+		for (int k = 0; k < triangles.Length; k += 3)
+		{
+			for (int l = 0; l < 3; l++)
+			{
+				Vector3 p2 = vertices[triangles[k + l]];
+				Vector3 p3 = vertices[triangles[k + (l + 1) % 3]];
+				Vector3 vector = vertices[triangles[k + (l + 2) % 3]];
+				Vector3Int vector3Int = Key(p2);
+				Vector3Int vector3Int2 = Key(p3);
+				if (dictionary[E(vector3Int, vector3Int2)] != 1)
+				{
+					continue;
+				}
+				Vector2 vector2 = new Vector2(p3.x - p2.x, p3.z - p2.z);
+				if (!(vector2.sqrMagnitude < 1E-08f))
+				{
+					Vector2 vector3 = new Vector2(vector2.y, 0f - vector2.x).normalized;
+					if (Vector2.Dot(vector3, new Vector2(vector.x - p2.x, vector.z - p2.z)) > 0f)
+					{
+						vector3 = -vector3;
+					}
+					dictionary2[vector3Int] = (dictionary2.TryGetValue(vector3Int, out var value2) ? value2 : Vector2.zero) + vector3;
+					dictionary2[vector3Int2] = (dictionary2.TryGetValue(vector3Int2, out var value3) ? value3 : Vector2.zero) + vector3;
+				}
+			}
+		}
+		if (dictionary2.Count == 0)
+		{
+			Vector3[] normals = mesh.normals;
+			if (normals != null && normals.Length == vertices.Length)
+			{
+				for (int m = 0; m < vertices.Length; m++)
+				{
+					Vector2 vector4 = new Vector2(normals[m].x, normals[m].z);
+					if (!(vector4.sqrMagnitude < 0.25f))
+					{
+						Vector3Int key2 = Key(vertices[m]);
+						dictionary2[key2] = (dictionary2.TryGetValue(key2, out var value4) ? value4 : Vector2.zero) + vector4.normalized;
+					}
+				}
+			}
+		}
+		int num = 0;
+		for (int n = 0; n < vertices.Length; n++)
+		{
+			if (dictionary2.TryGetValue(Key(vertices[n]), out var value5) && !(value5.sqrMagnitude < 1E-06f))
+			{
+				value5.Normalize();
+				vertices[n] += new Vector3(value5.x, 0f, value5.y) * amount;
+				num++;
+			}
+		}
+		mesh.vertices = vertices;
+		mesh.RecalculateBounds();
+		Debug.Log($"ROAD_EDGE_EXPAND {src.name} moved={num}");
+		return mesh;
+		static (Vector3Int, Vector3Int) E(Vector3Int a, Vector3Int b)
+		{
+			if (a.x >= b.x && (a.x != b.x || (a.y >= b.y && (a.y != b.y || a.z > b.z))))
+			{
+				return (b, a);
+			}
+			return (a, b);
+		}
+		static Vector3Int Key(Vector3 p)
+		{
+			return new Vector3Int(Mathf.RoundToInt(p.x * 1000f), Mathf.RoundToInt(p.y * 1000f), Mathf.RoundToInt(p.z * 1000f));
+		}
+	}
+
+	private void CollectObstacles()
+	{
+		colliders.Clear();
+		TownObstacle[] array = UnityEngine.Object.FindObjectsOfType<TownObstacle>();
+		foreach (TownObstacle townObstacle in array)
+		{
+			BoxCollider component = townObstacle.GetComponent<BoxCollider>();
+			if (!(component == null))
+			{
+				Transform transform = townObstacle.transform;
+				Vector3 vector = transform.TransformPoint(component.center);
+				Vector3 vector2 = Vector3.Scale(component.size, transform.lossyScale);
+				EggboyCollider eggboyCollider = new EggboyCollider
+				{
+					x = vector.x,
+					z = vector.z,
+					hw = vector2.x * 0.5f,
+					hd = vector2.z * 0.5f,
+					water = (townObstacle.kind == TownObstacle.Kind.Water),
+					minY = townObstacle.minY
+				};
+				if (townObstacle.kind == TownObstacle.Kind.WalkableTop)
+				{
+					eggboyCollider.top = vector.y + vector2.y * 0.5f;
+				}
+				colliders.Add(eggboyCollider);
+			}
+		}
+		TownObstacleSet[] array2 = UnityEngine.Object.FindObjectsOfType<TownObstacleSet>();
+		foreach (TownObstacleSet townObstacleSet in array2)
+		{
+			for (int j = 0; j < townObstacleSet.x.Length; j++)
+			{
+				colliders.Add(new EggboyCollider
+				{
+					x = townObstacleSet.x[j],
+					z = townObstacleSet.z[j],
+					r = townObstacleSet.r[j],
+					top = townObstacleSet.top[j]
+				});
+			}
+		}
+		spatialDirty = true;
+	}
+
+	public float WadeLimit(float x, float z, float ground)
+	{
+		if (!IsBeachSurface(x, z, ground))
+		{
+			return 0.05f;
+		}
+		return 0.18f;
+	}
+
+	public bool Walkable(float x, float z)
+	{
+		float ground;
+		if (walkPolys.Count != 0)
+		{
+			return TryWalkableGround(x, z, out ground);
+		}
+		return true;
+	}
+
+	private bool TryWalkableGround(float x, float z, out float ground)
+	{
+		ground = 0f;
+		bool flag = InWalkArea(x, z);
+		bool flag2 = !flag && InLawnArea(x, z);
+		bool flag3 = beachPoly != null && Contains(beachPoly.points, x, z);
+		if (!flag && !flag2 && !flag3)
+		{
+			return false;
+		}
+		ground = GroundAt(x, z);
+		if (ground < WaterY - WadeLimit(x, z, ground))
+		{
+			return false;
+		}
+		if (!flag3 || !(Mathf.Abs(ground - beachPoly.y) <= 0.12f))
+		{
+			if (!flag)
+			{
+				if (flag2)
+				{
+					return ground >= 2.5f;
+				}
+				return false;
+			}
+			return ground > 0.22f;
+		}
+		return true;
+	}
+
+	public bool IsBeachSurface(float x, float z, float height)
+	{
+		if (beachPoly != null && Mathf.Abs(height - beachPoly.y) <= 0.12f)
+		{
+			return Contains(beachPoly.points, x, z);
+		}
+		return false;
+	}
+
+	private void LoadRoamBlocks()
+	{
+		if (roamBlocks != null)
+		{
+			return;
+		}
+		TextAsset textAsset = Resources.Load<TextAsset>("World/roam_blocks");
+		RoamBlockDoc roamBlockDoc = ((textAsset != null) ? JsonUtility.FromJson<RoamBlockDoc>(textAsset.text) : null);
+		roamBlocks = ((roamBlockDoc != null && roamBlockDoc.blocks != null) ? roamBlockDoc.blocks : new RoamBlock[0]);
+		RoamBlock[] array = roamBlocks;
+		foreach (RoamBlock roamBlock in array)
+		{
+			float[] x = roamBlock.x;
+			int a = ((x != null) ? x.Length : 0);
+			float[] z = roamBlock.z;
+			roamBlock.pts = new Vector2[Mathf.Min(a, (z != null) ? z.Length : 0)];
+			for (int j = 0; j < roamBlock.pts.Length; j++)
+			{
+				roamBlock.pts[j] = new Vector2(roamBlock.x[j], roamBlock.z[j]);
+			}
+			if (roamBlock.when != null && roamBlock.when.StartsWith("water>=", StringComparison.Ordinal) && float.TryParse(roamBlock.when.Substring(7), NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+			{
+				roamBlock.waterMin = result;
+			}
+		}
+	}
+
+	public bool InRoamBlock(float x, float z, float ground)
+	{
+		LoadRoamBlocks();
+		RoamBlock[] array = roamBlocks;
+		foreach (RoamBlock roamBlock in array)
+		{
+			if (ground < roamBlock.minY || ground > roamBlock.maxY || !Contains(roamBlock.pts, x, z))
+			{
+				continue;
+			}
+			if (!float.IsNaN(roamBlock.waterMin))
+			{
+				if (WaterLevel.StaticY < roamBlock.waterMin)
+				{
+					continue;
+				}
+			}
+			else if (!string.IsNullOrEmpty(roamBlock.when) && roamBlock.when != "always" && RoamCondition != null && !RoamCondition(roamBlock.when))
+			{
+				continue;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	public float SurfaceBelow(float x, float z, float fromY)
+	{
+		float num = float.NaN;
+		RaycastHit[] array = Physics.RaycastAll(new Vector3(x, fromY, z), Vector3.down, fromY + 60f, groundMask, QueryTriggerInteraction.Ignore);
+		for (int i = 0; i < array.Length; i++)
+		{
+			RaycastHit raycastHit = array[i];
+			if (float.IsNaN(num) || raycastHit.point.y > num)
+			{
+				num = raycastHit.point.y;
+			}
+		}
+		return num;
+	}
+
+	public bool RoamStep(Vector3 from, float x, float z, bool jumping)
+	{
+		float num = SurfaceBelow(x, z, from.y + 1.3f);
+		if (float.IsNaN(num))
+		{
+			return false;
+		}
+		if (num - from.y > (jumping ? 0.28f : 0.23f))
+		{
+			return false;
+		}
+		if (RockWallAt(x, z, from.y))
+		{
+			return false;
+		}
+		if (RockHeadroomBlocked(x, z, num))
+		{
+			return false;
+		}
+		if (from.y - num > (jumping ? 3.45f : 0.6f))
+		{
+			return false;
+		}
+		if (num < WaterY - WadeLimit(x, z, num))
+		{
+			return false;
+		}
+		if (InRoamBlock(x, z, num))
+		{
+			return false;
+		}
+		return true;
+	}
+
+	public bool RockWallAt(float x, float z, float feetY)
+	{
+		float num = feetY + 40f;
+		int num2 = Physics.RaycastNonAlloc(new Vector3(x, num, z), Vector3.down, rockWallHits, num - (feetY + 1.3f), 256, QueryTriggerInteraction.Ignore);
+		for (int i = 0; i < num2; i++)
+		{
+			Collider collider = rockWallHits[i].collider;
+			if (collider.name != "RockGapLid" && collider.bounds.min.y < feetY + 0.25f)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public bool RockHeadroomBlocked(float x, float z, float feetY)
+	{
+		if (float.IsNaN(feetY))
+		{
+			return false;
+		}
+		if (Physics.Raycast(new Vector3(x, feetY + 0.15f, z), Vector3.up, out var hitInfo, 1.15f, 256, QueryTriggerInteraction.Ignore))
+		{
+			return hitInfo.collider.name != "RockGapLid";
+		}
+		return false;
+	}
+
+	public bool RoamStandable(float x, float z, float nearY)
+	{
+		float num = SurfaceBelow(x, z, nearY + 1.3f);
+		if (!float.IsNaN(num) && num >= WaterY - WadeLimit(x, z, num))
+		{
+			return !InRoamBlock(x, z, num);
+		}
+		return false;
+	}
+
+	public bool CanTraverse(Vector3 from, float x, float z, bool jumping)
+	{
+		if (walkPolys.Count == 0)
+		{
+			return true;
+		}
+		if (FreeRoam)
+		{
+			return RoamStep(from, x, z, jumping);
+		}
+		if (!TryWalkableGround(x, z, out var ground))
+		{
+			if (jumping && beachPoly != null && from.y >= beachPoly.y + 0.55f)
+			{
+				return IsDryBeachApproach(x, z);
+			}
+			return false;
+		}
+		if (beachPoly == null)
+		{
+			return true;
+		}
+		bool flag = from.y < beachPoly.y + 0.65f && Contains(beachPoly.points, from.x, from.z);
+		if (IsBeachSurface(x, z, ground))
+		{
+			return flag || jumping;
+		}
+		if (flag)
+		{
+			return ground <= from.y + 0.3f;
+		}
+		return true;
+	}
+
+	private bool IsDryBeachApproach(float x, float z)
+	{
+		if (beachPoly?.points == null || beachPoly.points.Length < 3 || WaterY > beachPoly.y + 0.18f)
+		{
+			return false;
+		}
+		Vector2 vector = new Vector2(x, z);
+		Vector2[] points = beachPoly.points;
+		int num = 0;
+		int num2 = points.Length - 1;
+		while (num < points.Length)
+		{
+			Vector2 vector2 = points[num] - points[num2];
+			float num3 = Mathf.Clamp01(Vector2.Dot(vector - points[num2], vector2) / Mathf.Max(vector2.sqrMagnitude, 0.0001f));
+			if (!((vector - points[num2] - num3 * vector2).sqrMagnitude >= 0.80999994f))
+			{
+				float num4 = GroundAt(x, z);
+				if (num4 > 0.05f)
+				{
+					return num4 <= beachPoly.y + 0.1f;
+				}
+				return false;
+			}
+			num2 = num++;
+		}
+		return false;
+	}
+
+	public bool InWalkArea(float x, float z)
+	{
+		foreach (WalkPoly walkPoly in walkPolys)
+		{
+			if (Contains(walkPoly.points, x, z))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public bool InLawnArea(float x, float z)
+	{
+		if (lawnPolys == null)
+		{
+			return false;
+		}
+		foreach (WalkPoly lawnPoly in lawnPolys)
+		{
+			if (Contains(lawnPoly.points, x, z))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public float GroundAt(float x, float z)
+	{
+		return GroundAt(x, z, float.PositiveInfinity);
+	}
+
+	public float GroundAt(float x, float z, float aboveY)
+	{
+		float num = -1f;
+		RaycastHit[] array = Physics.RaycastAll(new Vector3(x, 200f, z), Vector3.down, 400f, groundMask, QueryTriggerInteraction.Ignore);
+		foreach (RaycastHit raycastHit in array)
+		{
+			float y = raycastHit.point.y;
+			if (y <= aboveY + 0.3f && y > num)
+			{
+				num = y;
+			}
+		}
+		if (!(num < -0.5f))
+		{
+			return num;
+		}
+		return 0f;
+	}
+
+	private static bool Contains(Vector2[] poly, float x, float z)
+	{
+		if (poly == null || poly.Length < 3)
+		{
+			return false;
+		}
+		bool flag = false;
+		int num = 0;
+		int num2 = poly.Length - 1;
+		while (num < poly.Length)
+		{
+			Vector2 vector = poly[num];
+			Vector2 vector2 = poly[num2];
+			if (vector.y > z != vector2.y > z && x < (vector2.x - vector.x) * (z - vector.y) / (vector2.y - vector.y) + vector.x)
+			{
+				flag = !flag;
+			}
+			num2 = num++;
+		}
+		return flag;
+	}
 }

@@ -1,569 +1,922 @@
-// EGGBOY：移动、转向、跳跃、待机 / 走 / 跑（由步态层程序化生成）和一次性动作。
-// 从 game/src/player.ts 移植；动作片段只保留 idle 和一次性表情动作，
-// 走 / 跑交给 EggboyGait，身体姿态交给 EggboyPose，最后跑 EggboyAntiClip。
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class EggboyPlayer : MonoBehaviour
 {
-    // 腿只露出 3 cm：走路 0.65 m/s 是短腿碎步不打滑的上限
-    const float Walk = 0.65f, Run = 2.0f, Radius = 0.42f;
-    const float JumpStand = 0.42f, JumpMove = 0.38f; // 跳多高（米）
-    const float GUp = 14f, GDown = 21f, ApexSlow = 0.55f; // 竖直速度小于 0.7 m/s 时重力乘 ApexSlow
-    const float CrouchStand = 0.13f, CrouchMove = 0.06f; // 起跳前下蹲多久
-    const float LandStand = 0.32f, LandMove = 0.16f; // 落地缓冲多久
-    const float Step = 0.22f; // 不用跳就能迈上去的高度（原 0.14 会被路缘/小台阶卡住）
-    const float PlatR = 0.3f; // 撞台子侧面时身体的半径
-    const float JumpBuffer = .12f, CoyoteTime = .10f;
-    float jumpBufferLeft, coyoteLeft;
-    bool airborneFromJump;
-    public void ResetJumpInput() { jumpBufferLeft = coyoteLeft = 0f; airborneFromJump = false; }
-    const float AirControl = 0.35f;
+	public enum CarryPose
+	{
+		None,
+		Wood,
+		Oil,
+		Ball
+	}
 
-    static readonly Dictionary<string, int> Repeat = new Dictionary<string, int>
-    {
-        { "wave", 2 }, { "nod", 1 }, { "shake", 1 }, { "hop", 1 }, { "give", 1 }, { "look", 1 }, { "sad", int.MaxValue },
-    };
+	private class CarryTarget
+	{
+		public string bone;
 
-    public IEggboyWorld world;
-    public Vector3 SpawnPos => world != null ? world.SpawnPos : Vector3.zero;
-    public Vector3 vel;
-    public float yaw;           // 弧度，0 = 朝 +Z
-    public bool locked;         // 读信时不能动
-    public float idle;          // 站着不动多久了（秒）
-    public bool grounded = true;
-    public float speedScale = 1f; // 2026-11-14 涉水时走得慢：TideFeel 按水深设（1 = 正常），不动走 / 跑本身的数值
-    public bool TryingToMove { get; private set; }
-    public Vector3 camFocus;    // 给镜头跟的点
-    public JumpState jump = new JumpState();
-    public EggboyPose pose;
-    public EggboyGait gait;
-    public EggboyAntiClip antiClip;
-    public bool antiClipOn = true;
-    public bool disableAnim; // 调试：完全停掉动作片段，只看程序层
-    public bool debugPose;   // 调试：每秒打印一次骨骼姿态
-    public string CurrentEmote => emote;
-    public bool Emoting => emote != null;
-    public System.Action<string> onEmote;
-    public System.Action onEmoteEnd;
-    public GameObject ModelObject { get; private set; }
-    public EggboySkin Skin { get; private set; }
-    public EggboyBones Bones { get; private set; }
+		public Quaternion rot;
+	}
 
-    Animation anim;
-    readonly Dictionary<string, AnimationState> clips = new Dictionary<string, AnimationState>();
-    string loco = "idle", emote, currentClip;
-    float emoteEnd;
-    float camY;
-    Vector3 prevVel, acc;
-    float accYJump;
-    float debugT;
-    Transform modelT;
-    bool storyCrouch;
-    float storyCrouchWeight;
-    readonly List<EggboyCollider> nearbyColliders = new List<EggboyCollider>(32);
+	private const float Walk = 0.65f;
 
-    public void SetStoryCrouch(bool crouch) => storyCrouch = crouch;
-    public bool IsStoryCrouched => storyCrouchWeight > 0.9f;
+	private const float Run = 2f;
 
-    // ---- 互动动作（docs/INTERACTION_FEEL_BOOK.md）：锁窗 + 抓握帧回调 + 持物姿态 ----
-    public enum CarryPose { None, Wood, Oil, Ball }
+	private const float Radius = 0.42f;
 
-    class CarryTarget { public string bone; public Quaternion rot; }
+	private const float JumpStand = 0.42f;
 
-    public Transform CarryAnchor { get; private set; } // 挂在 body 骨头下，抱着的东西跟着身体起伏
-    public CarryPose Carry => carry;
-    public bool ActionLocked => Time.time < actionLockUntil;
-    public string CurrentAction => actionClip;
+	private const float JumpMove = 0.38f;
 
-    CarryPose carry = CarryPose.None;
-    float carryWeight;
-    CarryTarget[] carryTargets;
-    float actionLockUntil;
-    string actionClip;
-    System.Action pendingGrab, pendingComplete;
-    float grabAt, completeAt;
+	private const float GUp = 14f;
 
-    public bool HasClip(string name) => clips.ContainsKey(name);
+	private const float GDown = 21f;
 
-    // 播一个互动动作：lockSeconds 内不能走 / 跳（&lt;0 取片段时长）；grabAtSeconds 时调 onGrab（道具上手），播完调 onComplete。
-    // 没有这个片段时立即调两个回调，剧情不会卡住。
-    public bool PlayInteractAction(string clip, float lockSeconds = -1f, float grabAtSeconds = -1f,
-        System.Action onGrab = null, System.Action onComplete = null)
-    {
-        FlushPendingAction();
-        if (!clips.TryGetValue(clip, out var s))
-        {
-            Debug.LogWarning("模型里没有互动动作 " + clip + "，直接执行回调");
-            onGrab?.Invoke();
-            onComplete?.Invoke();
-            return false;
-        }
-        PlayEmote(clip);
-        actionClip = clip;
-        float len = s.length;
-        actionLockUntil = Time.time + (lockSeconds < 0f ? len : lockSeconds);
-        if (grounded) { vel.x = 0f; vel.z = 0f; }
-        pendingGrab = onGrab;
-        grabAt = Time.time + Mathf.Max(0f, grabAtSeconds);
-        pendingComplete = onComplete;
-        completeAt = Time.time + len;
-        return true;
-    }
+	private const float ApexSlow = 0.55f;
 
-    // 长按互动期间每帧调用：短暂锁住移动，松手 0.1 秒后自动解锁
-    public void HoldActionLock(float seconds = 0.1f)
-    {
-        actionLockUntil = Mathf.Max(actionLockUntil, Time.time + seconds);
-        if (grounded) { vel.x = 0f; vel.z = 0f; }
-    }
+	private const float CrouchStand = 0.13f;
 
-    public void StopEmote(string name)
-    {
-        if (emote != null && emote == name) EndEmote();
-    }
+	private const float CrouchMove = 0.06f;
 
-    // 有挂起的回调（新动作打断旧动作时）立刻执行，道具状态不会丢
-    void FlushPendingAction()
-    {
-        var g = pendingGrab; pendingGrab = null;
-        var c = pendingComplete; pendingComplete = null;
-        g?.Invoke();
-        c?.Invoke();
-    }
+	private const float LandStand = 0.32f;
 
-    void TickActions()
-    {
-        if (pendingGrab != null && Time.time >= grabAt) { var g = pendingGrab; pendingGrab = null; g(); }
-        if (pendingComplete != null && Time.time >= completeAt) { var c = pendingComplete; pendingComplete = null; c(); }
-    }
+	private const float LandMove = 0.16f;
 
-    public void SetCarryPose(CarryPose p)
-    {
-        if (carry == p) return;
-        carry = p;
-        carryTargets = BuildCarryTargets(p);
-    }
+	private const float Step = 0.22f;
 
-    // 和 EggboyAnimGenerator.ApplyPose 同一套写法：在绑定姿态上转手臂，记下目标局部朝向。
-    // 抱柴火的目标正好等于 pickup_wood.anim 的最后一帧，动作播完接持物姿态不会跳。
-    CarryTarget[] BuildCarryTargets(CarryPose p)
-    {
-        if (Bones == null || p == CarryPose.None) return null;
-        // armR0 抬放, armR1 前后, handR0, handR1, 左边同理；useL=false 时左手不管
-        float armR0, armR1, handR0, handR1, armL0, armL1, handL0, handL1;
-        bool useL = true;
-        switch (p)
-        {
-            case CarryPose.Wood: armR0 = 14f; armR1 = 52f; handR0 = 0f; handR1 = 42f; armL0 = 14f; armL1 = 52f; handL0 = 0f; handL1 = 42f; break;
-            case CarryPose.Ball: armR0 = 8f; armR1 = 46f; handR0 = 0f; handR1 = 48f; armL0 = 8f; armL1 = 46f; handL0 = 0f; handL1 = 48f; break;
-            // 2026-11-16 手提油壶：右臂自然下垂、往外 / 往前稍微张开一点，手腕回正（原来往前端着 34°、手腕弯 24°，像端盘子）
-            case CarryPose.Oil: armR0 = -12f; armR1 = 14f; handR0 = 0f; handR1 = 4f; armL0 = armL1 = handL0 = handL1 = 0f; useL = false; break;
-            default: return null;
-        }
-        var list = new List<CarryTarget>();
-        float d = Mathf.Deg2Rad;
-        void Target(string bone, float r1, float r0, bool right)
-        {
-            var e = Bones.Get(bone);
-            if (e == null) return;
-            var saved = e.bone.localRotation;
-            e.bone.localRotation = e.bindLocalRotation;
-            Bones.Rotate(bone, Vector3.up, (right ? r1 : -r1) * d);
-            Bones.Rotate(bone, Vector3.forward, (right ? -r0 : r0) * d);
-            list.Add(new CarryTarget { bone = bone, rot = e.bone.localRotation });
-            e.bone.localRotation = saved;
-        }
-        Target("armR", armR1, armR0, true);
-        Target("handR", handR1, handR0, true);
-        if (useL)
-        {
-            Target("armL", armL1, armL0, false);
-            Target("handL", handL1, handL0, false);
-        }
-        return list.ToArray();
-    }
+	private const float PlatR = 0.3f;
 
-    void ApplyCarryOverlay(float dt)
-    {
-        // 互动动作自己在摆手臂时不叠；别的小动作（点头、跳一下）照样抱着
-        bool want = carry != CarryPose.None && carryTargets != null && (emote == null || emote != actionClip);
-        carryWeight = Mathf.MoveTowards(carryWeight, want ? 1f : 0f, dt * 8f);
-        if (carryWeight <= 0f || carryTargets == null || Bones == null) return;
-        // 提油壶只盖 80%：走跑时步态的摆臂还留两成，油壶跟着右臂前后晃
-        float w = carry == CarryPose.Oil ? carryWeight * 0.8f : carryWeight;
-        foreach (var t in carryTargets)
-        {
-            var e = Bones.Get(t.bone);
-            if (e == null) continue;
-            e.bone.localRotation = Quaternion.Slerp(e.bone.localRotation, t.rot, w);
-        }
-        // 手指扣住提手（和跑步握拳同一套弯法，弯到八成）
-        if (carry == CarryPose.Oil && gait != null) gait.Grip(LegSide.R, 0.85f * carryWeight);
-    }
+	private const float JumpBuffer = 0.12f;
 
-    // 模型还在绑定姿态时调用：在胸前约 46 cm 高、往前 28 cm 的位置放一个锚点
-    void CreateCarryAnchor()
-    {
-        var body = Bones != null ? Bones.Bone("body") : null;
-        var go = new GameObject("CarryAnchor");
-        var t = go.transform;
-        t.SetParent(transform, false);
-        t.localPosition = new Vector3(0f, 0.46f, 0.28f);
-        t.localRotation = Quaternion.identity;
-        if (body != null) t.SetParent(body, true);
-        CarryAnchor = t;
-    }
+	private const float CoyoteTime = 0.1f;
 
-    // 模型挂在这个物体下面。朝向不对时改 modelYawDegrees
-    public void Setup(GameObject model, IEggboyWorld w, float modelYawDegrees)
-    {
-        world = w;
-        ModelObject = model;
-        modelT = model.transform;
-        modelT.SetParent(transform, false);
-        modelT.localRotation = Quaternion.Euler(0f, modelYawDegrees, 0f);
-        modelT.localScale = Vector3.one * 0.85f; // 设定稿约 80 cm
-        foreach (var r in model.GetComponentsInChildren<SkinnedMeshRenderer>())
-        {
-            r.updateWhenOffscreen = true;
-            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-            r.receiveShadows = true;
-        }
+	private float jumpBufferLeft;
 
-        anim = model.GetComponentInChildren<Animation>();
-        if (anim == null) { Debug.LogError("模型里没有 Animation 组件"); enabled = false; return; }
-        anim.Stop(); // 先停在绑定姿态，步态 / 防穿模要在这个姿态下量形状
-        var smr = model.GetComponentInChildren<SkinnedMeshRenderer>();
-        if (smr == null) { Debug.LogError("模型里没有 SkinnedMeshRenderer"); enabled = false; return; }
-        var skin = new EggboySkin(model, smr);
-        var bones = new EggboyBones(model, smr);
-        Skin = skin;
-        Bones = bones;
-        pose = new EggboyPose(bones);
-        gait = new EggboyGait(bones, skin, modelT);
-        antiClip = new EggboyAntiClip(skin, bones, modelT);
-        CreateCarryAnchor();
-        Debug.Log($"EGGBOY skin: shell {skin.shellVerts.Length}, leather {skin.leatherVerts.Length}, visor {skin.visorVerts.Length}; "
-            + $"gait {gait.Ok}, antiClip {antiClip.ok}, bones {smr.bones.Length}");
+	private float coyoteLeft;
 
-        foreach (AnimationState s in anim)
-        {
-            // FBX 里的名字是 EGGBOY|EGGBOY|idle，只留最后一段
-            var key = s.name.Substring(s.name.LastIndexOf('|') + 1);
-            clips[key] = s;
-        }
-        foreach (var extra in Resources.LoadAll<AnimationClip>("Animations"))
-        {
-            if (extra == null || clips.ContainsKey(extra.name)) continue;
-            extra.legacy = true;
-            anim.AddClip(extra, extra.name);
-            clips[extra.name] = anim[extra.name];
-        }
-        foreach (var k in new[] { "idle", "walk", "run" })
-            if (clips.TryGetValue(k, out var s)) s.wrapMode = WrapMode.Loop;
-        if (disableAnim) anim.Stop(); else Play("idle", 0f);
-    }
+	private bool airborneFromJump;
 
-    void Play(string name, float fade)
-    {
-        if (!clips.TryGetValue(name, out var s)) { Debug.LogError("模型里没有动作 " + name); return; }
-        if (fade > 0f) anim.CrossFade(s.name, fade); else anim.Play(s.name);
-        currentClip = name;
-    }
+	private const float AirControl = 0.35f;
 
-    public void PlayEmote(string name, int repeat = 1)
-    {
-        if (!clips.TryGetValue(name, out var s)) { Debug.LogError("模型里没有动作 " + name); return; }
-        s.wrapMode = repeat > 1 ? WrapMode.Loop : WrapMode.ClampForever;
-        s.time = 0f;
-        emote = name;
-        emoteEnd = repeat == int.MaxValue ? float.PositiveInfinity : Time.time + s.length * repeat;
-        Play(name, 0.18f);
-        idle = 0f;
-        onEmote?.Invoke(name);
-    }
+	private static readonly Dictionary<string, int> Repeat = new Dictionary<string, int>
+	{
+		{ "wave", 2 },
+		{ "nod", 1 },
+		{ "shake", 1 },
+		{ "hop", 1 },
+		{ "give", 1 },
+		{ "look", 1 },
+		{
+			"sad",
+			int.MaxValue
+		}
+	};
 
-    void EndEmote()
-    {
-        emote = null;
-        actionClip = null;
-        Play(loco, 0.3f);
-        onEmoteEnd?.Invoke();
-    }
+	public IEggboyWorld world;
 
-    public void FaceTowards(Vector3 p)
-    {
-        yaw = Mathf.Atan2(p.x - transform.position.x, p.z - transform.position.z);
-    }
+	public Vector3 vel;
 
-    void SetJump(JumpPhase phase, float dur = 0f)
-    {
-        jump.phase = phase;
-        jump.t = 0f;
-        jump.dur = dur;
-    }
+	public float yaw;
 
-    bool CanUseCollisionPosition(Vector3 from, float x, float z)
-    {
-        if (!(world is IslandWorld island)) return world.Walkable(x, z);
-        if (!island.CanTraverse(from, x, z, jump.phase == JumpPhase.air)) return false;
+	public bool locked;
 
-        // 轴向滑动和连续挤出以后重新检查落点，避免投影到旁边另一件物体里。
-        world.QueryColliders(x, z, nearbyColliders);
-        foreach (var c in nearbyColliders)
-        {
-            if (c.water || c.minY > 0f && from.y < c.minY - 0.03f) continue;
-            if (c.top.HasValue && (from.y >= c.top.Value - 0.03f || grounded && c.top.Value - from.y <= Step)) continue;
-            float radius = c.top.HasValue ? PlatR : Radius;
-            float depth = CollisionDepth(c, x, z, radius);
-            if (depth > 0.008f && depth > CollisionDepth(c, from.x, from.z, radius) + 0.0005f) return false;
-        }
-        return true;
-    }
+	public float idle;
 
-    static float CollisionDepth(EggboyCollider collider, float x, float z, float radius)
-    {
-        float dx = x - collider.x, dz = z - collider.z;
-        if (collider.r.HasValue) return collider.r.Value + radius - Mathf.Sqrt(dx * dx + dz * dz);
-        if (collider.hw.HasValue && collider.hd.HasValue)
-            return Mathf.Min(collider.hw.Value + radius - Mathf.Abs(dx), collider.hd.Value + radius - Mathf.Abs(dz));
-        return 0f;
-    }
+	public bool grounded = true;
 
-    public void Move(float dt, float inX, float inZ, bool run, bool jumpPressed)
-    {
-        if (world == null || gait == null) return;
-        // Animation 更新之前先还原上一帧的干净值，程序层叠加量才不会跨帧累积
-        if (Bones != null) { if (disableAnim) Bones.RestoreBindPose(); else Bones.RestoreClean(); }
-        TickActions();
-        float len = Mathf.Sqrt(inX * inX + inZ * inZ);
-        bool blocked = locked || ActionLocked;
-        if (blocked) jumpBufferLeft = 0f;
-        else jumpBufferLeft = jumpPressed ? JumpBuffer : Mathf.Max(0f, jumpBufferLeft - dt);
-        if (grounded && jump.phase != JumpPhase.crouch) { coyoteLeft = CoyoteTime; airborneFromJump = false; }
-        else coyoteLeft = Mathf.Max(0f, coyoteLeft - dt);
-        bool moving = len > 0.1f && !blocked;
-        TryingToMove = moving;
-        float target = moving ? (run ? Run : Walk) * speedScale : 0f;
-        float dirX = moving ? inX / len : 0f, dirZ = moving ? inZ / len : 0f;
-        JumpState J = jump;
-        J.t += dt;
+	public float speedScale = 1f;
 
-        // 原地跳下蹲时不动；空中只能稍微改方向
-        bool holdStill = J.phase == JumpPhase.crouch && !J.moving;
-        float k = holdStill ? Mathf.Min(1f, dt * 20f)
-            : Mathf.Min(1f, dt * (moving ? 8f : 10f)) * (grounded ? 1f : AirControl);
-        vel.x += ((holdStill ? 0f : dirX * target) - vel.x) * k;
-        vel.z += ((holdStill ? 0f : dirZ * target) - vel.z) * k;
+	public Vector3 camFocus;
 
-        // 起跳：先下蹲一下；落地缓冲中也能接着跳
-        bool coyoteJump = !grounded && !airborneFromJump && coyoteLeft > 0f;
-        if (jumpBufferLeft > 0f && !blocked && (grounded || coyoteJump)
-            && (J.phase == JumpPhase.none || J.phase == JumpPhase.land || (coyoteJump && J.phase == JumpPhase.air)))
-        {
-            jumpBufferLeft = coyoteLeft = 0f;
-            airborneFromJump = true;
-            FlushPendingAction();
-            if (emote != null) EndEmote();
-            float speed0 = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
-            J.moving = speed0 > 0.3f;
-            J.run = Mathf.Clamp01((speed0 - Walk) / (Run - Walk));
-            var fL = gait.feet[(int)LegSide.L];
-            var fR = gait.feet[(int)LegSide.R];
-            J.lead = fL.stance && !fR.stance ? LegSide.R : fR.stance && !fL.stance ? LegSide.L : (fL.fwd < fR.fwd ? LegSide.R : LegSide.L);
-            SetJump(JumpPhase.crouch, J.moving ? CrouchMove : CrouchStand);
-        }
+	public JumpState jump = new JumpState();
 
-        // 走动会打断一次性动作（跳一下除外）
-        if (moving && emote != null && emote != "hop") { FlushPendingAction(); EndEmote(); }
+	public EggboyPose pose;
 
-        // 移动 + 碰撞（使用空间分桶仅查询玩家周围格子内的碰撞体）
-        var p = transform.position;
-        float nx = p.x + vel.x * dt, nz = p.z + vel.z * dt;
-        world.QueryColliders(nx, nz, nearbyColliders);
-        for (int ci = 0; ci < nearbyColliders.Count; ci++)
-        {
-            var c = nearbyColliders[ci];
-            if (c.water)
-            {
-                if (p.y > 0.05f) continue;
-                float wr = (c.r ?? 0f) + 0.08f;
-                float wd = Mathf.Sqrt((nx - c.x) * (nx - c.x) + (nz - c.z) * (nz - c.z));
-                float oldD = Mathf.Sqrt((p.x - c.x) * (p.x - c.x) + (p.z - c.z) * (p.z - c.z));
-                if (wd < wr && oldD >= wr - 1e-3f && wd > 1e-6f)
-                {
-                    nx = c.x + (nx - c.x) / wd * wr;
-                    nz = c.z + (nz - c.z) / wd * wr;
-                }
-                continue;
-            }
-            float rad = Radius;
-            if (c.minY > 0f && p.y < c.minY - 0.03f) continue;
-            if (c.top.HasValue)
-            {
-                if (p.y >= c.top.Value - 0.03f || (grounded && c.top.Value - p.y <= Step)) continue;
-                rad = PlatR;
-            }
-            if (c.r.HasValue)
-            {
-                float dx = nx - c.x, dz = nz - c.z, d = Mathf.Sqrt(dx * dx + dz * dz), min = c.r.Value + rad;
-                if (d < min && d > 1e-6f) { nx = c.x + dx / d * min; nz = c.z + dz / d * min; }
-            }
-            else if (c.hw.HasValue && c.hd.HasValue)
-            {
-                float hw = c.hw.Value + rad, hd = c.hd.Value + rad;
-                float dx = nx - c.x, dz = nz - c.z;
-                if (Mathf.Abs(dx) < hw && Mathf.Abs(dz) < hd)
-                {
-                    if (hw - Mathf.Abs(dx) < hd - Mathf.Abs(dz)) nx = c.x + Mathf.Sign(dx) * hw;
-                    else nz = c.z + Mathf.Sign(dz) * hd;
-                }
-            }
-        }
-        if (CanUseCollisionPosition(p, nx, nz)) { p.x = nx; p.z = nz; }
-        else if (CanUseCollisionPosition(p, nx, p.z)) { p.x = nx; vel.z = 0f; }
-        else if (CanUseCollisionPosition(p, p.x, nz)) { p.z = nz; vel.x = 0f; }
-        else vel = Vector3.zero;
+	public EggboyGait gait;
 
-        // 竖直方向
-        float ground = world.GroundAt(p.x, p.z, p.y);
-        float vyPrev = J.vy;
-        if (J.phase == JumpPhase.crouch && J.t >= J.dur)
-        {
-            coyoteLeft = 0f;
-            airborneFromJump = true;
-            J.vy = J.vy0 = Mathf.Sqrt(2f * GUp * (J.moving ? JumpMove : JumpStand));
-            grounded = false;
-            SetJump(JumpPhase.air);
-        }
-        else if (grounded && ground < p.y - Step)
-        {
-            airborneFromJump = false;
-            J.vy = J.vy0 = 0f;
-            J.moving = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) > 0.3f;
-            J.run = Mathf.Clamp01((Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) - Walk) / (Run - Walk));
-            grounded = false;
-            SetJump(JumpPhase.air);
-        }
-        if (!grounded)
-        {
-            float g = (J.vy > 0f ? GUp : GDown) * (Mathf.Abs(J.vy) < 0.7f ? ApexSlow : 1f);
-            J.vy -= g * dt;
-            p.y += J.vy * dt;
-            if (p.y <= ground && J.vy <= 0f)
-            {
-                J.impact = -J.vy;
-                J.vy = 0f;
-                p.y = ground;
-                grounded = true;
-                SetJump(JumpPhase.land, J.moving ? LandMove : LandStand);
-            }
-        }
-        else
-        {
-            p.y += (ground - p.y) * Mathf.Min(1f, dt * 25f); // 迈上 / 迈下小台阶
-            J.vy = 0f;
-            if (J.phase == JumpPhase.land && J.t >= J.dur) SetJump(JumpPhase.none);
-        }
-        accYJump = dt > 0f ? (J.vy - vyPrev) / dt : 0f;
-        transform.position = p;
+	public EggboyAntiClip antiClip;
 
-        // 镜头：落地 / 站着时跟住高度，空中只跟 35%
-        float camGoal = grounded ? p.y : camY + (p.y - camY) * 0.35f;
-        camY += (camGoal - camY) * Mathf.Min(1f, dt * (grounded ? 8f : 3f));
-        camFocus = new Vector3(p.x, camY, p.z);
+	public bool antiClipOn = true;
 
-        // 转向：朝着走的方向，平滑转过去
-        float speed = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
-        if (speed > 0.15f) yaw = Mathf.Atan2(vel.x, vel.z);
-        float cur = transform.eulerAngles.y * Mathf.Deg2Rad;
-        float diff = Mathf.Atan2(Mathf.Sin(yaw - cur), Mathf.Cos(yaw - cur));
-        transform.rotation = Quaternion.Euler(0f, (cur + diff * Mathf.Min(1f, dt * 12f)) * Mathf.Rad2Deg, 0f);
+	public bool disableAnim;
 
-        idle = speed < 0.12f && emote == null && J.phase == JumpPhase.none ? idle + dt : 0f;
+	public bool debugPose;
 
-        // 走 / 跑由步态层生成，动作片段底下一直放待机
-        loco = "idle";
-        if (!disableAnim && emote == null && currentClip != loco) Play(loco, 0.22f);
-        if (emote != null && Time.time >= emoteEnd) EndEmote();
+	public Action<string> onEmote;
 
-        // 平滑过的加速度，推天线和邮差包
-        if (dt > 0f)
-        {
-            Vector3 raw = (vel - prevVel) / dt;
-            acc = Vector3.Lerp(acc, raw, Mathf.Min(1f, dt * 12f));
-            prevVel = vel;
-        }
-    }
+	public Action onEmoteEnd;
 
-    // 潮汐残影用：不读输入、不做碰撞，直接摆到录下来的位置；速度照录下来的给，
-    // 这样 LateUpdate 里的步态层会和真人一样迈腿、摆臂。要在 Update 阶段调用（Animation 更新之前）。
-    public void PuppetStep(Vector3 pos, float yawRad, Vector3 velocity, bool isGrounded, float dt)
-    {
-        if (Bones != null) { if (disableAnim) Bones.RestoreBindPose(); else Bones.RestoreClean(); }
-        transform.position = pos;
-        yaw = yawRad;
-        transform.rotation = Quaternion.Euler(0f, yawRad * Mathf.Rad2Deg, 0f);
-        vel = velocity;
-        grounded = isGrounded;
-        if (dt > 0f)
-        {
-            Vector3 raw = (vel - prevVel) / dt;
-            acc = Vector3.Lerp(acc, raw, Mathf.Min(1f, dt * 12f));
-            prevVel = vel;
-        }
-        if (emote != null && Time.time >= emoteEnd) EndEmote();
-    }
+	private Animation anim;
 
-    // 在 Animation 更新之后跑程序层
-    void LateUpdate()
-    {
-        if (pose == null || gait == null) return;
-        float dt = Mathf.Min(0.05f, Time.deltaTime);
-        if (dt <= 0f) return;
-        // Animation 已经更新：先记下干净姿态，再叠程序层
-        if (!disableAnim && Bones != null) Bones.CaptureClean();
-        float speed = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
-        float yawRad = transform.eulerAngles.y * Mathf.Deg2Rad;
-        float accF = acc.x * Mathf.Sin(yawRad) + acc.z * Mathf.Cos(yawRad);
-        float accL = acc.x * Mathf.Cos(yawRad) - acc.z * Mathf.Sin(yawRad);
+	private readonly Dictionary<string, AnimationState> clips = new Dictionary<string, AnimationState>();
 
-        gait.Update(dt, new GaitContext { speed = speed, accF = accF, accL = accL, emoting = emote != null, jump = jump });
-        pose.Update(dt, new PoseContext
-        {
-            speed = speed, accF = accF, accL = accL, accY = gait.accY + accYJump,
-            emoting = emote != null, jump = gait.jw,
-        });
-        storyCrouchWeight = Mathf.MoveTowards(storyCrouchWeight, storyCrouch ? 1f : 0f, dt * 5f);
-        if (storyCrouchWeight > 0f && Bones != null)
-        {
-            float bend = 0.35f * storyCrouchWeight;
-            Bones.Move("body", 0f, -0.055f * storyCrouchWeight, 0f);
-            Bones.Rotate("body", Vector3.right, 0.23f * storyCrouchWeight);
-            Bones.Rotate("legL", Vector3.right, -bend);
-            Bones.Rotate("legR", Vector3.right, -bend);
-            Bones.Rotate("footL", Vector3.right, bend);
-            Bones.Rotate("footR", Vector3.right, bend);
-        }
-        TickActions();
-        ApplyCarryOverlay(dt);
-        if (antiClipOn && antiClip != null) antiClip.Solve(dt, 1f + 2f * gait.jw);
-        if (debugPose && Time.time - debugT > 1f)
-        {
-            debugT = Time.time;
-            var root = Bones != null ? Bones.Bone("root") : null;
-            var body = Bones != null ? Bones.Bone("body") : null;
-            var armR = Bones != null ? Bones.Bone("armR") : null;
-            var handR = Bones != null ? Bones.Bone("handR") : null;
-            Debug.Log($"POSE rootL {(root != null ? root.localRotation.eulerAngles.ToString() : "-")} rootW {(root != null ? root.rotation.eulerAngles.ToString() : "-")} "
-                + $"bodyL {(body != null ? body.localRotation.eulerAngles.ToString() : "-")} bodyW {(body != null ? body.rotation.eulerAngles.ToString() : "-")} "
-                + $"bodyPos {(body != null ? body.position.ToString() : "-")} armR {(armR != null ? armR.position.ToString() : "-")} handR {(handR != null ? handR.position.ToString() : "-")} expr {pose.expr} "
-                + $"modelL {modelT.localRotation.eulerAngles} player {transform.eulerAngles} "
-                + $"gait w={gait.w:F2} amp={gait.amp:F2} phase={gait.phase:F2} jw={gait.jw:F2} speed={Speed:F2} bounds {Skin.renderer.bounds} "
-                + $"anti {antiClip.Measure()}");
-        }
-    }
+	private string loco = "idle";
 
-    public float Speed => Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
+	private string emote;
+
+	private string currentClip;
+
+	private float emoteEnd;
+
+	private float camY;
+
+	private Vector3 prevVel;
+
+	private Vector3 acc;
+
+	private float accYJump;
+
+	private float debugT;
+
+	private Transform modelT;
+
+	private bool storyCrouch;
+
+	private float storyCrouchWeight;
+
+	private readonly List<EggboyCollider> nearbyColliders = new List<EggboyCollider>(32);
+
+	private CarryPose carry;
+
+	private float carryWeight;
+
+	private CarryTarget[] carryTargets;
+
+	private float actionLockUntil;
+
+	private string actionClip;
+
+	private Action pendingGrab;
+
+	private Action pendingComplete;
+
+	private float grabAt;
+
+	private float completeAt;
+
+	public Vector3 SpawnPos
+	{
+		get
+		{
+			if (world == null)
+			{
+				return Vector3.zero;
+			}
+			return world.SpawnPos;
+		}
+	}
+
+	public bool TryingToMove { get; private set; }
+
+	public string CurrentEmote => emote;
+
+	public bool Emoting => emote != null;
+
+	public GameObject ModelObject { get; private set; }
+
+	public EggboySkin Skin { get; private set; }
+
+	public EggboyBones Bones { get; private set; }
+
+	public bool IsStoryCrouched => storyCrouchWeight > 0.9f;
+
+	public Transform CarryAnchor { get; private set; }
+
+	public CarryPose Carry => carry;
+
+	public bool ActionLocked => Time.time < actionLockUntil;
+
+	public string CurrentAction => actionClip;
+
+	public float Speed => Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
+
+	public void ResetJumpInput()
+	{
+		jumpBufferLeft = (coyoteLeft = 0f);
+		airborneFromJump = false;
+	}
+
+	public bool HasStandingClearance(Vector3 p)
+	{
+		if (world == null)
+		{
+			return true;
+		}
+		world.QueryColliders(p.x, p.z, nearbyColliders);
+		foreach (EggboyCollider nearbyCollider in nearbyColliders)
+		{
+			if (!nearbyCollider.water && (!(nearbyCollider.minY > 0f) || !(p.y < nearbyCollider.minY - 0.03f)) && (!nearbyCollider.top.HasValue || (!(p.y >= nearbyCollider.top.Value - 0.03f) && !(nearbyCollider.top.Value - p.y <= 0.22f))) && CollisionDepth(nearbyCollider, p.x, p.z, nearbyCollider.top.HasValue ? 0.3f : 0.42f) > 0.008f)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	public void SyncAfterSafeReturn()
+	{
+		vel = Vector3.zero;
+		jump.vy = 0f;
+		SetJump(JumpPhase.none);
+		grounded = true;
+		ResetJumpInput();
+	}
+
+	public void SetStoryCrouch(bool crouch)
+	{
+		storyCrouch = crouch;
+	}
+
+	public bool HasClip(string name)
+	{
+		return clips.ContainsKey(name);
+	}
+
+	public bool PlayInteractAction(string clip, float lockSeconds = -1f, float grabAtSeconds = -1f, Action onGrab = null, Action onComplete = null)
+	{
+		FlushPendingAction();
+		if (!clips.TryGetValue(clip, out var value))
+		{
+			Debug.LogWarning("模型里没有互动动作 " + clip + "，直接执行回调");
+			onGrab?.Invoke();
+			onComplete?.Invoke();
+			return false;
+		}
+		PlayEmote(clip);
+		actionClip = clip;
+		float length = value.length;
+		actionLockUntil = Time.time + ((lockSeconds < 0f) ? length : lockSeconds);
+		if (grounded)
+		{
+			vel.x = 0f;
+			vel.z = 0f;
+		}
+		pendingGrab = onGrab;
+		grabAt = Time.time + Mathf.Max(0f, grabAtSeconds);
+		pendingComplete = onComplete;
+		completeAt = Time.time + length;
+		return true;
+	}
+
+	public void HoldActionLock(float seconds = 0.1f)
+	{
+		actionLockUntil = Mathf.Max(actionLockUntil, Time.time + seconds);
+		if (grounded)
+		{
+			vel.x = 0f;
+			vel.z = 0f;
+		}
+	}
+
+	public void StopEmote(string name)
+	{
+		if (emote != null && emote == name)
+		{
+			EndEmote();
+		}
+	}
+
+	private void FlushPendingAction()
+	{
+		Action action = pendingGrab;
+		pendingGrab = null;
+		Action action2 = pendingComplete;
+		pendingComplete = null;
+		action?.Invoke();
+		action2?.Invoke();
+	}
+
+	private void TickActions()
+	{
+		if (pendingGrab != null && Time.time >= grabAt)
+		{
+			Action action = pendingGrab;
+			pendingGrab = null;
+			action();
+		}
+		if (pendingComplete != null && Time.time >= completeAt)
+		{
+			Action action2 = pendingComplete;
+			pendingComplete = null;
+			action2();
+		}
+	}
+
+	public void SetCarryPose(CarryPose p)
+	{
+		if (carry != p)
+		{
+			carry = p;
+			carryTargets = BuildCarryTargets(p);
+		}
+	}
+
+	private CarryTarget[] BuildCarryTargets(CarryPose p)
+	{
+		if (Bones == null || p == CarryPose.None)
+		{
+			return null;
+		}
+		bool flag = true;
+		float r2;
+		float r3;
+		float r4;
+		float r5;
+		float r9;
+		float r8;
+		float r7;
+		float r6;
+		switch (p)
+		{
+		case CarryPose.Wood:
+			r2 = 14f;
+			r3 = 52f;
+			r4 = 0f;
+			r5 = 42f;
+			r9 = 14f;
+			r8 = 52f;
+			r7 = 0f;
+			r6 = 42f;
+			break;
+		case CarryPose.Ball:
+			r2 = 8f;
+			r3 = 46f;
+			r4 = 0f;
+			r5 = 48f;
+			r9 = 8f;
+			r8 = 46f;
+			r7 = 0f;
+			r6 = 48f;
+			break;
+		case CarryPose.Oil:
+			r2 = -12f;
+			r3 = 14f;
+			r4 = 0f;
+			r5 = 4f;
+			r9 = (r8 = (r7 = (r6 = 0f)));
+			flag = false;
+			break;
+		default:
+			return null;
+		}
+		List<CarryTarget> list = new List<CarryTarget>();
+		float d = MathF.PI / 180f;
+		Target("armR", r3, r2, right: true);
+		Target("handR", r5, r4, right: true);
+		if (flag)
+		{
+			Target("armL", r8, r9, right: false);
+			Target("handL", r6, r7, right: false);
+		}
+		return list.ToArray();
+		void Target(string bone, float r1, float r0, bool right)
+		{
+			EggboyBones.Entry entry = Bones.Get(bone);
+			if (entry != null)
+			{
+				Quaternion localRotation = entry.bone.localRotation;
+				entry.bone.localRotation = entry.bindLocalRotation;
+				Bones.Rotate(bone, Vector3.up, (right ? r1 : (0f - r1)) * d);
+				Bones.Rotate(bone, Vector3.forward, (right ? (0f - r0) : r0) * d);
+				list.Add(new CarryTarget
+				{
+					bone = bone,
+					rot = entry.bone.localRotation
+				});
+				entry.bone.localRotation = localRotation;
+			}
+		}
+	}
+
+	private void ApplyCarryOverlay(float dt)
+	{
+		bool flag = carry != 0 && carryTargets != null && (emote == null || emote != actionClip);
+		carryWeight = Mathf.MoveTowards(carryWeight, flag ? 1f : 0f, dt * 8f);
+		if (carryWeight <= 0f || carryTargets == null || Bones == null)
+		{
+			return;
+		}
+		float t = ((carry == CarryPose.Oil) ? (carryWeight * 0.8f) : carryWeight);
+		CarryTarget[] array = carryTargets;
+		foreach (CarryTarget carryTarget in array)
+		{
+			EggboyBones.Entry entry = Bones.Get(carryTarget.bone);
+			if (entry != null)
+			{
+				entry.bone.localRotation = Quaternion.Slerp(entry.bone.localRotation, carryTarget.rot, t);
+			}
+		}
+		if (carry == CarryPose.Oil && gait != null)
+		{
+			gait.Grip(LegSide.R, 0.85f * carryWeight);
+		}
+	}
+
+	private void CreateCarryAnchor()
+	{
+		Transform transform = ((Bones != null) ? Bones.Bone("body") : null);
+		Transform transform2 = new GameObject("CarryAnchor").transform;
+		transform2.SetParent(base.transform, worldPositionStays: false);
+		transform2.localPosition = new Vector3(0f, 0.46f, 0.28f);
+		transform2.localRotation = Quaternion.identity;
+		if (transform != null)
+		{
+			transform2.SetParent(transform, worldPositionStays: true);
+		}
+		CarryAnchor = transform2;
+	}
+
+	public void Setup(GameObject model, IEggboyWorld w, float modelYawDegrees)
+	{
+		world = w;
+		ModelObject = model;
+		modelT = model.transform;
+		modelT.SetParent(base.transform, worldPositionStays: false);
+		modelT.localRotation = Quaternion.Euler(0f, modelYawDegrees, 0f);
+		modelT.localScale = Vector3.one * 0.85f;
+		SkinnedMeshRenderer[] componentsInChildren = model.GetComponentsInChildren<SkinnedMeshRenderer>();
+		foreach (SkinnedMeshRenderer obj in componentsInChildren)
+		{
+			obj.updateWhenOffscreen = true;
+			obj.shadowCastingMode = ShadowCastingMode.On;
+			obj.receiveShadows = true;
+		}
+		anim = model.GetComponentInChildren<Animation>();
+		if (anim == null)
+		{
+			Debug.LogError("模型里没有 Animation 组件");
+			base.enabled = false;
+			return;
+		}
+		anim.Stop();
+		SkinnedMeshRenderer componentInChildren = model.GetComponentInChildren<SkinnedMeshRenderer>();
+		if (componentInChildren == null)
+		{
+			Debug.LogError("模型里没有 SkinnedMeshRenderer");
+			base.enabled = false;
+			return;
+		}
+		EggboySkin eggboySkin = new EggboySkin(model, componentInChildren);
+		EggboyBones bones = new EggboyBones(model, componentInChildren);
+		Skin = eggboySkin;
+		Bones = bones;
+		pose = new EggboyPose(bones);
+		gait = new EggboyGait(bones, eggboySkin, modelT);
+		antiClip = new EggboyAntiClip(eggboySkin, bones, modelT);
+		CreateCarryAnchor();
+		Debug.Log($"EGGBOY skin: shell {eggboySkin.shellVerts.Length}, leather {eggboySkin.leatherVerts.Length}, visor {eggboySkin.visorVerts.Length}; " + $"gait {gait.Ok}, antiClip {antiClip.ok}, bones {componentInChildren.bones.Length}");
+		foreach (AnimationState item in anim)
+		{
+			string key = item.name.Substring(item.name.LastIndexOf('|') + 1);
+			clips[key] = item;
+		}
+		AnimationClip[] array = Resources.LoadAll<AnimationClip>("Animations");
+		foreach (AnimationClip animationClip in array)
+		{
+			if (!(animationClip == null) && !clips.ContainsKey(animationClip.name))
+			{
+				animationClip.legacy = true;
+				anim.AddClip(animationClip, animationClip.name);
+				clips[animationClip.name] = anim[animationClip.name];
+			}
+		}
+		string[] array2 = new string[3] { "idle", "walk", "run" };
+		foreach (string key2 in array2)
+		{
+			if (clips.TryGetValue(key2, out var value))
+			{
+				value.wrapMode = WrapMode.Loop;
+			}
+		}
+		if (disableAnim)
+		{
+			anim.Stop();
+		}
+		else
+		{
+			Play("idle", 0f);
+		}
+	}
+
+	private void Play(string name, float fade)
+	{
+		if (!clips.TryGetValue(name, out var value))
+		{
+			Debug.LogError("模型里没有动作 " + name);
+			return;
+		}
+		if (fade > 0f)
+		{
+			anim.CrossFade(value.name, fade);
+		}
+		else
+		{
+			anim.Play(value.name);
+		}
+		currentClip = name;
+	}
+
+	public void PlayEmote(string name, int repeat = 1)
+	{
+		if (!clips.TryGetValue(name, out var value))
+		{
+			Debug.LogError("模型里没有动作 " + name);
+			return;
+		}
+		value.wrapMode = ((repeat > 1) ? WrapMode.Loop : WrapMode.ClampForever);
+		value.time = 0f;
+		emote = name;
+		emoteEnd = ((repeat == int.MaxValue) ? float.PositiveInfinity : (Time.time + value.length * (float)repeat));
+		Play(name, 0.18f);
+		idle = 0f;
+		onEmote?.Invoke(name);
+	}
+
+	private void EndEmote()
+	{
+		emote = null;
+		actionClip = null;
+		Play(loco, 0.3f);
+		onEmoteEnd?.Invoke();
+	}
+
+	public void FaceTowards(Vector3 p)
+	{
+		yaw = Mathf.Atan2(p.x - base.transform.position.x, p.z - base.transform.position.z);
+	}
+
+	private void SetJump(JumpPhase phase, float dur = 0f)
+	{
+		jump.phase = phase;
+		jump.t = 0f;
+		jump.dur = dur;
+	}
+
+	private bool CanUseCollisionPosition(Vector3 from, float x, float z)
+	{
+		if (!(world is IslandWorld islandWorld))
+		{
+			return world.Walkable(x, z);
+		}
+		if (!islandWorld.CanTraverse(from, x, z, jump.phase == JumpPhase.air))
+		{
+			return false;
+		}
+		world.QueryColliders(x, z, nearbyColliders);
+		foreach (EggboyCollider nearbyCollider in nearbyColliders)
+		{
+			if (!nearbyCollider.water && (!(nearbyCollider.minY > 0f) || !(from.y < nearbyCollider.minY - 0.03f)) && (!nearbyCollider.top.HasValue || (!(from.y >= nearbyCollider.top.Value - 0.03f) && (!grounded || !(nearbyCollider.top.Value - from.y <= 0.22f)))))
+			{
+				float radius = (nearbyCollider.top.HasValue ? 0.3f : 0.42f);
+				float num = CollisionDepth(nearbyCollider, x, z, radius);
+				if (num > 0.008f && num > CollisionDepth(nearbyCollider, from.x, from.z, radius) + 0.0005f)
+				{
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	private static float CollisionDepth(EggboyCollider collider, float x, float z, float radius)
+	{
+		float num = x - collider.x;
+		float num2 = z - collider.z;
+		if (collider.r.HasValue)
+		{
+			return collider.r.Value + radius - Mathf.Sqrt(num * num + num2 * num2);
+		}
+		if (collider.hw.HasValue && collider.hd.HasValue)
+		{
+			return Mathf.Min(collider.hw.Value + radius - Mathf.Abs(num), collider.hd.Value + radius - Mathf.Abs(num2));
+		}
+		return 0f;
+	}
+
+	public void Move(float dt, float inX, float inZ, bool run, bool jumpPressed)
+	{
+		if (world == null || gait == null)
+		{
+			return;
+		}
+		if (Bones != null)
+		{
+			if (disableAnim)
+			{
+				Bones.RestoreBindPose();
+			}
+			else
+			{
+				Bones.RestoreClean();
+			}
+		}
+		TickActions();
+		float num = Mathf.Sqrt(inX * inX + inZ * inZ);
+		bool flag = locked || ActionLocked;
+		if (flag)
+		{
+			jumpBufferLeft = 0f;
+		}
+		else
+		{
+			jumpBufferLeft = (jumpPressed ? 0.12f : Mathf.Max(0f, jumpBufferLeft - dt));
+		}
+		if (grounded && jump.phase != JumpPhase.crouch)
+		{
+			coyoteLeft = 0.1f;
+			airborneFromJump = false;
+		}
+		else
+		{
+			coyoteLeft = Mathf.Max(0f, coyoteLeft - dt);
+		}
+		bool flag3 = (TryingToMove = num > 0.1f && !flag);
+		float num2 = (flag3 ? ((run ? 2f : 0.65f) * speedScale) : 0f);
+		float num3 = (flag3 ? (inX / num) : 0f);
+		float num4 = (flag3 ? (inZ / num) : 0f);
+		JumpState jumpState = jump;
+		jumpState.t += dt;
+		bool flag4 = jumpState.phase == JumpPhase.crouch && !jumpState.moving;
+		float num5 = (flag4 ? Mathf.Min(1f, dt * 20f) : (Mathf.Min(1f, dt * (flag3 ? 8f : 10f)) * (grounded ? 1f : 0.35f)));
+		vel.x += ((flag4 ? 0f : (num3 * num2)) - vel.x) * num5;
+		vel.z += ((flag4 ? 0f : (num4 * num2)) - vel.z) * num5;
+		bool flag5 = !grounded && !airborneFromJump && coyoteLeft > 0f;
+		if (jumpBufferLeft > 0f && !flag && (grounded || flag5) && (jumpState.phase == JumpPhase.none || jumpState.phase == JumpPhase.land || (flag5 && jumpState.phase == JumpPhase.air)))
+		{
+			jumpBufferLeft = (coyoteLeft = 0f);
+			airborneFromJump = true;
+			FlushPendingAction();
+			if (emote != null)
+			{
+				EndEmote();
+			}
+			float num6 = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
+			jumpState.moving = num6 > 0.3f;
+			jumpState.run = Mathf.Clamp01((num6 - 0.65f) / 1.35f);
+			FootState footState = gait.feet[0];
+			FootState footState2 = gait.feet[1];
+			jumpState.lead = ((footState.stance && !footState2.stance) ? LegSide.R : ((!footState2.stance || footState.stance) ? ((footState.fwd < footState2.fwd) ? LegSide.R : LegSide.L) : LegSide.L));
+			SetJump(JumpPhase.crouch, jumpState.moving ? 0.06f : 0.13f);
+		}
+		if (flag3 && emote != null && emote != "hop")
+		{
+			FlushPendingAction();
+			EndEmote();
+		}
+		Vector3 position = base.transform.position;
+		float num7 = position.x + vel.x * dt;
+		float num8 = position.z + vel.z * dt;
+		world.QueryColliders(num7, num8, nearbyColliders);
+		for (int i = 0; i < nearbyColliders.Count; i++)
+		{
+			EggboyCollider eggboyCollider = nearbyColliders[i];
+			if (eggboyCollider.water)
+			{
+				if (!(position.y > 0.05f))
+				{
+					float num9 = eggboyCollider.r.GetValueOrDefault() + 0.08f;
+					float num10 = Mathf.Sqrt((num7 - eggboyCollider.x) * (num7 - eggboyCollider.x) + (num8 - eggboyCollider.z) * (num8 - eggboyCollider.z));
+					float num11 = Mathf.Sqrt((position.x - eggboyCollider.x) * (position.x - eggboyCollider.x) + (position.z - eggboyCollider.z) * (position.z - eggboyCollider.z));
+					if (num10 < num9 && num11 >= num9 - 0.001f && num10 > 1E-06f)
+					{
+						num7 = eggboyCollider.x + (num7 - eggboyCollider.x) / num10 * num9;
+						num8 = eggboyCollider.z + (num8 - eggboyCollider.z) / num10 * num9;
+					}
+				}
+				continue;
+			}
+			float num12 = 0.42f;
+			if (eggboyCollider.minY > 0f && position.y < eggboyCollider.minY - 0.03f)
+			{
+				continue;
+			}
+			if (eggboyCollider.top.HasValue)
+			{
+				if (position.y >= eggboyCollider.top.Value - 0.03f || (grounded && eggboyCollider.top.Value - position.y <= 0.22f))
+				{
+					continue;
+				}
+				num12 = 0.3f;
+			}
+			if (eggboyCollider.r.HasValue)
+			{
+				float num13 = num7 - eggboyCollider.x;
+				float num14 = num8 - eggboyCollider.z;
+				float num15 = Mathf.Sqrt(num13 * num13 + num14 * num14);
+				float num16 = eggboyCollider.r.Value + num12;
+				if (num15 < num16 && num15 > 1E-06f)
+				{
+					num7 = eggboyCollider.x + num13 / num15 * num16;
+					num8 = eggboyCollider.z + num14 / num15 * num16;
+				}
+			}
+			else
+			{
+				if (!eggboyCollider.hw.HasValue || !eggboyCollider.hd.HasValue)
+				{
+					continue;
+				}
+				float num17 = eggboyCollider.hw.Value + num12;
+				float num18 = eggboyCollider.hd.Value + num12;
+				float f = num7 - eggboyCollider.x;
+				float f2 = num8 - eggboyCollider.z;
+				if (Mathf.Abs(f) < num17 && Mathf.Abs(f2) < num18)
+				{
+					if (num17 - Mathf.Abs(f) < num18 - Mathf.Abs(f2))
+					{
+						num7 = eggboyCollider.x + Mathf.Sign(f) * num17;
+					}
+					else
+					{
+						num8 = eggboyCollider.z + Mathf.Sign(f2) * num18;
+					}
+				}
+			}
+		}
+		if (CanUseCollisionPosition(position, num7, num8))
+		{
+			position.x = num7;
+			position.z = num8;
+		}
+		else if (CanUseCollisionPosition(position, num7, position.z))
+		{
+			position.x = num7;
+			vel.z = 0f;
+		}
+		else if (CanUseCollisionPosition(position, position.x, num8))
+		{
+			position.z = num8;
+			vel.x = 0f;
+		}
+		else
+		{
+			vel = Vector3.zero;
+		}
+		float num19 = world.GroundAt(position.x, position.z, position.y);
+		float vy = jumpState.vy;
+		if (jumpState.phase == JumpPhase.crouch && jumpState.t >= jumpState.dur)
+		{
+			coyoteLeft = 0f;
+			airborneFromJump = true;
+			jumpState.vy = (jumpState.vy0 = Mathf.Sqrt(28f * (jumpState.moving ? 0.38f : 0.42f)));
+			grounded = false;
+			SetJump(JumpPhase.air);
+		}
+		else if (grounded && num19 < position.y - 0.22f)
+		{
+			airborneFromJump = false;
+			jumpState.vy = (jumpState.vy0 = 0f);
+			jumpState.moving = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) > 0.3f;
+			jumpState.run = Mathf.Clamp01((Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z) - 0.65f) / 1.35f);
+			grounded = false;
+			SetJump(JumpPhase.air);
+		}
+		if (!grounded)
+		{
+			float num20 = ((jumpState.vy > 0f) ? 14f : 21f) * ((Mathf.Abs(jumpState.vy) < 0.7f) ? 0.55f : 1f);
+			jumpState.vy -= num20 * dt;
+			position.y += jumpState.vy * dt;
+			if (position.y <= num19 && jumpState.vy <= 0f)
+			{
+				jumpState.impact = 0f - jumpState.vy;
+				jumpState.vy = 0f;
+				position.y = num19;
+				grounded = true;
+				SetJump(JumpPhase.land, jumpState.moving ? 0.16f : 0.32f);
+			}
+		}
+		else
+		{
+			position.y += (num19 - position.y) * Mathf.Min(1f, dt * 25f);
+			jumpState.vy = 0f;
+			if (jumpState.phase == JumpPhase.land && jumpState.t >= jumpState.dur)
+			{
+				SetJump(JumpPhase.none);
+			}
+		}
+		accYJump = ((dt > 0f) ? ((jumpState.vy - vy) / dt) : 0f);
+		base.transform.position = position;
+		float num21 = (grounded ? position.y : (camY + (position.y - camY) * 0.35f));
+		camY += (num21 - camY) * Mathf.Min(1f, dt * (grounded ? 8f : 3f));
+		camFocus = new Vector3(position.x, camY, position.z);
+		float num22 = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
+		if (num22 > 0.15f)
+		{
+			yaw = Mathf.Atan2(vel.x, vel.z);
+		}
+		float num23 = base.transform.eulerAngles.y * (MathF.PI / 180f);
+		float num24 = Mathf.Atan2(Mathf.Sin(yaw - num23), Mathf.Cos(yaw - num23));
+		base.transform.rotation = Quaternion.Euler(0f, (num23 + num24 * Mathf.Min(1f, dt * 12f)) * 57.29578f, 0f);
+		idle = ((num22 < 0.12f && emote == null && jumpState.phase == JumpPhase.none) ? (idle + dt) : 0f);
+		loco = "idle";
+		if (!disableAnim && emote == null && currentClip != loco)
+		{
+			Play(loco, 0.22f);
+		}
+		if (emote != null && Time.time >= emoteEnd)
+		{
+			EndEmote();
+		}
+		if (dt > 0f)
+		{
+			Vector3 b = (vel - prevVel) / dt;
+			acc = Vector3.Lerp(acc, b, Mathf.Min(1f, dt * 12f));
+			prevVel = vel;
+		}
+	}
+
+	public void PuppetStep(Vector3 pos, float yawRad, Vector3 velocity, bool isGrounded, float dt)
+	{
+		if (Bones != null)
+		{
+			if (disableAnim)
+			{
+				Bones.RestoreBindPose();
+			}
+			else
+			{
+				Bones.RestoreClean();
+			}
+		}
+		base.transform.position = pos;
+		yaw = yawRad;
+		base.transform.rotation = Quaternion.Euler(0f, yawRad * 57.29578f, 0f);
+		vel = velocity;
+		grounded = isGrounded;
+		if (dt > 0f)
+		{
+			Vector3 b = (vel - prevVel) / dt;
+			acc = Vector3.Lerp(acc, b, Mathf.Min(1f, dt * 12f));
+			prevVel = vel;
+		}
+		if (emote != null && Time.time >= emoteEnd)
+		{
+			EndEmote();
+		}
+	}
+
+	private void LateUpdate()
+	{
+		if (pose == null || gait == null)
+		{
+			return;
+		}
+		float num = Mathf.Min(0.05f, Time.deltaTime);
+		if (!(num <= 0f))
+		{
+			if (!disableAnim && Bones != null)
+			{
+				Bones.CaptureClean();
+			}
+			float speed = Mathf.Sqrt(vel.x * vel.x + vel.z * vel.z);
+			float f = base.transform.eulerAngles.y * (MathF.PI / 180f);
+			float accF = acc.x * Mathf.Sin(f) + acc.z * Mathf.Cos(f);
+			float accL = acc.x * Mathf.Cos(f) - acc.z * Mathf.Sin(f);
+			gait.Update(num, new GaitContext
+			{
+				speed = speed,
+				accF = accF,
+				accL = accL,
+				emoting = (emote != null),
+				jump = jump
+			});
+			pose.Update(num, new PoseContext
+			{
+				speed = speed,
+				accF = accF,
+				accL = accL,
+				accY = gait.accY + accYJump,
+				emoting = (emote != null),
+				jump = gait.jw
+			});
+			storyCrouchWeight = Mathf.MoveTowards(storyCrouchWeight, storyCrouch ? 1f : 0f, num * 5f);
+			if (storyCrouchWeight > 0f && Bones != null)
+			{
+				float num2 = 0.35f * storyCrouchWeight;
+				Bones.Move("body", 0f, -0.055f * storyCrouchWeight, 0f);
+				Bones.Rotate("body", Vector3.right, 0.23f * storyCrouchWeight);
+				Bones.Rotate("legL", Vector3.right, 0f - num2);
+				Bones.Rotate("legR", Vector3.right, 0f - num2);
+				Bones.Rotate("footL", Vector3.right, num2);
+				Bones.Rotate("footR", Vector3.right, num2);
+			}
+			TickActions();
+			ApplyCarryOverlay(num);
+			if (antiClipOn && antiClip != null)
+			{
+				antiClip.Solve(num, 1f + 2f * gait.jw);
+			}
+			if (debugPose && Time.time - debugT > 1f)
+			{
+				debugT = Time.time;
+				Transform transform = ((Bones != null) ? Bones.Bone("root") : null);
+				Transform transform2 = ((Bones != null) ? Bones.Bone("body") : null);
+				Transform transform3 = ((Bones != null) ? Bones.Bone("armR") : null);
+				Transform transform4 = ((Bones != null) ? Bones.Bone("handR") : null);
+				Debug.Log("POSE rootL " + ((transform != null) ? transform.localRotation.eulerAngles.ToString() : "-") + " rootW " + ((transform != null) ? transform.rotation.eulerAngles.ToString() : "-") + " bodyL " + ((transform2 != null) ? transform2.localRotation.eulerAngles.ToString() : "-") + " bodyW " + ((transform2 != null) ? transform2.rotation.eulerAngles.ToString() : "-") + " " + string.Format("bodyPos {0} armR {1} handR {2} expr {3} ", (transform2 != null) ? transform2.position.ToString() : "-", (transform3 != null) ? transform3.position.ToString() : "-", (transform4 != null) ? transform4.position.ToString() : "-", pose.expr) + $"modelL {modelT.localRotation.eulerAngles} player {base.transform.eulerAngles} " + $"gait w={gait.w:F2} amp={gait.amp:F2} phase={gait.phase:F2} jw={gait.jw:F2} speed={Speed:F2} bounds {Skin.renderer.bounds} " + "anti " + antiClip.Measure());
+			}
+		}
+	}
 }

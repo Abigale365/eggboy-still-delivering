@@ -1,60 +1,92 @@
-// WP-15：山那边的新城灯光。结局过场时亮起，其中一盏手电来回晃。
 using UnityEngine;
 
 public sealed class CityGlow : MonoBehaviour
 {
-    public Renderer[] windows = new Renderer[0];
-    public Transform signal;
-    public float swing = 1.1f;
+	public Renderer[] windows = new Renderer[0];
 
-    public bool Shown { get; private set; }
+	public Transform signal;
 
-    Vector3 signalBase;
+	public float swing = 1.1f;
 
-    void Awake()
-    {
-        if (windows != null)
-            foreach (var w in windows) if (w != null) w.enabled = false;
-        if (signal != null)
-        {
-            signalBase = signal.localPosition;
-            signal.gameObject.SetActive(false);
-        }
-    }
+	private Vector3 signalBase;
 
-    public void Show()
-    {
-        if (Shown) return;
-        Shown = true;
-        var prefab = Resources.Load<GameObject>("Ending/NewPostOffice");
-        if (prefab != null)
-        {
-            var office = Instantiate(prefab, transform);
-            office.name = "NewPostOffice";
-            office.transform.localPosition = Vector3.down * 2f;
-            var direction = Vector3.ProjectOnPlane(-transform.position, Vector3.up);
-            if (direction.sqrMagnitude > 0.01f)
-                office.transform.rotation = Quaternion.LookRotation(direction);
-            office.transform.localScale *= 2f;
-            foreach (var collider in office.GetComponentsInChildren<Collider>()) collider.enabled = false;
+	public bool Shown { get; private set; }
 
-            var porch = new GameObject("NewPostOfficeWelcomeLight");
-            porch.transform.SetParent(transform, false);
-            porch.transform.localPosition = Vector3.up * 3f + direction.normalized * 5f;
-            var light = porch.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color32(255, 206, 147, 255);
-            light.range = 18f;
-            light.intensity = 2.1f;
-        }
-        if (windows != null)
-            foreach (var w in windows) if (w != null) w.enabled = true;
-        if (signal != null) signal.gameObject.SetActive(true);
-    }
+	private void Awake()
+	{
+		if (windows != null)
+		{
+			Renderer[] array = windows;
+			foreach (Renderer renderer in array)
+			{
+				if (renderer != null)
+				{
+					renderer.enabled = false;
+				}
+			}
+		}
+		if (signal != null)
+		{
+			signalBase = signal.localPosition;
+			signal.gameObject.SetActive(value: false);
+		}
+	}
 
-    void Update()
-    {
-        if (!Shown || signal == null) return;
-        signal.localPosition = signalBase + new Vector3(Mathf.Sin(Time.time * 1.8f) * swing, 0f, 0f);
-    }
+	public void Show()
+	{
+		if (Shown)
+		{
+			return;
+		}
+		Shown = true;
+		GameObject gameObject = Resources.Load<GameObject>("Ending/NewPostOffice");
+		if (gameObject != null)
+		{
+			GameObject gameObject2 = Object.Instantiate(gameObject, base.transform);
+			gameObject2.name = "NewPostOffice";
+			gameObject2.transform.localPosition = Vector3.down * 2f;
+			Vector3 forward = Vector3.ProjectOnPlane(-base.transform.position, Vector3.up);
+			if (forward.sqrMagnitude > 0.01f)
+			{
+				gameObject2.transform.rotation = Quaternion.LookRotation(forward);
+			}
+			gameObject2.transform.localScale *= 2f;
+			Collider[] componentsInChildren = gameObject2.GetComponentsInChildren<Collider>();
+			for (int i = 0; i < componentsInChildren.Length; i++)
+			{
+				componentsInChildren[i].enabled = false;
+			}
+			GameObject obj = new GameObject("NewPostOfficeWelcomeLight");
+			obj.transform.SetParent(base.transform, worldPositionStays: false);
+			obj.transform.localPosition = Vector3.up * 3f + forward.normalized * 5f;
+			Light light = obj.AddComponent<Light>();
+			light.type = LightType.Point;
+			light.color = new Color32(byte.MaxValue, 206, 147, byte.MaxValue);
+			light.range = 18f;
+			light.intensity = 2.1f;
+		}
+		if (windows != null)
+		{
+			Renderer[] array = windows;
+			foreach (Renderer renderer in array)
+			{
+				if (renderer != null)
+				{
+					renderer.enabled = true;
+				}
+			}
+		}
+		if (signal != null)
+		{
+			signal.gameObject.SetActive(value: true);
+		}
+	}
+
+	private void Update()
+	{
+		if (Shown && !(signal == null))
+		{
+			signal.localPosition = signalBase + new Vector3(Mathf.Sin(Time.time * 1.8f) * swing, 0f, 0f);
+		}
+	}
 }

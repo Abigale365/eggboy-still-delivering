@@ -1,8 +1,3 @@
-// 单手柄 + 键鼠双轨无缝兼容 + 麦克风吹气 + 摄像头 AR 手势中枢（HardwareAndSensorHub）。
-// 严格遵循「全设备无死角兼容 · 单手柄不接开发板」设计：
-//   1. 单游戏手柄（1P 手柄）与键鼠全程无缝共存，拔掉手柄仅用键鼠、或全程只用 1 个手柄均可 100% 丝滑通关；
-//   2. 旧物特写中主动启用麦克风吹散盐霜，无麦克风时随时可用鼠标擦拭 / F 键 / 手柄 RB 键替代；
-//   3. 摄像头 AR 手势感应（内置原生 WebCamTexture 动作捕捉 + UDP 18888 手势扩展），用于灯塔顶层挥手闪灯呼唤山那边的人；无摄像头时用空格 / E 键 / 手柄按键无缝替代。
 using System;
 using System.Collections.Concurrent;
 using System.Net;
@@ -14,454 +9,560 @@ using UnityEngine;
 
 public sealed class HardwareAndSensorHub : MonoBehaviour
 {
-    public static HardwareAndSensorHub Instance { get; private set; }
+	private struct JOYINFOEX
+	{
+		public uint dwSize;
 
-    [StructLayout(LayoutKind.Sequential)]
-    struct JOYINFOEX
-    {
-        public uint dwSize;
-        public uint dwFlags;
-        public uint dwXpos;
-        public uint dwYpos;
-        public uint dwZpos;
-        public uint dwRpos;
-        public uint dwUpos;
-        public uint dwVpos;
-        public uint dwButtons;
-        public uint dwButtonNumber;
-        public uint dwPOV;
-        public uint dwReserved1;
-        public uint dwReserved2;
-    }
+		public uint dwFlags;
 
-    [DllImport("winmm.dll")]
-    static extern int joyGetPosEx(int uJoyID, ref JOYINFOEX pji);
+		public uint dwXpos;
 
-    EggboyPlayer player;
-    EggboyUI ui;
-    IslandWorld world;
-    StoryDirector director;
-    GameState state;
-    InteractionService interactionSvc;
+		public uint dwYpos;
 
-    // 单手柄状态（与键鼠双轨并行）
-    public bool Gamepad1Connected { get; private set; }
-    public Vector2 Pad1LeftStick { get; private set; }
-    public Vector2 Pad1RightStick { get; private set; }
-    public uint Pad1Buttons { get; private set; }
-    uint prevPad1Buttons;
-    float pad1RingCooldown;
+		public uint dwZpos;
 
-    // 摄像头 AR 手势状态（支持原生 WebCamTexture 动态捕捉 + UDP 手势流）
-    public bool WebcamGestureActive { get; private set; }
-    bool builtInCamActive;
-    WebCamTexture webCamTex;
-    Color32[] prevCamPixels;
-    public bool CamOpen => WebcamGestureActive || (builtInCamActive && webCamTex != null && webCamTex.isPlaying);
-    public Vector2 HandNormalizedPos { get; private set; } = new Vector2(0.5f, 0.5f);
-    public float HandCenterX => HandNormalizedPos.x;
-    public float HandWaveSpeed { get; private set; }
-    public bool HandPinching { get; private set; }
-    bool prevHandPinch;
-    Vector2 prevHandPos = new Vector2(0.5f, 0.5f);
-    float lastWebcamPacketTime;
+		public uint dwRpos;
 
-    // 麦克风实时吹气状态
-    public bool MicActive { get; private set; }
-    public float MicLoudness { get; private set; }
-    IMicLevel inspectMicrophone;
-    float nextBellows;
-    Vector3 stovePosition;
+		public uint dwUpos;
 
-    // 外部稳定加成（供 TidalWindChallenge 读取）
-    public float ExternalWindStabilizeBoost { get; private set; }
+		public uint dwVpos;
 
-    readonly ConcurrentQueue<string> incomingPackets = new ConcurrentQueue<string>();
-    UdpClient udpListener;
-    Thread ioThread;
-    volatile bool running;
+		public uint dwButtons;
 
-    public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
-    {
-        Instance = this;
-        player = p;
-        ui = u;
-        world = w;
-        director = d;
-        state = s;
-        interactionSvc = FindObjectOfType<InteractionService>();
-        var stove = Array.Find(BakeryData.Load(), item => item.id == "stove");
-        if (stove != null) stovePosition = new Vector3(stove.x, stove.y, stove.z);
+		public uint dwButtonNumber;
 
-        StartBackgroundUdpThread();
-    }
+		public uint dwPOV;
 
-    public void EnableInspectMicrophone()
-    {
-        if (!ObjectInspectModal.IsOpen || inspectMicrophone != null) return;
-        inspectMicrophone = new PlatformMicLevel();
-        inspectMicrophone.Start();
-    }
+		public uint dwReserved1;
 
-    public void StopInspectMicrophone()
-    {
-        inspectMicrophone?.Stop();
-        inspectMicrophone = null;
-        MicActive = false;
-        MicLoudness = 0f;
-    }
+		public uint dwReserved2;
+	}
 
-    public bool ToggleBuiltInWebcam()
-    {
-        try
-        {
-            if (builtInCamActive && webCamTex != null)
-            {
-                webCamTex.Stop();
-                builtInCamActive = false;
-                HandWaveSpeed = 0f;
-                return false;
-            }
+	private EggboyPlayer player;
 
-            if (WebCamTexture.devices != null && WebCamTexture.devices.Length > 0)
-            {
-                if (webCamTex == null)
-                    webCamTex = new WebCamTexture(WebCamTexture.devices[0].name, 160, 120, 15);
-                webCamTex.Play();
-                builtInCamActive = true;
-                prevCamPixels = null;
-                return true;
-            }
-        }
-        catch (Exception)
-        {
-            builtInCamActive = false;
-        }
-        return false;
-    }
+	private EggboyUI ui;
 
-    void StartBackgroundUdpThread()
-    {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        // 网页版没有线程和 UDP（ESP32 手势板只给 Windows 版用）
-        return;
+	private IslandWorld world;
+
+	private StoryDirector director;
+
+	private GameState state;
+
+	private InteractionService interactionSvc;
+
+	private uint prevPad1Buttons;
+
+	private float pad1RingCooldown;
+
+	private bool builtInCamActive;
+
+	private WebCamTexture webCamTex;
+
+	private Color32[] prevCamPixels;
+
+	private bool prevHandPinch;
+
+	private Vector2 prevHandPos = new Vector2(0.5f, 0.5f);
+
+	private float lastWebcamPacketTime;
+
+	private IMicLevel inspectMicrophone;
+
+	private float nextBellows;
+
+	private Vector3 stovePosition;
+
+	private readonly ConcurrentQueue<string> incomingPackets = new ConcurrentQueue<string>();
+
+	private UdpClient udpListener;
+
+	private Thread ioThread;
+
+	private volatile bool running;
+
+	public static HardwareAndSensorHub Instance { get; private set; }
+
+	public bool Gamepad1Connected { get; private set; }
+
+	public Vector2 Pad1LeftStick { get; private set; }
+
+	public Vector2 Pad1RightStick { get; private set; }
+
+	public uint Pad1Buttons { get; private set; }
+
+	public bool WebcamGestureActive { get; private set; }
+
+	public bool CamOpen
+	{
+		get
+		{
+			if (!WebcamGestureActive)
+			{
+				if (builtInCamActive && webCamTex != null)
+				{
+					return webCamTex.isPlaying;
+				}
+				return false;
+			}
+			return true;
+		}
+	}
+
+	public Vector2 HandNormalizedPos { get; private set; } = new Vector2(0.5f, 0.5f);
+
+
+	public float HandCenterX => HandNormalizedPos.x;
+
+	public float HandWaveSpeed { get; private set; }
+
+	public bool HandPinching { get; private set; }
+
+	public bool MicActive { get; private set; }
+
+	public float MicLoudness { get; private set; }
+
+	public float ExternalWindStabilizeBoost { get; private set; }
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+	[DllImport("winmm.dll")]
+	private static extern int joyGetPosEx(int uJoyID, ref JOYINFOEX pji);
 #endif
-        running = true;
-        try
-        {
-            udpListener = new UdpClient(18888);
-            udpListener.Client.ReceiveTimeout = 25;
-        }
-        catch (Exception)
-        {
-            udpListener = null;
-        }
 
-        ioThread = new Thread(UdpPollLoop) { IsBackground = true, Name = "TideTownSensorUdp" };
-        ioThread.Start();
-    }
+	public void Init(EggboyPlayer p, EggboyUI u, IslandWorld w, StoryDirector d, GameState s)
+	{
+		Instance = this;
+		player = p;
+		ui = u;
+		world = w;
+		director = d;
+		state = s;
+		interactionSvc = UnityEngine.Object.FindObjectOfType<InteractionService>();
+		BakeryItem bakeryItem = Array.Find(BakeryData.Load(), (BakeryItem item) => item.id == "stove");
+		if (bakeryItem != null)
+		{
+			stovePosition = new Vector3(bakeryItem.x, bakeryItem.y, bakeryItem.z);
+		}
+#if !UNITY_WEBGL || UNITY_EDITOR
+		StartBackgroundUdpThread();
+#endif
+	}
 
-    void UdpPollLoop()
-    {
-        while (running)
-        {
-            try
-            {
-                if (udpListener != null && udpListener.Available > 0)
-                {
-                    IPEndPoint ep = new IPEndPoint(IPAddress.Any, 0);
-                    byte[] data = udpListener.Receive(ref ep);
-                    string text = Encoding.UTF8.GetString(data);
-                    foreach (var line in text.Split('\n'))
-                    {
-                        string trimmed = line.Trim();
-                        if (!string.IsNullOrEmpty(trimmed))
-                            incomingPackets.Enqueue(trimmed);
-                    }
-                }
-            }
-            catch (Exception) { }
-            Thread.Sleep(12);
-        }
-    }
+	public void EnableInspectMicrophone()
+	{
+		if (ObjectInspectModal.IsOpen && inspectMicrophone == null)
+		{
+			inspectMicrophone = new PlatformMicLevel();
+			inspectMicrophone.Start();
+		}
+	}
 
-    void OnDestroy()
-    {
-        StopInspectMicrophone();
-        running = false;
-        try { udpListener?.Close(); } catch (Exception) { }
-        try { if (webCamTex != null && webCamTex.isPlaying) webCamTex.Stop(); } catch (Exception) { }
-    }
+	public void StopInspectMicrophone()
+	{
+		inspectMicrophone?.Stop();
+		inspectMicrophone = null;
+		MicActive = false;
+		MicLoudness = 0f;
+	}
 
-    void Update()
-    {
-        if (ui == null || !ui.inputClose) return;
-        float dt = Time.unscaledDeltaTime;
-        if (dt <= 0f || dt > 0.25f) return;
+	public bool ToggleBuiltInWebcam()
+	{
+		try
+		{
+			if (builtInCamActive && webCamTex != null)
+			{
+				webCamTex.Stop();
+				builtInCamActive = false;
+				HandWaveSpeed = 0f;
+				return false;
+			}
+			if (WebCamTexture.devices != null && WebCamTexture.devices.Length != 0)
+			{
+				if (webCamTex == null)
+				{
+					webCamTex = new WebCamTexture(WebCamTexture.devices[0].name, 160, 120, 15);
+				}
+				webCamTex.Play();
+				builtInCamActive = true;
+				prevCamPixels = null;
+				return true;
+			}
+		}
+		catch (Exception)
+		{
+			builtInCamActive = false;
+		}
+		return false;
+	}
 
-        ExternalWindStabilizeBoost = Mathf.MoveTowards(ExternalWindStabilizeBoost, 0f, dt * 1.6f);
+	private void StartBackgroundUdpThread()
+	{
+		running = true;
+		try
+		{
+			udpListener = new UdpClient(18888);
+			udpListener.Client.ReceiveTimeout = 25;
+		}
+		catch (Exception)
+		{
+			udpListener = null;
+		}
+		ioThread = new Thread(UdpPollLoop)
+		{
+			IsBackground = true,
+			Name = "TideTownSensorUdp"
+		};
+		ioThread.Start();
+	}
 
-        // 0. 塔顶随时按 B 键快速下塔（彻底杜绝困在灯塔顶层）
-        if (player != null && player.transform.position.y > 10f && !player.locked && !WoodenMechanismPuzzleModal.IsOpen && !ObjectInspectModal.IsOpen)
-        {
-            if (EasyInputBridge.Down(KeyCode.B))
-            {
-                if (director != null) director.DescendTower();
-            }
-        }
+	private void UdpPollLoop()
+	{
+		while (running)
+		{
+			try
+			{
+				if (udpListener != null && udpListener.Available > 0)
+				{
+					IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+					byte[] bytes = udpListener.Receive(ref remoteEP);
+					string[] array = Encoding.UTF8.GetString(bytes).Split('\n');
+					for (int i = 0; i < array.Length; i++)
+					{
+						string text = array[i].Trim();
+						if (!string.IsNullOrEmpty(text))
+						{
+							incomingPackets.Enqueue(text);
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+			}
+			Thread.Sleep(12);
+		}
+	}
 
-        // 1. 处理摄像头 AR 手势（内置 WebCamTexture 动作感应 + UDP 手势包）
-        ProcessIncomingGesturePackets();
-        UpdateBuiltInWebcamMotion(dt);
-        if (WebcamGestureActive && Time.unscaledTime - lastWebcamPacketTime > 2.5f)
-            WebcamGestureActive = false;
+	private void OnDestroy()
+	{
+		StopInspectMicrophone();
+		running = false;
+		try
+		{
+			udpListener?.Close();
+		}
+		catch (Exception)
+		{
+		}
+		try
+		{
+			if (webCamTex != null && webCamTex.isPlaying)
+			{
+				webCamTex.Stop();
+			}
+		}
+		catch (Exception)
+		{
+		}
+	}
 
-        // 2. 轮询单游戏手柄（1P 手柄与键鼠无缝双轨共存）
-        PollSingleGamepad(dt);
+	private void Update()
+	{
+		if (ui == null || !ui.inputClose)
+		{
+			return;
+		}
+		float unscaledDeltaTime = Time.unscaledDeltaTime;
+		if (unscaledDeltaTime <= 0f || unscaledDeltaTime > 0.25f)
+		{
+			return;
+		}
+		ExternalWindStabilizeBoost = Mathf.MoveTowards(ExternalWindStabilizeBoost, 0f, unscaledDeltaTime * 1.6f);
+		if (player != null && player.transform.position.y > 10f && !player.locked && !WoodenMechanismPuzzleModal.IsOpen && !ObjectInspectModal.IsOpen && EasyInputBridge.Down(KeyCode.B) && director != null)
+		{
+			director.DescendTower();
+		}
+		ProcessIncomingGesturePackets();
+		UpdateBuiltInWebcamMotion(unscaledDeltaTime);
+		if (WebcamGestureActive && Time.unscaledTime - lastWebcamPacketTime > 2.5f)
+		{
+			WebcamGestureActive = false;
+		}
+		PollSingleGamepad(unscaledDeltaTime);
+		bool flag = player != null && state != null && state.flags.Contains("oven_lit") && Vector3.Distance(player.transform.position, stovePosition) < 3.5f && !ui.Paused && !ObjectInspectModal.IsOpen;
+		if (inspectMicrophone == null && (ObjectInspectModal.IsOpen || flag))
+		{
+			inspectMicrophone = new PlatformMicLevel();
+			inspectMicrophone.Start();
+		}
+		else if (inspectMicrophone != null && !ObjectInspectModal.IsOpen && !flag)
+		{
+			StopInspectMicrophone();
+		}
+		float num = inspectMicrophone?.ReadRms() ?? (-1f);
+		MicActive = num >= 0f;
+		MicLoudness = (MicActive ? Mathf.Clamp01(num * 14f) : 0f);
+		if (flag && (num > 0.006f || EasyInputBridge.Down(KeyCode.E)) && Time.unscaledTime >= nextBellows)
+		{
+			nextBellows = Time.unscaledTime + 1.1f;
+			BakeryEffects bakeryEffects = UnityEngine.Object.FindObjectOfType<BakeryEffects>();
+			if (bakeryEffects != null && director != null)
+			{
+				director.BoostOvenBellows(bakeryEffects);
+			}
+		}
+	}
 
-        bool nearOven = player != null && state != null && state.flags.Contains("oven_lit") &&
-            Vector3.Distance(player.transform.position, stovePosition) < 5f && !ui.Paused;
-        if (inspectMicrophone == null && (ObjectInspectModal.IsOpen || nearOven))
-        {
-            inspectMicrophone = new PlatformMicLevel();
-            inspectMicrophone.Start();
-        }
-        else if (inspectMicrophone != null && !ObjectInspectModal.IsOpen && !nearOven) StopInspectMicrophone();
-        float rms = inspectMicrophone?.ReadRms() ?? -1f;
-        MicActive = rms >= 0f;
-        MicLoudness = MicActive ? Mathf.Clamp01(rms * 14f) : 0f;
-        if (nearOven && MicLoudness > 0.28f && Time.unscaledTime >= nextBellows)
-        {
-            nextBellows = Time.unscaledTime + 1f;
-            var fx = FindObjectOfType<BakeryEffects>();
-            if (fx != null && director != null) director.BoostOvenBellows(fx);
-        }
-    }
+	private void UpdateBuiltInWebcamMotion(float dt)
+	{
+		if (!builtInCamActive || webCamTex == null || !webCamTex.isPlaying || !webCamTex.didUpdateThisFrame)
+		{
+			return;
+		}
+		Color32[] pixels = webCamTex.GetPixels32();
+		int width = webCamTex.width;
+		int height = webCamTex.height;
+		if (pixels == null || pixels.Length != width * height)
+		{
+			return;
+		}
+		if (prevCamPixels == null || prevCamPixels.Length != pixels.Length)
+		{
+			prevCamPixels = (Color32[])pixels.Clone();
+			return;
+		}
+		long num = 0L;
+		long num2 = 0L;
+		int num3 = 0;
+		for (int i = 0; i < height; i += 2)
+		{
+			int num4 = i * width;
+			for (int j = 0; j < width; j += 2)
+			{
+				int num5 = num4 + j;
+				Color32 color = pixels[num5];
+				Color32 color2 = prevCamPixels[num5];
+				if (Mathf.Abs(color.r - color2.r) + Mathf.Abs(color.g - color2.g) + Mathf.Abs(color.b - color2.b) > 72)
+				{
+					num += width - 1 - j;
+					num2 += i;
+					num3++;
+				}
+				prevCamPixels[num5] = color;
+			}
+		}
+		int num6 = width / 2 * (height / 2);
+		float num7 = ((num6 > 0) ? ((float)num3 / (float)num6) : 0f);
+		HandWaveSpeed = Mathf.Lerp(HandWaveSpeed, Mathf.Clamp01(num7 * 5.5f), dt * 10f);
+		if (num3 > 18)
+		{
+			float x = Mathf.Clamp01((float)num / (float)(num3 * width));
+			float y = Mathf.Clamp01((float)num2 / (float)(num3 * height));
+			HandNormalizedPos = Vector2.Lerp(HandNormalizedPos, new Vector2(x, y), dt * 10f);
+		}
+	}
 
-    void UpdateBuiltInWebcamMotion(float dt)
-    {
-        if (!builtInCamActive || webCamTex == null || !webCamTex.isPlaying || !webCamTex.didUpdateThisFrame)
-            return;
+	private void ProcessIncomingGesturePackets()
+	{
+		int num = 0;
+		string result;
+		while (num++ < 24 && incomingPackets.TryDequeue(out result))
+		{
+			if (!result.StartsWith("HAND:"))
+			{
+				continue;
+			}
+			WebcamGestureActive = true;
+			lastWebcamPacketTime = Time.unscaledTime;
+			string[] array = result.Substring(5).Split(',');
+			if (array.Length < 5 || !float.TryParse(array[0], out var result2) || !float.TryParse(array[1], out var result3) || !int.TryParse(array[2], out var result4) || !float.TryParse(array[3], out var result5))
+			{
+				continue;
+			}
+			Vector2 vector = new Vector2(Mathf.Clamp01(result2), Mathf.Clamp01(result3));
+			Vector2 vector2 = vector - prevHandPos;
+			prevHandPos = vector;
+			HandNormalizedPos = vector;
+			HandPinching = result4 > 0;
+			HandWaveSpeed = result5;
+			if (ObjectInspectModal.IsOpen)
+			{
+				ObjectInspectModal.ExternalRotate((0f - vector2.x) * 220f, vector2.y * 180f);
+				if (HandPinching && !prevHandPinch)
+				{
+					ObjectInspectModal.ExternalPressPin((!(result2 < 0.38f)) ? ((!(result2 > 0.62f)) ? 1 : 2) : 0);
+				}
+			}
+			else if (WoodenMechanismPuzzleModal.IsOpen)
+			{
+				if (Mathf.Abs(vector2.x) > 0.045f)
+				{
+					WoodenMechanismPuzzleModal.ExternalRotateRing(WoodenMechanismPuzzleModal.ActiveRingSelection, (vector2.x > 0f) ? 1 : (-1));
+				}
+				if (HandPinching && !prevHandPinch)
+				{
+					WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
+				}
+			}
+			prevHandPinch = HandPinching;
+		}
+	}
 
-        Color32[] pixels = webCamTex.GetPixels32();
-        int w = webCamTex.width;
-        int h = webCamTex.height;
-        if (pixels == null || pixels.Length != w * h) return;
+	private void PollSingleGamepad(float dt)
+	{
+		Gamepad1Connected = ReadWinMMJoystick(0, out var leftStick, out var rightStick, out var buttons);
+		Pad1LeftStick = leftStick;
+		Pad1RightStick = rightStick;
+		Pad1Buttons = buttons;
+		uint num = buttons & ~prevPad1Buttons;
+		prevPad1Buttons = buttons;
+		if (pad1RingCooldown > 0f)
+		{
+			pad1RingCooldown -= dt;
+		}
+		if (ObjectInspectModal.IsOpen)
+		{
+			Vector2 vector = ((leftStick.sqrMagnitude > rightStick.sqrMagnitude) ? leftStick : rightStick);
+			if (vector.sqrMagnitude > 0.04f)
+			{
+				ObjectInspectModal.ExternalRotate((0f - vector.x) * 125f * dt, vector.y * 105f * dt);
+			}
+			if ((num & 0x20u) != 0)
+			{
+				ObjectInspectModal.ExternalClearDust(byBreath: false);
+			}
+			if ((num & (true ? 1u : 0u)) != 0)
+			{
+				ObjectInspectModal.ExternalPressPin(0);
+			}
+			if ((num & 2u) != 0)
+			{
+				ObjectInspectModal.ExternalPressPin(1);
+			}
+			if ((num & 4u) != 0)
+			{
+				ObjectInspectModal.ExternalPressPin(2);
+			}
+			return;
+		}
+		if (WoodenMechanismPuzzleModal.IsOpen)
+		{
+			float num2 = ((Mathf.Abs(leftStick.x) > Mathf.Abs(rightStick.x)) ? leftStick.x : rightStick.x);
+			if (Mathf.Abs(num2) > 0.55f && pad1RingCooldown <= 0f)
+			{
+				WoodenMechanismPuzzleModal.ExternalRotateRing(WoodenMechanismPuzzleModal.ActiveRingSelection, (num2 > 0f) ? 1 : (-1));
+				pad1RingCooldown = 0.24f;
+			}
+			if ((num & (true ? 1u : 0u)) != 0)
+			{
+				WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
+			}
+			if ((num & 4u) != 0)
+			{
+				WoodenMechanismPuzzleModal.ExternalUnlockAllLatchesByBlowOrGesture("手柄机关拨栓");
+			}
+			if ((num & 0x10u) != 0)
+			{
+				WoodenMechanismPuzzleModal.ActiveRingSelection = (WoodenMechanismPuzzleModal.ActiveRingSelection + 2) % 3;
+			}
+			if ((num & 0x20u) != 0)
+			{
+				WoodenMechanismPuzzleModal.ActiveRingSelection = (WoodenMechanismPuzzleModal.ActiveRingSelection + 1) % 3;
+			}
+			return;
+		}
+		if (leftStick.sqrMagnitude > 0.12f)
+		{
+			ExternalWindStabilizeBoost = 1f;
+			if (player != null && !player.locked && world != null && !AIAgentCalibrationDirector.IsOpen)
+			{
+				Transform obj = ((Camera.main != null) ? Camera.main.transform : player.transform);
+				Vector3 normalized = Vector3.ProjectOnPlane(obj.forward, Vector3.up).normalized;
+				Vector3 normalized2 = Vector3.ProjectOnPlane(obj.right, Vector3.up).normalized;
+				Vector3 normalized3 = (normalized * leftStick.y + normalized2 * leftStick.x).normalized;
+				Vector3 position = player.transform.position + normalized3 * (4.2f * dt);
+				if (world.Walkable(position.x, position.z))
+				{
+					position.y = world.GroundAt(position.x, position.z, position.y);
+					player.transform.position = position;
+					player.yaw = Mathf.Atan2(normalized3.x, normalized3.z);
+					player.transform.rotation = Quaternion.Euler(0f, player.yaw * 57.29578f, 0f);
+				}
+			}
+		}
+		if (((num & (true ? 1u : 0u)) != 0 || (num & 4u) != 0) && !AIAgentCalibrationDirector.IsOpen && interactionSvc != null)
+		{
+			interactionSvc.TryInteractNearest();
+		}
+		if ((num & 2u) != 0 && player != null && player.transform.position.y > 10f && director != null)
+		{
+			director.DescendTower();
+		}
+		if ((num & 8u) != 0)
+		{
+			AIAgentCalibrationDirector.ToggleConsole();
+		}
+		if ((num & 0x20u) != 0)
+		{
+			TriggerButtonBlowEffect();
+		}
+	}
 
-        if (prevCamPixels == null || prevCamPixels.Length != pixels.Length)
-        {
-            prevCamPixels = (Color32[])pixels.Clone();
-            return;
-        }
-
-        long sumX = 0;
-        long sumY = 0;
-        int changedCount = 0;
-
-        for (int y = 0; y < h; y += 2)
-        {
-            int row = y * w;
-            for (int x = 0; x < w; x += 2)
-            {
-                int idx = row + x;
-                Color32 c = pixels[idx];
-                Color32 p = prevCamPixels[idx];
-                int diff = Mathf.Abs(c.r - p.r) + Mathf.Abs(c.g - p.g) + Mathf.Abs(c.b - p.b);
-                if (diff > 72)
-                {
-                    // 镜像 X 坐标，使挥手方向与画面一致
-                    sumX += (w - 1 - x);
-                    sumY += y;
-                    changedCount++;
-                }
-                prevCamPixels[idx] = c;
-            }
-        }
-
-        int totalSampled = (w / 2) * (h / 2);
-        float motionRatio = totalSampled > 0 ? (float)changedCount / totalSampled : 0f;
-        HandWaveSpeed = Mathf.Lerp(HandWaveSpeed, Mathf.Clamp01(motionRatio * 5.5f), dt * 10f);
-
-        if (changedCount > 18)
-        {
-            float cx = Mathf.Clamp01((float)sumX / (changedCount * w));
-            float cy = Mathf.Clamp01((float)sumY / (changedCount * h));
-            HandNormalizedPos = Vector2.Lerp(HandNormalizedPos, new Vector2(cx, cy), dt * 10f);
-        }
-    }
-
-    void ProcessIncomingGesturePackets()
-    {
-        int processed = 0;
-        while (processed++ < 24 && incomingPackets.TryDequeue(out string pkt))
-        {
-            if (pkt.StartsWith("HAND:"))
-            {
-                WebcamGestureActive = true;
-                lastWebcamPacketTime = Time.unscaledTime;
-                string[] parts = pkt.Substring(5).Split(',');
-                if (parts.Length >= 5 &&
-                    float.TryParse(parts[0], out float hx) &&
-                    float.TryParse(parts[1], out float hy) &&
-                    int.TryParse(parts[2], out int pinchInt) &&
-                    float.TryParse(parts[3], out float wave))
-                {
-                    Vector2 newPos = new Vector2(Mathf.Clamp01(hx), Mathf.Clamp01(hy));
-                    Vector2 delta = newPos - prevHandPos;
-                    prevHandPos = newPos;
-                    HandNormalizedPos = newPos;
-                    HandPinching = pinchInt > 0;
-                    HandWaveSpeed = wave;
-
-                    if (ObjectInspectModal.IsOpen)
-                    {
-                        ObjectInspectModal.ExternalRotate(-delta.x * 220f, delta.y * 180f);
-                        if (HandPinching && !prevHandPinch)
-                        {
-                            int pinIdx = hx < 0.38f ? 0 : (hx > 0.62f ? 2 : 1);
-                            ObjectInspectModal.ExternalPressPin(pinIdx);
-                        }
-                    }
-                    else if (WoodenMechanismPuzzleModal.IsOpen)
-                    {
-                        if (Mathf.Abs(delta.x) > 0.045f)
-                            WoodenMechanismPuzzleModal.ExternalRotateRing(WoodenMechanismPuzzleModal.ActiveRingSelection, delta.x > 0f ? 1 : -1);
-                        if (HandPinching && !prevHandPinch)
-                            WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
-                    }
-                    prevHandPinch = HandPinching;
-                }
-            }
-        }
-    }
-
-    void PollSingleGamepad(float dt)
-    {
-        Gamepad1Connected = ReadWinMMJoystick(0, out Vector2 p1L, out Vector2 p1R, out uint b1);
-        Pad1LeftStick = p1L;
-        Pad1RightStick = p1R;
-        Pad1Buttons = b1;
-
-        uint down1 = b1 & ~prevPad1Buttons;
-        prevPad1Buttons = b1;
-
-        if (pad1RingCooldown > 0f) pad1RingCooldown -= dt;
-
-        // 1. 在 3D 旧物端详界面中：单手柄左/右摇杆 360° 翻转模型，RB 键拂去盐霜，A/B/X 键按压三枚铜扣
-        if (ObjectInspectModal.IsOpen)
-        {
-            Vector2 stick = p1L.sqrMagnitude > p1R.sqrMagnitude ? p1L : p1R;
-            if (stick.sqrMagnitude > 0.04f)
-                ObjectInspectModal.ExternalRotate(-stick.x * 125f * dt, stick.y * 105f * dt);
-            if ((down1 & 32u) != 0) ObjectInspectModal.ExternalClearDust(false);
-            if ((down1 & 1u) != 0) ObjectInspectModal.ExternalPressPin(0);
-            if ((down1 & 2u) != 0) ObjectInspectModal.ExternalPressPin(1);
-            if ((down1 & 4u) != 0) ObjectInspectModal.ExternalPressPin(2);
-            return;
-        }
-
-        // 2. 在 3D 鲁班机关界面中：单手柄 LB/RB 切换外中内环，摇杆拨动齿轮，X 键拨木栓，A 键推入主轴开锁
-        if (WoodenMechanismPuzzleModal.IsOpen)
-        {
-            float s1 = Mathf.Abs(p1L.x) > Mathf.Abs(p1R.x) ? p1L.x : p1R.x;
-            if (Mathf.Abs(s1) > 0.55f && pad1RingCooldown <= 0f)
-            {
-                WoodenMechanismPuzzleModal.ExternalRotateRing(WoodenMechanismPuzzleModal.ActiveRingSelection, s1 > 0f ? 1 : -1);
-                pad1RingCooldown = 0.24f;
-            }
-
-            if ((down1 & 1u) != 0) WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
-            if ((down1 & 4u) != 0)
-            {
-                // 单手柄 X 键依次拨开三枚外层木栓
-                WoodenMechanismPuzzleModal.ExternalUnlockAllLatchesByBlowOrGesture("手柄机关拨栓");
-            }
-            if ((down1 & 16u) != 0) WoodenMechanismPuzzleModal.ActiveRingSelection = (WoodenMechanismPuzzleModal.ActiveRingSelection + 2) % 3;
-            if ((down1 & 32u) != 0) WoodenMechanismPuzzleModal.ActiveRingSelection = (WoodenMechanismPuzzleModal.ActiveRingSelection + 1) % 3;
-            return;
-        }
-
-        // 3. 大世界中：单手柄摇杆移动与稳住海风重心，A/X 键互动，B 键塔顶下塔，Y 键打开心愿 3D 造物笺，RB 键鼓风
-        if (p1L.sqrMagnitude > 0.12f)
-        {
-            ExternalWindStabilizeBoost = 1f;
-            if (player != null && !player.locked && world != null && !AIAgentCalibrationDirector.IsOpen)
-            {
-                var cam = Camera.main != null ? Camera.main.transform : player.transform;
-                Vector3 fwd = Vector3.ProjectOnPlane(cam.forward, Vector3.up).normalized;
-                Vector3 right = Vector3.ProjectOnPlane(cam.right, Vector3.up).normalized;
-                Vector3 moveDir = (fwd * p1L.y + right * p1L.x).normalized;
-                Vector3 next = player.transform.position + moveDir * (4.2f * dt);
-                if (world.Walkable(next.x, next.z))
-                {
-                    next.y = world.GroundAt(next.x, next.z, next.y);
-                    player.transform.position = next;
-                    player.yaw = Mathf.Atan2(moveDir.x, moveDir.z);
-                    player.transform.rotation = Quaternion.Euler(0f, player.yaw * Mathf.Rad2Deg, 0f);
-                }
-            }
-        }
-
-        if ((down1 & 1u) != 0 || (down1 & 4u) != 0)
-        {
-            if (!AIAgentCalibrationDirector.IsOpen && interactionSvc != null)
-                interactionSvc.TryInteractNearest();
-        }
-        if ((down1 & 2u) != 0 && player != null && player.transform.position.y > 10f && director != null)
-        {
-            director.DescendTower();
-        }
-        if ((down1 & 8u) != 0)
-        {
-            AIAgentCalibrationDirector.ToggleConsole();
-        }
-        if ((down1 & 32u) != 0)
-        {
-            TriggerButtonBlowEffect();
-        }
-    }
-
-    static bool ReadWinMMJoystick(int joyId, out Vector2 leftStick, out Vector2 rightStick, out uint buttons)
-    {
-        leftStick = Vector2.zero;
-        rightStick = Vector2.zero;
-        buttons = 0u;
-#if !(UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN)
-        return false; // winmm.dll 只有 Windows 有
+	private static bool ReadWinMMJoystick(int joyId, out Vector2 leftStick, out Vector2 rightStick, out uint buttons)
+	{
+		leftStick = Vector2.zero;
+		rightStick = Vector2.zero;
+		buttons = 0u;
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+		JOYINFOEX jOYINFOEX = default(JOYINFOEX);
+		jOYINFOEX.dwSize = (uint)Marshal.SizeOf(typeof(JOYINFOEX));
+		jOYINFOEX.dwFlags = 255u;
+		JOYINFOEX pji = jOYINFOEX;
+		if (joyGetPosEx(joyId, ref pji) != 0)
+		{
+			return false;
+		}
+		float num = ((float)pji.dwXpos - 32767f) / 32768f;
+		float num2 = (0f - ((float)pji.dwYpos - 32767f)) / 32768f;
+		float num3 = ((float)pji.dwZpos - 32767f) / 32768f;
+		float num4 = (0f - ((float)pji.dwRpos - 32767f)) / 32768f;
+		if (Mathf.Abs(num) < 0.18f)
+		{
+			num = 0f;
+		}
+		if (Mathf.Abs(num2) < 0.18f)
+		{
+			num2 = 0f;
+		}
+		if (Mathf.Abs(num3) < 0.18f)
+		{
+			num3 = 0f;
+		}
+		if (Mathf.Abs(num4) < 0.18f)
+		{
+			num4 = 0f;
+		}
+		leftStick = new Vector2(num, num2);
+		rightStick = new Vector2(num3, num4);
+		buttons = pji.dwButtons;
+		return true;
 #else
-        var info = new JOYINFOEX { dwSize = (uint)Marshal.SizeOf(typeof(JOYINFOEX)), dwFlags = 0xFFu };
-        if (joyGetPosEx(joyId, ref info) != 0) return false;
-
-        float lx = (info.dwXpos - 32767f) / 32768f;
-        float ly = -(info.dwYpos - 32767f) / 32768f;
-        float rx = (info.dwZpos - 32767f) / 32768f;
-        float ry = -(info.dwRpos - 32767f) / 32768f;
-        if (Mathf.Abs(lx) < 0.18f) lx = 0f;
-        if (Mathf.Abs(ly) < 0.18f) ly = 0f;
-        if (Mathf.Abs(rx) < 0.18f) rx = 0f;
-        if (Mathf.Abs(ry) < 0.18f) ry = 0f;
-        leftStick = new Vector2(lx, ly);
-        rightStick = new Vector2(rx, ry);
-        buttons = info.dwButtons;
-        return true;
+		return false;
 #endif
-    }
+	}
 
-    void TriggerButtonBlowEffect()
-    {
-        if (ObjectInspectModal.IsOpen)
-        {
-            ObjectInspectModal.ExternalClearDust(false);
-            return;
-        }
-
-        if (player != null && Vector3.Distance(player.transform.position, new Vector3(-11.5f, 1.3f, -7.8f)) < 9.5f)
-        {
-            var fx = FindObjectOfType<BakeryEffects>();
-            if (fx != null && director != null && state != null && state.flags.Contains("oven_lit"))
-            {
-                director.BoostOvenBellows(fx);
-            }
-        }
-    }
+	private void TriggerButtonBlowEffect()
+	{
+		if (ObjectInspectModal.IsOpen)
+		{
+			ObjectInspectModal.ExternalClearDust(byBreath: false);
+		}
+		else if (player != null && Vector3.Distance(player.transform.position, new Vector3(-11.5f, 1.3f, -7.8f)) < 9.5f)
+		{
+			BakeryEffects bakeryEffects = UnityEngine.Object.FindObjectOfType<BakeryEffects>();
+			if (bakeryEffects != null && director != null && state != null && state.flags.Contains("oven_lit"))
+			{
+				director.BoostOvenBellows(bakeryEffects);
+			}
+		}
+	}
 }

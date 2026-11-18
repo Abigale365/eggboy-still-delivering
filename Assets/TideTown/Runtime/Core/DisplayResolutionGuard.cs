@@ -1,4 +1,3 @@
-// 启动时选择窗口大小，按显卡和持续帧率选择主相机抗锯齿与阴影预算。
 using System;
 using System.Collections;
 using UnityEngine;
@@ -8,216 +7,263 @@ using UnityEngine.SceneManagement;
 
 public static class DisplayResolutionGuard
 {
-    internal enum Tier { Low, Medium, High }
+	internal enum Tier
+	{
+		Low,
+		Medium,
+		High
+	}
 
-    const int FullW = 1920, FullH = 1080;
-    const int ChromeMargin = 90;
-    const float ObservationSeconds = 4f, MinimumFps = 48f;
-    static readonly string[] IntegratedNames = { "610M", "UHD", "Iris", "Vega" };
+	internal struct FrameBudget
+	{
+		private float seconds;
 
-    static bool smaaOff, automatic;
-    static Tier tier;
-    static Camera configuredCamera;
-    static Vector2Int expectedWindow;
+		private int frames;
 
-    internal struct FrameBudget
-    {
-        float seconds;
-        int frames;
+		public bool Observe(float elapsed)
+		{
+			seconds += elapsed;
+			frames++;
+			if (seconds < 4f)
+			{
+				return false;
+			}
+			bool result = (float)frames / seconds < 48f;
+			this = default(FrameBudget);
+			return result;
+		}
+	}
 
-        public bool Observe(float elapsed)
-        {
-            seconds += elapsed;
-            frames++;
-            if (seconds < ObservationSeconds) return false;
-            bool slow = frames / seconds < MinimumFps;
-            this = default;
-            return slow;
-        }
-    }
+	private const int FullW = 1920;
 
-    static bool HasArg(string[] args, string name) =>
-        Array.Exists(args, arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+	private const int FullH = 1080;
 
-    static bool ResolutionGivenOnCommandLine(string[] args) => Array.Exists(args, arg =>
-        arg.StartsWith("-screen-", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(arg, "-popupwindow", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(arg, "-window-mode", StringComparison.OrdinalIgnoreCase));
+	private const int ChromeMargin = 90;
 
-    // 纯计算入口，分辨率自检与正常启动共用。
-    public static Vector2Int PickWindowSize(int displayWidth, int displayHeight)
-    {
-        if (displayWidth < FullW || displayHeight < FullH) return new Vector2Int(1280, 720);
-        if (displayHeight < FullH + ChromeMargin) return new Vector2Int(1600, 900);
-        return new Vector2Int(FullW, FullH);
-    }
+	private const float ObservationSeconds = 4f;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    static void FitWindow()
-    {
-        expectedWindow = Vector2Int.zero;
-        if (Application.isEditor || Application.isBatchMode || Application.isMobilePlatform ||
-            Application.platform == RuntimePlatform.WebGLPlayer) return;
+	private const float MinimumFps = 48f;
 
-        var args = Environment.GetCommandLineArgs();
-        if (ResolutionGivenOnCommandLine(args))
-        {
-            Debug.Log("RESGUARD window source=command-line");
-            return;
-        }
+	private static readonly string[] IntegratedNames = new string[4] { "610M", "UHD", "Iris", "Vega" };
 
-        var display = Display.main;
-        expectedWindow = PickWindowSize(display.systemWidth, display.systemHeight);
-        Debug.Log($"RESGUARD window source=display native={display.systemWidth}x{display.systemHeight} " +
-                  $"selected={expectedWindow.x}x{expectedWindow.y} mode={Screen.fullScreenMode}");
-        if (Screen.fullScreenMode != FullScreenMode.Windowed) { expectedWindow = Vector2Int.zero; return; }
-        if (Screen.width != expectedWindow.x || Screen.height != expectedWindow.y)
-            Screen.SetResolution(expectedWindow.x, expectedWindow.y, FullScreenMode.Windowed);
-    }
+	private static bool smaaOff;
 
-    internal static Tier AutomaticTier(string deviceName, bool web)
-    {
-        if (web) return Tier.Low;
-        if (string.IsNullOrEmpty(deviceName)) return Tier.High;
-        foreach (var name in IntegratedNames)
-            if (deviceName.IndexOf(name, StringComparison.OrdinalIgnoreCase) >= 0) return Tier.Medium;
-        return Tier.High;
-    }
+	private static bool automatic;
 
-    static bool TryReadTier(string[] args, out Tier result)
-    {
-        result = Tier.High;
-        if (HasArg(args, "-trailerRecord") && !FilmingStageJumper.AuditArguments()) return true;
-        int index = Array.FindIndex(args, a => string.Equals(a, "-quality", StringComparison.OrdinalIgnoreCase));
-        if (index < 0) return false;
-        switch (index + 1 < args.Length ? args[index + 1].ToLowerInvariant() : "")
-        {
-            case "high": return true;
-            case "medium": result = Tier.Medium; return true;
-            case "low": result = Tier.Low; return true;
-            default: Debug.LogWarning("RESGUARD 无法识别画质档位。可用 high、medium、low，将采用自动设置。"); return false;
-        }
-    }
+	private static Tier tier;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void HookQuality()
-    {
-        var args = Environment.GetCommandLineArgs();
-        bool manual = TryReadTier(args, out tier);
-        bool photograph = HasArg(args, "-shot_aa");
-        automatic = !manual && !photograph;
-        if (automatic) tier = AutomaticTier(SystemInfo.graphicsDeviceName, Application.platform == RuntimePlatform.WebGLPlayer);
-        smaaOff = HasArg(args, "-nosmaa");
-        configuredCamera = null;
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-        SceneManager.sceneLoaded += OnSceneLoaded;
-        RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
-        RenderPipelineManager.beginCameraRendering += OnBeginCamera;
-        ApplyQuality(manual ? "command-line" : photograph ? "capture" : "hardware");
+	private static Camera configuredCamera;
 
-        bool check = HasArg(args, "-qualitycheck");
-        if (automatic || check)
-        {
-            var monitor = new GameObject("DisplayQuality").AddComponent<DisplayQualityMonitor>();
-            UnityEngine.Object.DontDestroyOnLoad(monitor.gameObject);
-            monitor.Check = check;
-        }
-    }
+	private static Vector2Int expectedWindow;
 
-    static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        configuredCamera = null;
-        ApplyQuality("scene");
-    }
+	internal static bool CanAdapt
+	{
+		get
+		{
+			if (automatic)
+			{
+				return tier != Tier.Low;
+			}
+			return false;
+		}
+	}
 
-    static void OnBeginCamera(ScriptableRenderContext context, Camera cam)
-    {
-        if (cam == configuredCamera || cam.cameraType != CameraType.Game || !cam.CompareTag("MainCamera")) return;
-        ApplyCamera(cam);
-    }
+	private static bool HasArg(string[] args, string name)
+	{
+		return Array.Exists(args, (string arg) => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+	}
 
-    static void ApplyQuality(string reason)
-    {
-        if (tier != Tier.High && GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline)
-        {
-            float limit = tier == Tier.Medium ? 52f : 32f;
-            int cascades = tier == Tier.Medium ? 2 : 1;
-            TownLighting.ApplyShadowRange(Mathf.Min(limit, pipeline.shadowDistance),
-                Mathf.Min(cascades, pipeline.shadowCascadeCount));
-            pipeline.maxAdditionalLightsCount = Mathf.Min(pipeline.maxAdditionalLightsCount, tier == Tier.Medium ? 4 : 2);
-        }
-        ApplyCamera(Camera.main);
-        Debug.Log($"RESGUARD quality={tier} reason={reason} gpu={SystemInfo.graphicsDeviceName}");
-    }
+	private static bool ResolutionGivenOnCommandLine(string[] args)
+	{
+		return Array.Exists(args, (string arg) => arg.StartsWith("-screen-", StringComparison.OrdinalIgnoreCase) || string.Equals(arg, "-popupwindow", StringComparison.OrdinalIgnoreCase) || string.Equals(arg, "-window-mode", StringComparison.OrdinalIgnoreCase));
+	}
 
-    static void ApplyCamera(Camera cam)
-    {
-        if (cam == null) return;
-        var data = cam.GetUniversalAdditionalCameraData();
-        bool smaa = !smaaOff && tier != Tier.Low;
-        data.antialiasing = smaa ? AntialiasingMode.SubpixelMorphologicalAntiAliasing : AntialiasingMode.None;
-        if (smaa)
-        {
-            data.antialiasingQuality = tier == Tier.High ? AntialiasingQuality.High : AntialiasingQuality.Low;
-            data.renderPostProcessing = true;
-        }
-        else if (tier == Tier.Low) cam.allowMSAA = true;
-        configuredCamera = cam;
-    }
+	public static Vector2Int PickWindowSize(int displayWidth, int displayHeight)
+	{
+		if (displayWidth < 1920 || displayHeight < 1080)
+		{
+			return new Vector2Int(1280, 720);
+		}
+		if (displayHeight < 1170)
+		{
+			return new Vector2Int(1600, 900);
+		}
+		return new Vector2Int(1920, 1080);
+	}
 
-    internal static bool CanAdapt => automatic && tier != Tier.Low;
+	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+	private static void FitWindow()
+	{
+		expectedWindow = Vector2Int.zero;
+		if (Application.isEditor || Application.isBatchMode || Application.isMobilePlatform || Application.platform == RuntimePlatform.WebGLPlayer)
+		{
+			return;
+		}
+		if (ResolutionGivenOnCommandLine(Environment.GetCommandLineArgs()))
+		{
+			Debug.Log("RESGUARD window source=command-line");
+			return;
+		}
+		Display main = Display.main;
+		expectedWindow = PickWindowSize(main.systemWidth, main.systemHeight);
+		Debug.Log($"RESGUARD window source=display native={main.systemWidth}x{main.systemHeight} " + $"selected={expectedWindow.x}x{expectedWindow.y} mode={Screen.fullScreenMode}");
+		if (Screen.fullScreenMode != FullScreenMode.Windowed)
+		{
+			expectedWindow = Vector2Int.zero;
+		}
+		else if (Screen.width != expectedWindow.x || Screen.height != expectedWindow.y)
+		{
+			Screen.SetResolution(expectedWindow.x, expectedWindow.y, FullScreenMode.Windowed);
+		}
+	}
 
-    internal static void StepDown()
-    {
-        if (!CanAdapt) return;
-        tier = tier == Tier.High ? Tier.Medium : Tier.Low;
-        ApplyQuality("fps<48/4s");
-    }
+	internal static Tier AutomaticTier(string deviceName, bool web)
+	{
+		if (web)
+		{
+			return Tier.Low;
+		}
+		if (string.IsNullOrEmpty(deviceName))
+		{
+			return Tier.High;
+		}
+		string[] integratedNames = IntegratedNames;
+		foreach (string value in integratedNames)
+		{
+			if (deviceName.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0)
+			{
+				return Tier.Medium;
+			}
+		}
+		return Tier.High;
+	}
 
-    internal static IEnumerator CheckOnStartup()
-    {
-        yield return null;
-        yield return null;
-        bool windowCases = PickWindowSize(1366, 768) == new Vector2Int(1280, 720)
-            && PickWindowSize(1920, 1080) == new Vector2Int(1600, 900)
-            && PickWindowSize(2560, 1440) == new Vector2Int(1920, 1080);
-        bool hardwareCases = AutomaticTier("AMD Radeon 610M", false) == Tier.Medium
-            && AutomaticTier("Intel Iris Xe", false) == Tier.Medium
-            && AutomaticTier("NVIDIA RTX", true) == Tier.Low
-            && AutomaticTier("NVIDIA RTX", false) == Tier.High;
-        var budget = new FrameBudget();
-        bool early = false;
-        for (int i = 0; i < 119; i++) early |= budget.Observe(1f / 30f);
-        bool slow = budget.Observe(.04f);
-        bool windowApplied = expectedWindow == Vector2Int.zero || expectedWindow == new Vector2Int(Screen.width, Screen.height);
-        bool passed = windowCases && hardwareCases && !early && slow && windowApplied;
-        Debug.Log($"RESGUARD selfcheck {(passed ? "PASS" : "FAIL")} windows={windowCases} " +
-                  $"hardware={hardwareCases} slowFrames={!early && slow} applied={windowApplied} actual={Screen.width}x{Screen.height}");
-        Application.Quit(passed ? 0 : 2);
-    }
+	private static bool TryReadTier(string[] args, out Tier result)
+	{
+		result = Tier.High;
+		if (HasArg(args, "-trailerRecord") && !FilmingStageJumper.AuditArguments())
+		{
+			return true;
+		}
+		int num = Array.FindIndex(args, (string a) => string.Equals(a, "-quality", StringComparison.OrdinalIgnoreCase));
+		if (num < 0)
+		{
+			return false;
+		}
+		switch ((num + 1 < args.Length) ? args[num + 1].ToLowerInvariant() : "")
+		{
+		case "high":
+			return true;
+		case "medium":
+			result = Tier.Medium;
+			return true;
+		case "low":
+			result = Tier.Low;
+			return true;
+		default:
+			Debug.LogWarning("RESGUARD 无法识别画质档位。可用 high、medium、low，将采用自动设置。");
+			return false;
+		}
+	}
+
+	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+	private static void HookQuality()
+	{
+		string[] commandLineArgs = Environment.GetCommandLineArgs();
+		bool flag = TryReadTier(commandLineArgs, out tier);
+		bool flag2 = HasArg(commandLineArgs, "-shot_aa");
+		automatic = !flag && !flag2;
+		if (automatic)
+		{
+			tier = AutomaticTier(SystemInfo.graphicsDeviceName, Application.platform == RuntimePlatform.WebGLPlayer);
+		}
+		smaaOff = HasArg(commandLineArgs, "-nosmaa");
+		configuredCamera = null;
+		SceneManager.sceneLoaded -= OnSceneLoaded;
+		SceneManager.sceneLoaded += OnSceneLoaded;
+		RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+		RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+		ApplyQuality(flag ? "command-line" : (flag2 ? "capture" : "hardware"));
+		bool flag3 = HasArg(commandLineArgs, "-qualitycheck");
+		if (automatic || flag3)
+		{
+			DisplayQualityMonitor displayQualityMonitor = new GameObject("DisplayQuality").AddComponent<DisplayQualityMonitor>();
+			UnityEngine.Object.DontDestroyOnLoad(displayQualityMonitor.gameObject);
+			displayQualityMonitor.Check = flag3;
+		}
+	}
+
+	private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+	{
+		configuredCamera = null;
+		ApplyQuality("scene");
+	}
+
+	private static void OnBeginCamera(ScriptableRenderContext context, Camera cam)
+	{
+		if (!(cam == configuredCamera) && cam.cameraType == CameraType.Game && cam.CompareTag("MainCamera"))
+		{
+			ApplyCamera(cam);
+		}
+	}
+
+	private static void ApplyQuality(string reason)
+	{
+		if (tier != Tier.High && GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset universalRenderPipelineAsset)
+		{
+			float a = ((tier == Tier.Medium) ? 52f : 32f);
+			TownLighting.ApplyShadowRange(cascades: Mathf.Min((tier != Tier.Medium) ? 1 : 2, universalRenderPipelineAsset.shadowCascadeCount), distance: Mathf.Min(a, universalRenderPipelineAsset.shadowDistance));
+			universalRenderPipelineAsset.maxAdditionalLightsCount = Mathf.Min(universalRenderPipelineAsset.maxAdditionalLightsCount, (tier == Tier.Medium) ? 4 : 2);
+		}
+		ApplyCamera(Camera.main);
+		Debug.Log($"RESGUARD quality={tier} reason={reason} gpu={SystemInfo.graphicsDeviceName}");
+	}
+
+	private static void ApplyCamera(Camera cam)
+	{
+		if (!(cam == null))
+		{
+			UniversalAdditionalCameraData universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
+			bool flag = !smaaOff && tier != Tier.Low;
+			universalAdditionalCameraData.antialiasing = (flag ? AntialiasingMode.SubpixelMorphologicalAntiAliasing : AntialiasingMode.None);
+			if (flag)
+			{
+				universalAdditionalCameraData.antialiasingQuality = ((tier == Tier.High) ? AntialiasingQuality.High : AntialiasingQuality.Low);
+				universalAdditionalCameraData.renderPostProcessing = true;
+			}
+			else if (tier == Tier.Low)
+			{
+				cam.allowMSAA = true;
+			}
+			configuredCamera = cam;
+		}
+	}
+
+	internal static void StepDown()
+	{
+		if (CanAdapt)
+		{
+			tier = ((tier == Tier.High) ? Tier.Medium : Tier.Low);
+			ApplyQuality("fps<48/4s");
+		}
+	}
+
+	internal static IEnumerator CheckOnStartup()
+	{
+		yield return null;
+		yield return null;
+		bool flag = PickWindowSize(1366, 768) == new Vector2Int(1280, 720) && PickWindowSize(1920, 1080) == new Vector2Int(1600, 900) && PickWindowSize(2560, 1440) == new Vector2Int(1920, 1080);
+		bool flag2 = AutomaticTier("AMD Radeon 610M", web: false) == Tier.Medium && AutomaticTier("Intel Iris Xe", web: false) == Tier.Medium && AutomaticTier("NVIDIA RTX", web: true) == Tier.Low && AutomaticTier("NVIDIA RTX", web: false) == Tier.High;
+		FrameBudget frameBudget = default(FrameBudget);
+		bool flag3 = false;
+		for (int i = 0; i < 119; i++)
+		{
+			flag3 |= frameBudget.Observe(1f / 30f);
+		}
+		bool flag4 = frameBudget.Observe(0.04f);
+		bool flag5 = expectedWindow == Vector2Int.zero || expectedWindow == new Vector2Int(Screen.width, Screen.height);
+		bool flag6 = flag && flag2 && !flag3 && flag4 && flag5;
+		Debug.Log(string.Format("RESGUARD selfcheck {0} windows={1} ", flag6 ? "PASS" : "FAIL", flag) + $"hardware={flag2} slowFrames={!flag3 && flag4} applied={flag5} actual={Screen.width}x{Screen.height}");
+		Application.Quit((!flag6) ? 2 : 0);
+	}
 }
-
-internal sealed class DisplayQualityMonitor : MonoBehaviour
-{
-    public bool Check;
-    DisplayResolutionGuard.FrameBudget frameBudget;
-    float warmedFor;
-
-    IEnumerator Start()
-    {
-        if (Check) yield return DisplayResolutionGuard.CheckOnStartup();
-    }
-
-    void Update()
-    {
-        if (!DisplayResolutionGuard.CanAdapt || Time.timeScale <= 0f || !Application.isFocused)
-        {
-            frameBudget = default;
-            return;
-        }
-        warmedFor += Time.unscaledDeltaTime;
-        if (warmedFor < 2f) return;
-        if (frameBudget.Observe(Time.unscaledDeltaTime)) DisplayResolutionGuard.StepDown();
-    }
-}
-

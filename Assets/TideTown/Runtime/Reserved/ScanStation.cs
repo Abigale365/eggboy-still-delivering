@@ -1,35 +1,65 @@
-// WP-09 预留：邮局门口的扫描站。Features.scan=false 时整站隐藏、不注册、不显示提示。
 using UnityEngine;
 
 public sealed class ScanStation : MonoBehaviour, IInteractable
 {
-    readonly IScanSource source = new NullScanSource();
-    string message = "";
-    float messageUntil;
+	private readonly IScanSource source = new NullScanSource();
 
-    public string EntityId => "scan_station";
-    public Vector3 Position => transform.position;
+	private string message = "";
 
-    void Awake() { SetEnabled(Features.scan); }
+	private float messageUntil;
 
-    public void SetEnabled(bool on)
-    {
-        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.enabled = on;
-        foreach (var c in GetComponentsInChildren<Collider>(true)) c.enabled = on;
-    }
+	public string EntityId => "scan_station";
 
-    public string Prompt(GameState s) => Time.time < messageUntil ? message : "E　扫描";
-    public bool CanInteract(GameState s) => Features.scan;
+	public Vector3 Position => base.transform.position;
 
-    public void Interact(GameState s, InteractionService svc)
-    {
-        source.Capture(bytes => Show("样例已就绪"), err => Show(err));
-    }
+	private void Awake()
+	{
+		SetEnabled(Features.scan);
+	}
 
-    void Show(string text)
-    {
-        message = text;
-        messageUntil = Time.time + 6f;
-        Debug.Log("SCAN " + text);
-    }
+	public void SetEnabled(bool on)
+	{
+		Renderer[] componentsInChildren = GetComponentsInChildren<Renderer>(includeInactive: true);
+		for (int i = 0; i < componentsInChildren.Length; i++)
+		{
+			componentsInChildren[i].enabled = on;
+		}
+		Collider[] componentsInChildren2 = GetComponentsInChildren<Collider>(includeInactive: true);
+		for (int i = 0; i < componentsInChildren2.Length; i++)
+		{
+			componentsInChildren2[i].enabled = on;
+		}
+	}
+
+	public string Prompt(GameState s)
+	{
+		if (!(Time.time < messageUntil))
+		{
+			return "E\u3000扫描";
+		}
+		return message;
+	}
+
+	public bool CanInteract(GameState s)
+	{
+		return Features.scan;
+	}
+
+	public void Interact(GameState s, InteractionService svc)
+	{
+		source.Capture(delegate
+		{
+			Show("样例已就绪");
+		}, delegate(string err)
+		{
+			Show(err);
+		});
+	}
+
+	private void Show(string text)
+	{
+		message = text;
+		messageUntil = Time.time + 6f;
+		Debug.Log("SCAN " + text);
+	}
 }

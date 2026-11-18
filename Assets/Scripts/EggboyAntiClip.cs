@@ -1,381 +1,585 @@
-// 防穿模：每帧在姿态层之后，检查手臂 / 手 / 邮差包有没有戳进身体、耳机、邮差包，
-// 戳进去就绕关节往外转一点，直到刚好贴着表面。碰撞形状从模型本身量出来（绑定姿态下）：
-// 蛋形身体按高度切片记每层的半宽 / 半厚；两侧耳机当球；邮差包当椭球。
-// 从 game/src/anticlip.ts 移植，保留三个关键做法：
-// 1) 每帧从上一帧的纠正量接着解；2) 离表面 1.2 cm 内既不推也不松；3) 纠正量限速。
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 public class EggboyAntiClip
 {
-    const int BANDS = 28;
-    const float MARGIN = 0.006f;
-    const float EAR_X = 0.31f;
-    const float RELAX = 5f;
-    const float HOLD = 0.012f;
-    const float MAX_RATE = 6f;
+	private struct Ear
+	{
+		public Vector3 c;
 
-    struct Ear { public Vector3 c; public float r; }
-    struct BagShape { public Vector3 c; public Vector3 r; }
-    struct WorstResult { public float pen; public Vector3 pt; public Vector3 nrm; }
-    class Limb { public Transform bone; public int[] idx; }
-    class Job { public Transform bone; public int[] idx; public bool skipBag; public float allow; }
-    class Corr { public Quaternion c = Quaternion.identity; public Quaternion baseQ = Quaternion.identity; }
+		public float r;
+	}
 
-    readonly EggboySkin skin;
-    readonly EggboyBones bones;
-    Transform bodyBone, bagBone;
-    int bodyIdx = -1, bagIdx = -1;
-    float y0, y1;
-    readonly float[] rx = new float[BANDS];
-    readonly float[] rz = new float[BANDS];
-    readonly List<Ear> ears = new List<Ear>();
-    BagShape? bag;
-    readonly Limb[] limbs = new Limb[4]; // armR, handR, armL, handL
-    int[] bagPts = new int[0];
-    float bagBase;
-    public readonly bool ok;
-    readonly Dictionary<Transform, Corr> corr = new Dictionary<Transform, Corr>();
-    Matrix4x4[] skinMats;
+	private struct BagShape
+	{
+		public Vector3 c;
 
-    public EggboyAntiClip(EggboySkin skin, EggboyBones bones, Transform model)
-    {
-        this.skin = skin;
-        this.bones = bones;
-        if (skin == null || skin.renderer == null || skin.mesh == null) { ok = false; return; }
-        bodyIdx = skin.BoneIndex("body");
-        bagIdx = skin.BoneIndex("bag");
-        bodyBone = bodyIdx >= 0 ? skin.renderer.bones[bodyIdx] : null;
-        bagBone = bagIdx >= 0 ? skin.renderer.bones[bagIdx] : null;
+		public Vector3 r;
+	}
 
-        var bodyVerts = new List<int>();
-        Matrix4x4 bodyBind = bodyIdx >= 0 ? skin.mesh.bindposes[bodyIdx] : Matrix4x4.identity; // 网格空间 → body 骨骼本地
-        foreach (int vi in skin.shellVerts)
-        {
-            if (bodyIdx < 0 || skin.boneOfVertex[vi] != bodyIdx) continue;
-            Vector3 lb = bodyBind.MultiplyPoint3x4(skin.verts[vi]);
-            if (Mathf.Abs(lb.x) < EAR_X) bodyVerts.Add(vi);
-        }
-        if (bodyVerts.Count > 0)
-        {
-            y0 = float.PositiveInfinity; y1 = float.NegativeInfinity;
-            foreach (int vi in bodyVerts)
-            {
-                Vector3 lb = bodyBind.MultiplyPoint3x4(skin.verts[vi]);
-                y0 = Mathf.Min(y0, lb.y);
-                y1 = Mathf.Max(y1, lb.y);
-            }
-            foreach (int vi in bodyVerts)
-            {
-                Vector3 lb = bodyBind.MultiplyPoint3x4(skin.verts[vi]);
-                int b = Band(lb.y);
-                rx[b] = Mathf.Max(rx[b], Mathf.Abs(lb.x));
-                rz[b] = Mathf.Max(rz[b], Mathf.Abs(lb.z));
-            }
-        }
+	private struct WorstResult
+	{
+		public float pen;
 
-        // 耳机：两侧伸出去的部分各当一个球（body 本地）
-        foreach (int side in new[] { -1, 1 })
-        {
-            var ear = new List<int>();
-            foreach (int vi in skin.shellVerts)
-            {
-                if (bodyIdx < 0 || skin.boneOfVertex[vi] != bodyIdx) continue;
-                Vector3 lb = bodyBind.MultiplyPoint3x4(skin.verts[vi]);
-                if (lb.x * side >= EAR_X) ear.Add(vi);
-            }
-            if (ear.Count == 0) continue;
-            Vector3 c = Vector3.zero;
-            foreach (int vi in ear) c += bodyBind.MultiplyPoint3x4(skin.verts[vi]);
-            c /= ear.Count;
-            float r = 0f;
-            foreach (int vi in ear) r = Mathf.Max(r, Vector3.Distance(bodyBind.MultiplyPoint3x4(skin.verts[vi]), c));
-            ears.Add(new Ear { c = c, r = r * 0.85f });
-        }
+		public Vector3 pt;
 
-        // 邮差包：包身的包围盒当椭球（bag 本地）
-        var bagList = new List<int>();
-        Matrix4x4 bagBind = bagIdx >= 0 ? skin.mesh.bindposes[bagIdx] : Matrix4x4.identity;
-        if (bagIdx >= 0)
-            foreach (int vi in skin.leatherVerts) if (skin.boneOfVertex[vi] == bagIdx) bagList.Add(vi);
-        if (bagList.Count > 0)
-        {
-            Vector3 min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
-            Vector3 max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
-            foreach (int vi in bagList)
-            {
-                Vector3 v = bagBind.MultiplyPoint3x4(skin.verts[vi]);
-                min = Vector3.Min(min, v);
-                max = Vector3.Max(max, v);
-            }
-            bag = new BagShape { c = (min + max) * 0.5f, r = (max - min) * 0.45f };
-            var sampled = new List<int>();
-            for (int k = 0; k < bagList.Count; k++) if (k % 6 == 0) sampled.Add(bagList[k]);
-            bagPts = sampled.ToArray();
-        }
+		public Vector3 nrm;
+	}
 
-        // 手臂 / 手上的采样点（肩膀根部本来就插在身体关节槽里，不算）
-        limbs[0] = LimbOf("armR", true, skin);
-        limbs[1] = LimbOf("handR", false, skin);
-        limbs[2] = LimbOf("armL", true, skin);
-        limbs[3] = LimbOf("handL", false, skin);
-        ok = bodyIdx >= 0 && bagIdx >= 0 && bodyVerts.Count > 100 && limbs[0] != null && limbs[0].idx.Length > 5;
+	private class Limb
+	{
+		public Transform bone;
 
-        // 绑定姿态下包压进身体多少
-        if (ok && bag != null)
-        {
-            Refresh();
-            bagBase = Worst(bagPts, true, 0f).pen;
-        }
-        if (ok) AddShoulderJoints(model);
-    }
+		public int[] idx;
+	}
 
-    Limb LimbOf(string name, bool arm, EggboySkin skin)
-    {
-        int id = skin.BoneIndex(name);
-        if (id < 0) return null;
-        var list = new List<int>();
-        foreach (int vi in skin.shellVerts)
-            if (skin.boneOfVertex[vi] == id) list.Add(vi);
-        if (arm)
-        {
-            // 肩关节在网格空间里的绑定位置
-            Vector3 sh = skin.mesh.bindposes[id].inverse.MultiplyPoint3x4(Vector3.zero);
-            list.RemoveAll(vi => Vector3.Distance(skin.verts[vi], sh) <= 0.1f);
-        }
-        int step = Mathf.Max(1, list.Count / 70);
-        var sampled = new List<int>();
-        for (int k = 0; k < list.Count; k++) if (k % step == 0) sampled.Add(list[k]);
-        return new Limb { bone = skin.renderer.bones[id], idx = sampled.ToArray() };
-    }
+	private class Job
+	{
+		public Transform bone;
 
-    int Band(float y)
-    {
-        float t = Mathf.Clamp01((y - y0) / Mathf.Max(1e-6f, y1 - y0));
-        return Mathf.Min(BANDS - 1, Mathf.FloorToInt(t * BANDS));
-    }
+		public int[] idx;
 
-    void Refresh()
-    {
-        if (skin == null) return;
-        skinMats = skin.SkinMatrices();
-    }
+		public bool skipBag;
 
-    // 世界坐标的点戳进碰撞体多深；out 是往外推的世界方向；extra 把碰撞体整体放大
-    float Penetrate(Vector3 pw, bool skipBag, out Vector3 outDir, float extra = 0f)
-    {
-        Vector3 bestDir = Vector3.zero;
-        float best = 0f;
-        Vector3 p = bodyBone.InverseTransformPoint(pw);
-        if (p.y > y0 && p.y < y1)
-        {
-            int b = Band(p.y);
-            float ex = rx[b] + MARGIN + extra, ez = rz[b] + MARGIN + extra;
-            float q = (p.x / ex) * (p.x / ex) + (p.z / ez) * (p.z / ez);
-            if (q < 1f)
-            {
-                float d = (1f - Mathf.Sqrt(q)) * Mathf.Min(ex, ez);
-                if (d > best)
-                {
-                    best = d;
-                    Vector3 g = new Vector3(p.x / (ex * ex), 0f, p.z / (ez * ez));
-                    bestDir = bodyBone.TransformDirection(g).normalized;
-                }
-            }
-        }
-        foreach (var e in ears)
-        {
-            float d = e.r + MARGIN + extra - Vector3.Distance(p, e.c);
-            if (d > best)
-            {
-                best = d;
-                bestDir = bodyBone.TransformDirection(p - e.c).normalized;
-            }
-        }
-        if (!skipBag && bag.HasValue && bagBone != null)
-        {
-            p = bagBone.InverseTransformPoint(pw) - bag.Value.c;
-            float ex = bag.Value.r.x + extra, ey = bag.Value.r.y + extra, ez = bag.Value.r.z + extra;
-            float q = (p.x / ex) * (p.x / ex) + (p.y / ey) * (p.y / ey) + (p.z / ez) * (p.z / ez);
-            if (q < 1f)
-            {
-                float d = (1f - Mathf.Sqrt(q)) * Mathf.Min(ex, Mathf.Min(ey, ez));
-                if (d > best)
-                {
-                    best = d;
-                    Vector3 g = new Vector3(p.x / (ex * ex), p.y / (ey * ey), p.z / (ez * ez));
-                    bestDir = bagBone.TransformDirection(g).normalized;
-                }
-            }
-        }
-        outDir = bestDir;
-        return best;
-    }
+		public float allow;
+	}
 
-    WorstResult Worst(int[] idx, bool skipBag, float extra)
-    {
-        WorstResult w = new WorstResult { pen = 0f, pt = Vector3.zero, nrm = Vector3.zero };
-        if (idx == null || idx.Length == 0) return w;
-        Refresh();
-        foreach (int vi in idx)
-        {
-            Vector3 tp = skin.VertexWorld(vi, skinMats);
-            float d = Penetrate(tp, skipBag, out Vector3 nrm, extra);
-            if (d > w.pen) { w.pen = d; w.pt = tp; w.nrm = nrm; }
-        }
-        return w;
-    }
+	private class Corr
+	{
+		public Quaternion c = Quaternion.identity;
 
-    // 把骨头绕着它的关节、在世界坐标里转一下
-    void Turn(Transform bone, Vector3 axisWorld, float angle)
-    {
-        if (bone.parent == null) return;
-        Quaternion pq = bone.parent.rotation;
-        Quaternion q = Quaternion.AngleAxis(angle * Mathf.Rad2Deg, axisWorld);
-        bone.localRotation = (Quaternion.Inverse(pq) * q * pq) * bone.localRotation;
-    }
+		public Quaternion baseQ = Quaternion.identity;
+	}
 
-    void Push(Transform bone, int[] idx, bool skipBag, float allow)
-    {
-        for (int it = 0; it < 8; it++)
-        {
-            WorstResult w = Worst(idx, skipBag, 0f);
-            w.pen -= allow;
-            if (w.pen < 0.001f) return;
-            Vector3 pivot = bone.position;
-            Vector3 d = w.pt - pivot;
-            float len = d.magnitude;
-            Vector3 axis = Vector3.Cross(d, w.nrm);
-            if (len < 1e-4f || axis.sqrMagnitude < 1e-10f) return;
-            axis.Normalize();
-            Turn(bone, axis, Mathf.Min(0.3f, (w.pen / len) * 1.05f));
-        }
-    }
+	private const int BANDS = 28;
 
-    void SetBone(Transform b, Quaternion c, Quaternion baseQ)
-    {
-        b.localRotation = c * baseQ;
-    }
+	private const float MARGIN = 0.006f;
 
-    // 每帧调用（姿态层之后）。boost：纠正量跟得快几倍（跳跃时手臂摆得快）
-    public void Solve(float dt, float boost = 1f)
-    {
-        if (!ok || dt <= 0f) return;
-        var jobs = new List<Job>();
-        if (bagBone != null && bagPts.Length > 0)
-            jobs.Add(new Job { bone = bagBone, idx = bagPts, skipBag = true, allow = bagBase + 0.004f });
-        if (limbs[0] != null)
-        {
-            jobs.Add(new Job { bone = limbs[0].bone, idx = Merge(limbs[0].idx, limbs[1]?.idx), skipBag = false, allow = 0f });
-            if (limbs[1] != null) jobs.Add(new Job { bone = limbs[1].bone, idx = limbs[1].idx, skipBag = false, allow = 0f });
-            jobs.Add(new Job { bone = limbs[2].bone, idx = Merge(limbs[2].idx, limbs[3]?.idx), skipBag = false, allow = 0f });
-            if (limbs[3] != null) jobs.Add(new Job { bone = limbs[3].bone, idx = limbs[3].idx, skipBag = false, allow = 0f });
-        }
+	private const float EAR_X = 0.31f;
 
-        // 1. 先套上上一帧的纠正量，从那里接着解
-        foreach (var job in jobs)
-        {
-            if (!corr.TryGetValue(job.bone, out var s))
-            {
-                s = new Corr();
-                corr[job.bone] = s;
-            }
-            s.baseQ = job.bone.localRotation;
-            job.bone.localRotation = s.c * job.bone.localRotation;
-        }
-        Refresh();
+	private const float RELAX = 5f;
 
-        // 2. 离表面够远就把纠正量松一点，再把还戳进去的推出来
-        float relax = 1f - Mathf.Exp(-dt * RELAX * boost);
-        Quaternion identity = Quaternion.identity;
-        foreach (var job in jobs)
-        {
-            var s = corr[job.bone];
-            if (relax > 0f && Angle(s.c, identity) > 0.006f)
-            {
-                Quaternion keep = s.c;
-                SetBone(job.bone, Quaternion.Slerp(s.c, identity, relax), s.baseQ);
-                if (Worst(job.idx, job.skipBag, HOLD).pen > job.allow)
-                {
-                    s.c = keep;
-                    SetBone(job.bone, keep, s.baseQ);
-                }
-            }
-            Push(job.bone, job.idx, job.skipBag, job.allow);
-        }
+	private const float HOLD = 0.012f;
 
-        // 3. 记下新的纠正量，但一帧最多变 MAX_RATE·dt，偶尔解跳了也只会平滑地过去
-        float stepDeg = MAX_RATE * boost * dt * Mathf.Rad2Deg;
-        foreach (var job in jobs)
-        {
-            var s = corr[job.bone];
-            Quaternion target = job.bone.localRotation * Quaternion.Inverse(s.baseQ);
-            s.c = Quaternion.RotateTowards(s.c, target, stepDeg);
-            job.bone.localRotation = s.c * s.baseQ;
-        }
-    }
+	private const float MAX_RATE = 6f;
 
-    static int[] Merge(int[] a, int[] b)
-    {
-        if (b == null || b.Length == 0) return a;
-        var r = new int[a.Length + b.Length];
-        System.Array.Copy(a, 0, r, 0, a.Length);
-        System.Array.Copy(b, 0, r, a.Length, b.Length);
-        return r;
-    }
+	private readonly EggboySkin skin;
 
-    static float Angle(Quaternion a, Quaternion b) => Quaternion.Angle(a, b);
+	private readonly EggboyBones bones;
 
-    // 肩关节球：部件拆分时手臂根部是个没封口的洞，转大角度会露出来
-    void AddShoulderJoints(Transform model)
-    {
-        if (bodyBone == null) return;
-        Material mat = JointMaterial();
-        foreach (string name in new[] { "armR", "armL" })
-        {
-            int id = skin.BoneIndex(name);
-            if (id < 0) continue;
-            Matrix4x4 armBind = skin.mesh.bindposes[id].inverse;
-            Vector3 pivot = armBind.MultiplyPoint3x4(Vector3.zero);
-            Vector3 dir = armBind.MultiplyVector(Vector3.up).normalized;
-            Vector3 centerMesh = pivot + dir * -0.012f;
-            Vector3 centerBody = skin.mesh.bindposes[bodyIdx].MultiplyPoint3x4(centerMesh);
+	private Transform bodyBone;
 
-            var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            ball.name = "joint-" + name;
-            Object.Destroy(ball.GetComponent<Collider>());
-            var mr = ball.GetComponent<MeshRenderer>();
-            if (mat != null) mr.sharedMaterial = mat;
-            ball.transform.SetParent(bodyBone, false);
-            ball.transform.localPosition = centerBody;
-            ball.transform.localScale = Vector3.one * 0.096f * 2f;
-        }
-    }
+	private Transform bagBone;
 
-    static Material JointMaterial()
-    {
-        Shader sh = GraphicsSettings.currentRenderPipeline != null
-            ? Shader.Find("Universal Render Pipeline/Lit")
-            : Shader.Find("Standard");
-        if (sh == null) sh = Shader.Find("Standard");
-        if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
-        if (sh == null) return null;
-        var m = new Material(sh);
-        m.name = "joint";
-        m.color = new Color32(0x4b, 0x4a, 0x50, 255);
-        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.42f);
-        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.42f);
-        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0.55f);
-        return m;
-    }
+	private int bodyIdx = -1;
 
-    // 测量用：当前各部位最深戳进去多少（米），不纠正
-    public string Measure()
-    {
-        if (!ok) return "antiClip not ready";
-        Refresh();
-        return $"armR {Worst(limbs[0].idx, false, 0f).pen:F4} handR {Worst(limbs[1].idx, false, 0f).pen:F4} "
-             + $"armL {Worst(limbs[2].idx, false, 0f).pen:F4} handL {Worst(limbs[3].idx, false, 0f).pen:F4}";
-    }
+	private int bagIdx = -1;
+
+	private float y0;
+
+	private float y1;
+
+	private readonly float[] rx = new float[28];
+
+	private readonly float[] rz = new float[28];
+
+	private readonly List<Ear> ears = new List<Ear>();
+
+	private BagShape? bag;
+
+	private readonly Limb[] limbs = new Limb[4];
+
+	private int[] bagPts = new int[0];
+
+	private float bagBase;
+
+	public readonly bool ok;
+
+	private readonly Dictionary<Transform, Corr> corr = new Dictionary<Transform, Corr>();
+
+	private Matrix4x4[] skinMats;
+
+	public EggboyAntiClip(EggboySkin skin, EggboyBones bones, Transform model)
+	{
+		this.skin = skin;
+		this.bones = bones;
+		if (skin == null || skin.renderer == null || skin.mesh == null)
+		{
+			ok = false;
+			return;
+		}
+		bodyIdx = skin.BoneIndex("body");
+		bagIdx = skin.BoneIndex("bag");
+		bodyBone = ((bodyIdx >= 0) ? skin.renderer.bones[bodyIdx] : null);
+		bagBone = ((bagIdx >= 0) ? skin.renderer.bones[bagIdx] : null);
+		List<int> list = new List<int>();
+		Matrix4x4 matrix4x = ((bodyIdx >= 0) ? skin.mesh.bindposes[bodyIdx] : Matrix4x4.identity);
+		int[] shellVerts = skin.shellVerts;
+		foreach (int num in shellVerts)
+		{
+			if (bodyIdx >= 0 && skin.boneOfVertex[num] == bodyIdx && Mathf.Abs(matrix4x.MultiplyPoint3x4(skin.verts[num]).x) < 0.31f)
+			{
+				list.Add(num);
+			}
+		}
+		if (list.Count > 0)
+		{
+			y0 = float.PositiveInfinity;
+			y1 = float.NegativeInfinity;
+			foreach (int item in list)
+			{
+				Vector3 vector = matrix4x.MultiplyPoint3x4(skin.verts[item]);
+				y0 = Mathf.Min(y0, vector.y);
+				y1 = Mathf.Max(y1, vector.y);
+			}
+			foreach (int item2 in list)
+			{
+				Vector3 vector2 = matrix4x.MultiplyPoint3x4(skin.verts[item2]);
+				int num2 = Band(vector2.y);
+				rx[num2] = Mathf.Max(rx[num2], Mathf.Abs(vector2.x));
+				rz[num2] = Mathf.Max(rz[num2], Mathf.Abs(vector2.z));
+			}
+		}
+		shellVerts = new int[2] { -1, 1 };
+		foreach (int num3 in shellVerts)
+		{
+			List<int> list2 = new List<int>();
+			int[] shellVerts2 = skin.shellVerts;
+			foreach (int num4 in shellVerts2)
+			{
+				if (bodyIdx >= 0 && skin.boneOfVertex[num4] == bodyIdx && matrix4x.MultiplyPoint3x4(skin.verts[num4]).x * (float)num3 >= 0.31f)
+				{
+					list2.Add(num4);
+				}
+			}
+			if (list2.Count == 0)
+			{
+				continue;
+			}
+			Vector3 zero = Vector3.zero;
+			foreach (int item3 in list2)
+			{
+				zero += matrix4x.MultiplyPoint3x4(skin.verts[item3]);
+			}
+			zero /= (float)list2.Count;
+			float num5 = 0f;
+			foreach (int item4 in list2)
+			{
+				num5 = Mathf.Max(num5, Vector3.Distance(matrix4x.MultiplyPoint3x4(skin.verts[item4]), zero));
+			}
+			ears.Add(new Ear
+			{
+				c = zero,
+				r = num5 * 0.85f
+			});
+		}
+		List<int> list3 = new List<int>();
+		Matrix4x4 matrix4x2 = ((bagIdx >= 0) ? skin.mesh.bindposes[bagIdx] : Matrix4x4.identity);
+		if (bagIdx >= 0)
+		{
+			shellVerts = skin.leatherVerts;
+			foreach (int num6 in shellVerts)
+			{
+				if (skin.boneOfVertex[num6] == bagIdx)
+				{
+					list3.Add(num6);
+				}
+			}
+		}
+		if (list3.Count > 0)
+		{
+			Vector3 vector3 = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
+			Vector3 vector4 = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+			foreach (int item5 in list3)
+			{
+				Vector3 rhs = matrix4x2.MultiplyPoint3x4(skin.verts[item5]);
+				vector3 = Vector3.Min(vector3, rhs);
+				vector4 = Vector3.Max(vector4, rhs);
+			}
+			bag = new BagShape
+			{
+				c = (vector3 + vector4) * 0.5f,
+				r = (vector4 - vector3) * 0.45f
+			};
+			List<int> list4 = new List<int>();
+			for (int k = 0; k < list3.Count; k++)
+			{
+				if (k % 6 == 0)
+				{
+					list4.Add(list3[k]);
+				}
+			}
+			bagPts = list4.ToArray();
+		}
+		limbs[0] = LimbOf("armR", arm: true, skin);
+		limbs[1] = LimbOf("handR", arm: false, skin);
+		limbs[2] = LimbOf("armL", arm: true, skin);
+		limbs[3] = LimbOf("handL", arm: false, skin);
+		ok = bodyIdx >= 0 && bagIdx >= 0 && list.Count > 100 && limbs[0] != null && limbs[0].idx.Length > 5;
+		if (ok && bag.HasValue)
+		{
+			Refresh();
+			bagBase = Worst(bagPts, skipBag: true, 0f).pen;
+		}
+		if (ok)
+		{
+			AddShoulderJoints(model);
+		}
+	}
+
+	private Limb LimbOf(string name, bool arm, EggboySkin skin)
+	{
+		int num = skin.BoneIndex(name);
+		if (num < 0)
+		{
+			return null;
+		}
+		List<int> list = new List<int>();
+		int[] shellVerts = skin.shellVerts;
+		foreach (int num2 in shellVerts)
+		{
+			if (skin.boneOfVertex[num2] == num)
+			{
+				list.Add(num2);
+			}
+		}
+		if (arm)
+		{
+			Vector3 sh = skin.mesh.bindposes[num].inverse.MultiplyPoint3x4(Vector3.zero);
+			list.RemoveAll((int vi) => Vector3.Distance(skin.verts[vi], sh) <= 0.1f);
+		}
+		int num3 = Mathf.Max(1, list.Count / 70);
+		List<int> list2 = new List<int>();
+		for (int j = 0; j < list.Count; j++)
+		{
+			if (j % num3 == 0)
+			{
+				list2.Add(list[j]);
+			}
+		}
+		return new Limb
+		{
+			bone = skin.renderer.bones[num],
+			idx = list2.ToArray()
+		};
+	}
+
+	private int Band(float y)
+	{
+		float num = Mathf.Clamp01((y - y0) / Mathf.Max(1E-06f, y1 - y0));
+		return Mathf.Min(27, Mathf.FloorToInt(num * 28f));
+	}
+
+	private void Refresh()
+	{
+		if (skin != null)
+		{
+			skinMats = skin.SkinMatrices();
+		}
+	}
+
+	private float Penetrate(Vector3 pw, bool skipBag, out Vector3 outDir, float extra = 0f)
+	{
+		Vector3 vector = Vector3.zero;
+		float num = 0f;
+		Vector3 vector2 = bodyBone.InverseTransformPoint(pw);
+		if (vector2.y > y0 && vector2.y < y1)
+		{
+			int num2 = Band(vector2.y);
+			float num3 = rx[num2] + 0.006f + extra;
+			float num4 = rz[num2] + 0.006f + extra;
+			float num5 = vector2.x / num3 * (vector2.x / num3) + vector2.z / num4 * (vector2.z / num4);
+			if (num5 < 1f)
+			{
+				float num6 = (1f - Mathf.Sqrt(num5)) * Mathf.Min(num3, num4);
+				if (num6 > num)
+				{
+					num = num6;
+					Vector3 direction = new Vector3(vector2.x / (num3 * num3), 0f, vector2.z / (num4 * num4));
+					vector = bodyBone.TransformDirection(direction).normalized;
+				}
+			}
+		}
+		foreach (Ear ear in ears)
+		{
+			float num7 = ear.r + 0.006f + extra - Vector3.Distance(vector2, ear.c);
+			if (num7 > num)
+			{
+				num = num7;
+				vector = bodyBone.TransformDirection(vector2 - ear.c).normalized;
+			}
+		}
+		if (!skipBag && bag.HasValue && bagBone != null)
+		{
+			vector2 = bagBone.InverseTransformPoint(pw) - bag.Value.c;
+			float num8 = bag.Value.r.x + extra;
+			float num9 = bag.Value.r.y + extra;
+			float num10 = bag.Value.r.z + extra;
+			float num11 = vector2.x / num8 * (vector2.x / num8) + vector2.y / num9 * (vector2.y / num9) + vector2.z / num10 * (vector2.z / num10);
+			if (num11 < 1f)
+			{
+				float num12 = (1f - Mathf.Sqrt(num11)) * Mathf.Min(num8, Mathf.Min(num9, num10));
+				if (num12 > num)
+				{
+					num = num12;
+					Vector3 direction2 = new Vector3(vector2.x / (num8 * num8), vector2.y / (num9 * num9), vector2.z / (num10 * num10));
+					vector = bagBone.TransformDirection(direction2).normalized;
+				}
+			}
+		}
+		outDir = vector;
+		return num;
+	}
+
+	private WorstResult Worst(int[] idx, bool skipBag, float extra)
+	{
+		WorstResult worstResult = default(WorstResult);
+		worstResult.pen = 0f;
+		worstResult.pt = Vector3.zero;
+		worstResult.nrm = Vector3.zero;
+		WorstResult result = worstResult;
+		if (idx == null || idx.Length == 0)
+		{
+			return result;
+		}
+		Refresh();
+		foreach (int vertex in idx)
+		{
+			Vector3 vector = skin.VertexWorld(vertex, skinMats);
+			Vector3 outDir;
+			float num = Penetrate(vector, skipBag, out outDir, extra);
+			if (num > result.pen)
+			{
+				result.pen = num;
+				result.pt = vector;
+				result.nrm = outDir;
+			}
+		}
+		return result;
+	}
+
+	private void Turn(Transform bone, Vector3 axisWorld, float angle)
+	{
+		if (!(bone.parent == null))
+		{
+			Quaternion rotation = bone.parent.rotation;
+			Quaternion quaternion = Quaternion.AngleAxis(angle * 57.29578f, axisWorld);
+			bone.localRotation = Quaternion.Inverse(rotation) * quaternion * rotation * bone.localRotation;
+		}
+	}
+
+	private void Push(Transform bone, int[] idx, bool skipBag, float allow)
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			WorstResult worstResult = Worst(idx, skipBag, 0f);
+			worstResult.pen -= allow;
+			if (worstResult.pen < 0.001f)
+			{
+				break;
+			}
+			Vector3 position = bone.position;
+			Vector3 lhs = worstResult.pt - position;
+			float magnitude = lhs.magnitude;
+			Vector3 axisWorld = Vector3.Cross(lhs, worstResult.nrm);
+			if (magnitude < 0.0001f || axisWorld.sqrMagnitude < 1E-10f)
+			{
+				break;
+			}
+			axisWorld.Normalize();
+			Turn(bone, axisWorld, Mathf.Min(0.3f, worstResult.pen / magnitude * 1.05f));
+		}
+	}
+
+	private void SetBone(Transform b, Quaternion c, Quaternion baseQ)
+	{
+		b.localRotation = c * baseQ;
+	}
+
+	public void Solve(float dt, float boost = 1f)
+	{
+		if (!ok || dt <= 0f)
+		{
+			return;
+		}
+		List<Job> list = new List<Job>();
+		if (bagBone != null && bagPts.Length != 0)
+		{
+			list.Add(new Job
+			{
+				bone = bagBone,
+				idx = bagPts,
+				skipBag = true,
+				allow = bagBase + 0.004f
+			});
+		}
+		if (limbs[0] != null)
+		{
+			list.Add(new Job
+			{
+				bone = limbs[0].bone,
+				idx = Merge(limbs[0].idx, limbs[1]?.idx),
+				skipBag = false,
+				allow = 0f
+			});
+			if (limbs[1] != null)
+			{
+				list.Add(new Job
+				{
+					bone = limbs[1].bone,
+					idx = limbs[1].idx,
+					skipBag = false,
+					allow = 0f
+				});
+			}
+			list.Add(new Job
+			{
+				bone = limbs[2].bone,
+				idx = Merge(limbs[2].idx, limbs[3]?.idx),
+				skipBag = false,
+				allow = 0f
+			});
+			if (limbs[3] != null)
+			{
+				list.Add(new Job
+				{
+					bone = limbs[3].bone,
+					idx = limbs[3].idx,
+					skipBag = false,
+					allow = 0f
+				});
+			}
+		}
+		foreach (Job item in list)
+		{
+			if (!this.corr.TryGetValue(item.bone, out var value))
+			{
+				value = new Corr();
+				this.corr[item.bone] = value;
+			}
+			value.baseQ = item.bone.localRotation;
+			item.bone.localRotation = value.c * item.bone.localRotation;
+		}
+		Refresh();
+		float num = 1f - Mathf.Exp((0f - dt) * 5f * boost);
+		Quaternion identity = Quaternion.identity;
+		foreach (Job item2 in list)
+		{
+			Corr corr = this.corr[item2.bone];
+			if (num > 0f && Angle(corr.c, identity) > 0.006f)
+			{
+				Quaternion c = corr.c;
+				SetBone(item2.bone, Quaternion.Slerp(corr.c, identity, num), corr.baseQ);
+				if (Worst(item2.idx, item2.skipBag, 0.012f).pen > item2.allow)
+				{
+					corr.c = c;
+					SetBone(item2.bone, c, corr.baseQ);
+				}
+			}
+			Push(item2.bone, item2.idx, item2.skipBag, item2.allow);
+		}
+		float maxDegreesDelta = 6f * boost * dt * 57.29578f;
+		foreach (Job item3 in list)
+		{
+			Corr corr2 = this.corr[item3.bone];
+			Quaternion to = item3.bone.localRotation * Quaternion.Inverse(corr2.baseQ);
+			corr2.c = Quaternion.RotateTowards(corr2.c, to, maxDegreesDelta);
+			item3.bone.localRotation = corr2.c * corr2.baseQ;
+		}
+	}
+
+	private static int[] Merge(int[] a, int[] b)
+	{
+		if (b == null || b.Length == 0)
+		{
+			return a;
+		}
+		int[] array = new int[a.Length + b.Length];
+		Array.Copy(a, 0, array, 0, a.Length);
+		Array.Copy(b, 0, array, a.Length, b.Length);
+		return array;
+	}
+
+	private static float Angle(Quaternion a, Quaternion b)
+	{
+		return Quaternion.Angle(a, b);
+	}
+
+	private void AddShoulderJoints(Transform model)
+	{
+		if (bodyBone == null)
+		{
+			return;
+		}
+		Material material = JointMaterial();
+		string[] array = new string[2] { "armR", "armL" };
+		foreach (string text in array)
+		{
+			int num = skin.BoneIndex(text);
+			if (num >= 0)
+			{
+				Matrix4x4 inverse = skin.mesh.bindposes[num].inverse;
+				Vector3 vector = inverse.MultiplyPoint3x4(Vector3.zero);
+				Vector3 normalized = inverse.MultiplyVector(Vector3.up).normalized;
+				Vector3 point = vector + normalized * -0.012f;
+				Vector3 localPosition = skin.mesh.bindposes[bodyIdx].MultiplyPoint3x4(point);
+				GameObject gameObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				gameObject.name = "joint-" + text;
+				UnityEngine.Object.Destroy(gameObject.GetComponent<Collider>());
+				MeshRenderer component = gameObject.GetComponent<MeshRenderer>();
+				if (material != null)
+				{
+					component.sharedMaterial = material;
+				}
+				gameObject.transform.SetParent(bodyBone, worldPositionStays: false);
+				gameObject.transform.localPosition = localPosition;
+				gameObject.transform.localScale = Vector3.one * 0.096f * 2f;
+			}
+		}
+	}
+
+	private static Material JointMaterial()
+	{
+		Shader shader = ((GraphicsSettings.currentRenderPipeline != null) ? Shader.Find("Universal Render Pipeline/Lit") : Shader.Find("Standard"));
+		if (shader == null)
+		{
+			shader = Shader.Find("Standard");
+		}
+		if (shader == null)
+		{
+			shader = Shader.Find("Universal Render Pipeline/Lit");
+		}
+		if (shader == null)
+		{
+			return null;
+		}
+		Material material = new Material(shader);
+		material.name = "joint";
+		material.color = new Color32(75, 74, 80, byte.MaxValue);
+		if (material.HasProperty("_Smoothness"))
+		{
+			material.SetFloat("_Smoothness", 0.42f);
+		}
+		if (material.HasProperty("_Glossiness"))
+		{
+			material.SetFloat("_Glossiness", 0.42f);
+		}
+		if (material.HasProperty("_Metallic"))
+		{
+			material.SetFloat("_Metallic", 0.55f);
+		}
+		return material;
+	}
+
+	public string Measure()
+	{
+		if (!ok)
+		{
+			return "antiClip not ready";
+		}
+		Refresh();
+		return $"armR {Worst(limbs[0].idx, skipBag: false, 0f).pen:F4} handR {Worst(limbs[1].idx, skipBag: false, 0f).pen:F4} " + $"armL {Worst(limbs[2].idx, skipBag: false, 0f).pen:F4} handL {Worst(limbs[3].idx, skipBag: false, 0f).pen:F4}";
+	}
 }

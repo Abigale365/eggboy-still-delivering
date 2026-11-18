@@ -9,8 +9,9 @@ public sealed partial class StoryDirector
         StopAllCoroutines();
         ui.CloseLetter();
         if (letterLock != null) gate.Release(letterLock);
+        gate?.ReleaseForFilming();
         letterLock = null; readingSchool = false; signalActive = false;
-        cutscene = false; climbing = false;
+        cutscene = false; climbing = false; Ended = false;
         if (signalCard != null) signalCard.gameObject.SetActive(false);
         if (fade != null) fade.color = new Color(0, 0, 0, 0);
         arrivedStep = "";
@@ -24,8 +25,20 @@ public sealed partial class StoryDirector
         var sky = FindObjectOfType<SkyDimmer>();
         if (sky != null) sky.enabled = false;
         TownLighting.SetFilmingPhase(stage == 9 ? 1f : 0f);
+        if (stage == 10 && sky != null) { sky.SetDawnInstant(); sky.Rebase(); }
         if (water != null) water.SetInstant(WaterLevel.LevelYs[stage >= 8 ? 2 : stage >= 7 ? 1 : 0]);
+        if (island.endingDesk != null) island.endingDesk.transform.position = EndingData.Point(EndingData.Load().desk);
         Vector3 at, target;
+        if (stage == 10)
+        {
+            State.flags.Add("dawn_shown");
+            target = MarkerPos("P_06", new Vector3(-24.7f, 6.5f, 10.8f));
+            target.y = island.GroundAt(target.x, target.z);
+            if (island.endingDesk != null) island.endingDesk.transform.position = target;
+            at = target + new Vector3(0, 0, -1.1f);
+            State.step = "E1_read";
+        }
+        else
         if (stage == 5)
         {
             var house = GameObject.Find("B1_post_office_visual");
@@ -49,7 +62,7 @@ public sealed partial class StoryDirector
         else if (stage == 8)
         {
             target = FindObjectOfType<WorldMechanismDirector>().WinchPosition;
-            at = target + new Vector3(-1f, 0, -1f); State.step = "L0_cross";
+            at = target; State.step = "L0_cross";
             FindObjectOfType<WorldMechanismDirector>().DebugResetCrossing();
         }
         else
@@ -69,6 +82,13 @@ public sealed partial class StoryDirector
         player.locked = false; player.FaceTowards(target);
         var chase = FindObjectOfType<ChaseCamera>();
         if (chase != null) { chase.enabled = true; chase.SnapBehind(at, player.yaw); }
+        var filmingCamera = Camera.main;
+        if (stage != 9 && filmingCamera != null)
+        {
+            filmingCamera.transform.position = at + new Vector3(2f, 2.2f, -4f);
+            filmingCamera.transform.LookAt(at + Vector3.up * .7f);
+            filmingCamera.fieldOfView = 48f;
+        }
         ShowCarriedModel(null); ApplyStepGoal();
         var oven = FindObjectOfType<BakeryEffects>();
         if (stage >= 6 && oven != null) oven.Light();
@@ -77,9 +97,35 @@ public sealed partial class StoryDirector
         if (dog != null) { if (stage >= 8) dog.Follow(); else dog.Hide(); }
         if (stage == 9)
         {
+            FindObjectOfType<FlashlightReply>()?.ResetForFilming();
             player.locked = true; // 旋钮 A/D 只转灯，不让邮差沿塔顶平台横移。
             StartCoroutine(InteractiveLighthouseRoutine(beacon, FindObjectOfType<FlashlightReply>()));
         }
         Debug.Log("FILMING_STAGE F" + stage + " at=" + at + " lamp=" + target);
     }
+    public void PrepareSimpleFilmingShot(int shot)
+    {
+        if (shot == 1)
+        {
+            State.seenMemories.Remove("scale_detail");
+            ObjectInspectModal.Open("scale", "老台秤", "海盐霜下藏着三枚黄铜暗扣。", State, store, player, ui, gate);
+            ObjectInspectModal.PrepareFilmingBack();
+        }
+        else if (shot == 3)
+        {
+            Vector3 waiting = player.transform.position;
+            waiting.y = Mathf.Max(waiting.y, WaterLevel.StaticY + .2f);
+            player.transform.position = waiting;
+            player.locked = true;
+            var print = FindObjectOfType<PerspectivePrintSystem>();
+            print?.PrepareFilmingBridge();
+        }
+        else if (shot == 4)
+        {
+            var hardware = HardwareAndSensorHub.Instance;
+            if (hardware != null && !hardware.CamOpen) hardware.ToggleBuiltInWebcam();
+        }
+        else if (shot == 5) ReadEndingLetter();
+    }
+
 }

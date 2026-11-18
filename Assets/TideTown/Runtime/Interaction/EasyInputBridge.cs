@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Scripting;
 
+[DefaultExecutionOrder(-9999)]
 public sealed class EasyInputBridge : MonoBehaviour
 {
     static readonly Dictionary<KeyCode, int> pressed = new Dictionary<KeyCode, int>();
@@ -20,6 +21,46 @@ public sealed class EasyInputBridge : MonoBehaviour
     void OnApplicationFocus(bool focused)
     {
         if (!focused) ResetInput("");
+    }
+
+    static bool IsBoardPrimaryKey(KeyCode key)
+    {
+        return key == KeyCode.W || key == KeyCode.A || key == KeyCode.S || key == KeyCode.D || key == KeyCode.E;
+    }
+
+    void Update()
+    {
+        if (EasyInputReportDecoder.IsFnHeld)
+        {
+            if (Input.GetKeyDown(KeyCode.W)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s1"); }
+            if (Input.GetKeyDown(KeyCode.A)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s2"); }
+            if (Input.GetKeyDown(KeyCode.S)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s3"); }
+            if (Input.GetKeyDown(KeyCode.D)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s4"); }
+            if (Input.GetKeyDown(KeyCode.E)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s5"); }
+            return;
+        }
+
+        if (WoodenMechanismPuzzleModal.IsOpen)
+        {
+            if (Input.GetKeyDown(KeyCode.W)) HandlePuzzle("s1");
+            if (Input.GetKeyDown(KeyCode.A)) HandlePuzzle("s2");
+            if (Input.GetKeyDown(KeyCode.S)) HandlePuzzle("s3");
+            if (Input.GetKeyDown(KeyCode.E)) HandlePuzzle("s5");
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.W)) ExtendHold(KeyCode.W, 0.14f);
+        if (Input.GetKeyDown(KeyCode.A)) ExtendHold(KeyCode.A, 0.14f);
+        if (Input.GetKeyDown(KeyCode.S)) ExtendHold(KeyCode.S, 0.14f);
+        if (Input.GetKeyDown(KeyCode.D)) ExtendHold(KeyCode.D, 0.14f);
+        if (Input.GetKeyDown(KeyCode.E)) ExtendHold(KeyCode.E, 1.0f);
+    }
+
+    static void ExtendHold(KeyCode key, float duration)
+    {
+        float until = Time.unscaledTime + duration;
+        if (!heldUntil.TryGetValue(key, out float prev) || until > prev)
+            heldUntil[key] = until;
     }
 
     [Preserve]
@@ -84,13 +125,15 @@ public sealed class EasyInputBridge : MonoBehaviour
 
     public static bool Down(KeyCode key)
     {
-        return Input.GetKeyDown(key) ||
+        bool rawDown = !(EasyInputReportDecoder.IsFnHeld && IsBoardPrimaryKey(key)) && Input.GetKeyDown(key);
+        return rawDown ||
             (pressed.TryGetValue(key, out int frame) && frame == Time.frameCount);
     }
 
     public static bool Held(KeyCode key)
     {
-        return Input.GetKey(key) ||
+        bool rawHeld = !(EasyInputReportDecoder.IsFnHeld && IsBoardPrimaryKey(key)) && Input.GetKey(key);
+        return rawHeld ||
             (heldUntil.TryGetValue(key, out float time) && time > Time.unscaledTime);
     }
 }

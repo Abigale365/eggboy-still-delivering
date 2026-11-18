@@ -1,9 +1,3 @@
-// WP-08 验收（-wateraudit）：
-//   1. 五档水位各从 PreviewCam 截一张图（shots/water_L0..L4.png）
-//   2. L2 木箱区用真实 Move 走过去（不跳），全程不进水
-//   3. 掉进水里后回到最近的安全点
-//   4. 4 秒涨水过场：终点正确、单调上涨、镜头有抬高
-//   5. 水面着色器在包里能 Shader.Find 到（WebGL 不丢的同一套判定）
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -13,403 +7,564 @@ using UnityEngine;
 
 public class WaterAudit : MonoBehaviour
 {
-    GameBootstrap boot;
-    WaterLevel water;
-    EggboyPlayer player;
-    IslandWorld world;
-    SafePoints safe;
-    PrototypeGame game;
-    Camera shotCam;
-    Transform hero;
+	[Serializable]
+	private class RoutePt
+	{
+		public string id;
 
-    string status = "running", reason = "";
-    readonly StringBuilder levels = new StringBuilder();
-    string crateJson = "{}";
-    string rescueJson = "{}";
-    string fallJson = "{}";
-    string riseJson = "{}";
-    string shaderJson = "{}";
-    float startedAt;
+		public bool stop;
 
-    public void Begin(GameBootstrap b) { boot = b; StartCoroutine(Run()); }
+		public float x;
 
-    IEnumerator Run()
-    {
-        yield return null;
-        startedAt = Time.realtimeSinceStartup;
-        water = FindObjectOfType<WaterLevel>();
-        player = FindObjectOfType<EggboyPlayer>();
-        world = FindObjectOfType<IslandWorld>();
-        safe = FindObjectOfType<SafePoints>();
-        game = FindObjectOfType<PrototypeGame>();
+		public float z;
+	}
 
-        if (water == null || player == null || world == null)
-        {
-            Fail("setup_failed", "缺 WaterLevel / EggboyPlayer / IslandWorld");
-            yield break;
-        }
+	[Serializable]
+	private class RouteDoc
+	{
+		public RoutePt[] route;
+	}
 
-        // 和 RouteAudit2 一样，接管角色，避免键盘输入和审计的 Move 叠加
-        if (game != null) game.enabled = false;
-        foreach (var c in FindObjectsOfType<Canvas>()) c.enabled = false;
-        var heroGO = GameObject.Find("EGGBOY");
-        if (heroGO != null) hero = heroGO.transform;
+	private GameBootstrap boot;
 
-        shaderJson = ShaderCheck();
-        if (status == "running") yield return Levels();
-        if (status == "running") yield return Rise();
-        if (status == "running") yield return CrateCross();
-        if (status == "running") yield return Rescue();
-        if (status == "running") yield return Fall();
+	private WaterLevel water;
 
-        // 收尾：回到 L0
-        water.SetInstant(WaterLevel.LevelYs[0]);
-        if (status == "running") status = "passed";
-        Finish();
-    }
+	private EggboyPlayer player;
 
-    // ---------- 五档截图 ----------
+	private IslandWorld world;
 
-    IEnumerator Levels()
-    {
-        var def = ShotTool.FindCamera("preview");
-        var main = Camera.main;
-        var go = new GameObject("WaterShotCam");
-        shotCam = go.AddComponent<Camera>();
-        if (main != null) { shotCam.CopyFrom(main); main.enabled = false; }
-        if (def != null)
-        {
-            shotCam.transform.SetPositionAndRotation(new Vector3(def.pos[0], def.pos[1], def.pos[2]),
-                Quaternion.Euler(def.euler[0], def.euler[1], def.euler[2]));
-            shotCam.fieldOfView = def.fov;
-            shotCam.nearClipPlane = 1f;
-            shotCam.farClipPlane = 800f;
-        }
-        if (hero != null) hero.gameObject.SetActive(false);
+	private SafePoints safe;
 
-        string dir = Path.Combine(Application.dataPath, "..", "shots");
-        Directory.CreateDirectory(dir);
-        int w = def != null && def.width > 0 ? def.width : 1774;
-        int h = def != null && def.height > 0 ? def.height : 887;
+	private PrototypeGame game;
 
-        for (int i = 0; i < WaterLevel.LevelNames.Length; i++)
-        {
-            water.SetInstant(WaterLevel.LevelYs[i]);
-            yield return null;
-            yield return null;
-            string file = "water_" + WaterLevel.LevelNames[i] + ".png";
-            yield return ShotTool.Capture(shotCam, w, h, Path.Combine(dir, file));
-            levels.Append(levels.Length == 0 ? "" : ",")
-                  .Append("[\"").Append(WaterLevel.LevelNames[i]).Append("\",")
-                  .Append(WaterLevel.LevelYs[i].ToString("F2")).Append(",\"").Append(file).Append("\"]");
-        }
+	private Camera shotCam;
 
-        if (hero != null) hero.gameObject.SetActive(true);
-        if (shotCam != null) Destroy(shotCam.gameObject);
-        if (main != null) main.enabled = true;
-        water.SetInstant(WaterLevel.LevelYs[2]);
-        yield return null;
-    }
+	private Transform hero;
 
-    // ---------- 4 秒涨水 ----------
+	private string status = "running";
 
-    IEnumerator Rise()
-    {
-        water.SetInstant(WaterLevel.LevelYs[2]);
-        yield return null;
-        var chase = FindObjectOfType<ChaseCamera>();
-        float from = water.Y;
-        water.Set(WaterLevel.LevelYs[3], 4f);
-        float maxLift = 0f;
-        float lastY = from;
-        bool monotonic = true;
-        int samples = 0;
-        float t0 = Time.realtimeSinceStartup;
-        while (Time.realtimeSinceStartup - t0 < 4.6f)
-        {
-            yield return new WaitForSecondsRealtime(0.2f);
-            samples++;
-            if (water.Y < lastY - 1e-3f) monotonic = false;
-            lastY = water.Y;
-            if (chase != null) maxLift = Mathf.Max(maxLift, chase.extraLift);
-            if (Time.realtimeSinceStartup - t0 > 4.1f && Mathf.Abs(water.Y - WaterLevel.LevelYs[3]) < 0.02f) break;
-        }
-        float seconds = Time.realtimeSinceStartup - t0;
-        bool ok = monotonic && Mathf.Abs(water.Y - WaterLevel.LevelYs[3]) < 0.02f && seconds <= 4.9f && maxLift > 0.3f;
-        riseJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"from\":" + from.ToString("F2") + ",\"to\":" + water.Y.ToString("F2") +
-                   ",\"seconds\":" + seconds.ToString("F2") + ",\"samples\":" + samples +
-                   ",\"monotonic\":" + (monotonic ? "true" : "false") + ",\"maxCameraLift\":" + maxLift.ToString("F2") + "}";
-        if (!ok) Fail("rise_failed", "涨水过场不对：" + riseJson);
-    }
+	private string reason = "";
 
-    // ---------- 木箱区 ----------
+	private readonly StringBuilder levels = new StringBuilder();
 
-    static int CrateIndex(string name)
-    {
-        int us = name.LastIndexOf('_');
-        return us >= 0 && int.TryParse(name.Substring(us + 1), out int n) ? n : 0;
-    }
+	private string crateJson = "{}";
 
-    IEnumerator CrateCross()
-    {
-        water.SetInstant(WaterLevel.LevelYs[2]);
-        yield return null;
-        yield return null;
+	private string rescueJson = "{}";
 
-        // 2026-11-07：按场景里生成的浮箱算起点和方向，换地图不用改坐标
-        var crates = new List<FloatingCrate>(FindObjectsOfType<FloatingCrate>());
-        if (crates.Count < 2) { Fail("crate_failed", "场景里浮箱少于 2 个"); yield break; }
-        // 按名字里的编号排（Crate_10 不能排在 Crate_2 前面）
-        crates.Sort((a, b) => CrateIndex(a.name).CompareTo(CrateIndex(b.name)));
-        var c0 = crates[0].transform.position; var c1 = crates[crates.Count - 1].transform.position;
-        var firstDir = new Vector3(crates[1].transform.position.x - c0.x, 0f, crates[1].transform.position.z - c0.z).normalized;
-        var c1prev = crates[crates.Count - 2].transform.position;
-        var dir = new Vector3(c1.x - c1prev.x, 0f, c1.z - c1prev.z).normalized;
-        var start = c0 - firstDir * 1.4f;
-        start.y = world.GroundAt(start.x, start.z) + 0.01f;
+	private string fallJson = "{}";
 
-        // 2026-11-08：箱子沿弯路摆成一条弧，原来从起点直线瞄"最后一个箱子再往前 0.3 m"，会抄近道切到路沿外、
-        // 按帧时间不同时好时坏地卡在 (12.91,-13.57)。改成像玩家一样一个箱子一个箱子踩过去，
-        // 过了箱子以后沿路线走到船棚门口（route.json 里 LOW 之后、直到 24 的路径点）
-        var targets = new List<Vector3>();
-        for (int ci = 1; ci < crates.Count; ci++) targets.Add(crates[ci].transform.position);
-        targets.Add(c1 + dir * 0.3f);
-        var rdoc = JsonUtility.FromJson<RouteDoc>(Resources.Load<TextAsset>("World/route").text);
-        int li = Array.FindIndex(rdoc.route, r => r.stop && r.id == "LOW");
-        for (int i = li + 1; li >= 0 && i < rdoc.route.Length; i++)
-        {
-            targets.Add(new Vector3(rdoc.route[i].x, 0f, rdoc.route[i].z));
-            if (rdoc.route[i].stop) break;
-        }
-        player.transform.position = start;
-        player.vel = Vector3.zero;
-        player.grounded = true;
-        yield return null;
-        yield return null;
+	private string riseJson = "{}";
 
-        float t0 = Time.realtimeSinceStartup;
-        int waterFrames = 0;
-        int frames = 0;
-        int k = 0;
-        float maxY = start.y;
-        float best = float.MaxValue, bestAt = t0;
-        while (Time.realtimeSinceStartup - t0 < 20f && k < targets.Count)
-        {
-            var p = player.transform.position;
-            var to = new Vector3(targets[k].x - p.x, 0f, targets[k].z - p.z);
-            float dist = to.magnitude;
-            if (dist < 0.5f) { k++; best = float.MaxValue; bestAt = Time.realtimeSinceStartup; continue; }
-            // 2026-11-08："最后一个箱子再往前 0.3 m" 这个点跟着浮箱晃，偶尔落在路沿外面，人贴着路沿到不了 0.5 m 内，
-            // 测试就原地顶 20 秒失败（两次都停在 12.91,-13.57）。和剧情审计一样：1.2 m 内、0.6 秒没再靠近，就算到了
-            if (dist < best - 0.01f) { best = dist; bestAt = Time.realtimeSinceStartup; }
-            else if (dist < 1.2f && Time.realtimeSinceStartup - bestAt > 0.6f) { k++; best = float.MaxValue; bestAt = Time.realtimeSinceStartup; continue; }
-            if (p.y < water.Y - 0.05f) waterFrames++;
-            maxY = Mathf.Max(maxY, p.y);
-            to.Normalize();
-            player.Move(Mathf.Min(0.05f, Time.deltaTime), to.x, to.z, false, false);
-            frames++;
-            yield return null;
-        }
+	private string shaderJson = "{}";
 
-        var end = player.transform.position;
-        float seconds = Time.realtimeSinceStartup - t0;
-        var dock = GameObject.Find("P_26");
-        var dockPos = dock != null ? dock.transform.position : Vector3.zero;
-        var midCrate = crates[crates.Count / 2].transform.position;
-        bool ok = k >= targets.Count && targets.Count > 1 && waterFrames == 0;
-        crateJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"from\":[" + start.x.ToString("F2") + "," + start.y.ToString("F2") + "," + start.z.ToString("F2") +
-                    "],\"to\":[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") +
-                    "],\"k\":" + k + ",\"targets\":[" + string.Join(",", targets.ConvertAll(t => "[" + t.x.ToString("F2") + "," + t.z.ToString("F2") + "]")) +
-                    "],\"crates\":[" + string.Join(",", crates.ConvertAll(c => "[" + c.transform.position.x.ToString("F2") + "," + c.transform.position.y.ToString("F2") + "," + c.transform.position.z.ToString("F2") + "]")) +
-                    "],\"seconds\":" + seconds.ToString("F2") + ",\"frames\":" + frames +
-                    ",\"waterFrames\":" + waterFrames + ",\"maxY\":" + maxY.ToString("F2") +
-                    ",\"jumpUsed\":false,\"walkableOnCrates\":" + (world.Walkable(midCrate.x, midCrate.z) ? "true" : "false") +
-                    ",\"walkableInWater\":" + (world.Walkable(dockPos.x, dockPos.z) ? "true" : "false") + "}";
-        if (!ok)
-        {
-            Fail("crate_failed", "木箱区没走过去：" + crateJson);
-        }
-    }
+	private float startedAt;
 
-    // ---------- 掉水回安全点 ----------
+	public void Begin(GameBootstrap b)
+	{
+		boot = b;
+		StartCoroutine(Run());
+	}
 
-    IEnumerator Rescue()
-    {
-        water.SetInstant(WaterLevel.LevelYs[2]);
-        yield return null;
-        if (safe == null) { Fail("rescue_failed", "场景里没有 SafePoints"); yield break; }
+	private IEnumerator Run()
+	{
+		yield return null;
+		startedAt = Time.realtimeSinceStartup;
+		water = UnityEngine.Object.FindObjectOfType<WaterLevel>();
+		player = UnityEngine.Object.FindObjectOfType<EggboyPlayer>();
+		world = UnityEngine.Object.FindObjectOfType<IslandWorld>();
+		safe = UnityEngine.Object.FindObjectOfType<SafePoints>();
+		game = UnityEngine.Object.FindObjectOfType<PrototypeGame>();
+		if (water == null || player == null || world == null)
+		{
+			Fail("setup_failed", "缺 WaterLevel / EggboyPlayer / IslandWorld");
+			yield break;
+		}
+		if (game != null)
+		{
+			game.enabled = false;
+		}
+		Canvas[] array = UnityEngine.Object.FindObjectsOfType<Canvas>();
+		for (int i = 0; i < array.Length; i++)
+		{
+			array[i].enabled = false;
+		}
+		GameObject gameObject = GameObject.Find("EGGBOY");
+		if (gameObject != null)
+		{
+			hero = gameObject.transform;
+		}
+		shaderJson = ShaderCheck();
+		if (status == "running")
+		{
+			yield return Levels();
+		}
+		if (status == "running")
+		{
+			yield return Rise();
+		}
+		if (status == "running")
+		{
+			yield return CrateCross();
+		}
+		if (status == "running")
+		{
+			yield return Rescue();
+		}
+		if (status == "running")
+		{
+			yield return Fall();
+		}
+		water.SetInstant(WaterLevel.LevelYs[0]);
+		if (status == "running")
+		{
+			status = "passed";
+		}
+		Finish();
+	}
 
-        int before = safe.RescueCount;
-        // 码头（P_26）在 L2 被淹（地面 0.9，水位 1.15）
-        var dockGo = GameObject.Find("P_26");
-        if (dockGo == null) { Fail("rescue_failed", "场景里没有 P_26 码头点"); yield break; }
-        var dp = dockGo.transform.position;
-        var from = new Vector3(dp.x, world.GroundAt(dp.x, dp.z), dp.z);
-        player.transform.position = from;
-        player.vel = Vector3.zero;
-        player.grounded = true;
+	private IEnumerator Levels()
+	{
+		ShotTool.CamDef camDef = ShotTool.FindCamera("preview");
+		Camera main = Camera.main;
+		GameObject gameObject = new GameObject("WaterShotCam");
+		shotCam = gameObject.AddComponent<Camera>();
+		if (main != null)
+		{
+			shotCam.CopyFrom(main);
+			main.enabled = false;
+		}
+		if (camDef != null)
+		{
+			shotCam.transform.SetPositionAndRotation(new Vector3(camDef.pos[0], camDef.pos[1], camDef.pos[2]), Quaternion.Euler(camDef.euler[0], camDef.euler[1], camDef.euler[2]));
+			shotCam.fieldOfView = camDef.fov;
+			shotCam.nearClipPlane = 1f;
+			shotCam.farClipPlane = 800f;
+		}
+		if (hero != null)
+		{
+			hero.gameObject.SetActive(value: false);
+		}
+		string dir = Path.Combine(Application.dataPath, "..", "shots");
+		Directory.CreateDirectory(dir);
+		int w = ((camDef != null && camDef.width > 0) ? camDef.width : 1774);
+		int h = ((camDef != null && camDef.height > 0) ? camDef.height : 887);
+		for (int i = 0; i < WaterLevel.LevelNames.Length; i++)
+		{
+			water.SetInstant(WaterLevel.LevelYs[i]);
+			yield return null;
+			yield return null;
+			string file = "water_" + WaterLevel.LevelNames[i] + ".png";
+			yield return ShotTool.Capture(shotCam, w, h, Path.Combine(dir, file));
+			levels.Append((levels.Length == 0) ? "" : ",").Append("[\"").Append(WaterLevel.LevelNames[i])
+				.Append("\",")
+				.Append(WaterLevel.LevelYs[i].ToString("F2"))
+				.Append(",\"")
+				.Append(file)
+				.Append("\"]");
+		}
+		if (hero != null)
+		{
+			hero.gameObject.SetActive(value: true);
+		}
+		if (shotCam != null)
+		{
+			UnityEngine.Object.Destroy(shotCam.gameObject);
+		}
+		if (main != null)
+		{
+			main.enabled = true;
+		}
+		water.SetInstant(WaterLevel.LevelYs[2]);
+		yield return null;
+	}
 
-        float t0 = Time.realtimeSinceStartup;
-        while (Time.realtimeSinceStartup - t0 < 2f && safe.RescueCount == before)
-            yield return null;
+	private IEnumerator Rise()
+	{
+		water.SetInstant(WaterLevel.LevelYs[2]);
+		yield return null;
+		ChaseCamera chase = UnityEngine.Object.FindObjectOfType<ChaseCamera>();
+		float from = water.Y;
+		water.Set(WaterLevel.LevelYs[3], 4f);
+		float maxLift = 0f;
+		float lastY = from;
+		bool monotonic = true;
+		int samples = 0;
+		float t0 = Time.realtimeSinceStartup;
+		while (Time.realtimeSinceStartup - t0 < 4.6f)
+		{
+			yield return new WaitForSecondsRealtime(0.2f);
+			samples++;
+			if (water.Y < lastY - 0.001f)
+			{
+				monotonic = false;
+			}
+			lastY = water.Y;
+			if (chase != null)
+			{
+				maxLift = Mathf.Max(maxLift, chase.extraLift);
+			}
+			if (Time.realtimeSinceStartup - t0 > 4.1f && Mathf.Abs(water.Y - WaterLevel.LevelYs[3]) < 0.02f)
+			{
+				break;
+			}
+		}
+		float num = Time.realtimeSinceStartup - t0;
+		bool flag = monotonic && Mathf.Abs(water.Y - WaterLevel.LevelYs[3]) < 0.02f && num <= 4.9f && maxLift > 0.3f;
+		riseJson = "{\"ok\":" + (flag ? "true" : "false") + ",\"from\":" + from.ToString("F2") + ",\"to\":" + water.Y.ToString("F2") + ",\"seconds\":" + num.ToString("F2") + ",\"samples\":" + samples + ",\"monotonic\":" + (monotonic ? "true" : "false") + ",\"maxCameraLift\":" + maxLift.ToString("F2") + "}";
+		if (!flag)
+		{
+			Fail("rise_failed", "涨水过场不对：" + riseJson);
+		}
+	}
 
-        var end = player.transform.position;
-        bool rescued = safe.RescueCount > before;
-        bool dry = end.y >= water.Y - 0.05f;
-        bool ok = rescued && dry;
-        rescueJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"from\":[" + from.x.ToString("F2") + "," + from.y.ToString("F2") + "," + from.z.ToString("F2") +
-                     "],\"to\":[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") +
-                     "],\"reason\":\"" + (safe.LastReason ?? "") + "\",\"seconds\":" + (Time.realtimeSinceStartup - t0).ToString("F2") +
-                     ",\"dry\":" + (dry ? "true" : "false") + ",\"rescued\":" + (rescued ? "true" : "false") + "}";
-        if (!ok) Fail("rescue_failed", "掉水后没回到安全点：" + rescueJson);
-    }
+	private static int CrateIndex(string name)
+	{
+		int num = name.LastIndexOf('_');
+		if (num < 0 || !int.TryParse(name.Substring(num + 1), out var result))
+		{
+			return 0;
+		}
+		return result;
+	}
 
-    // ---------- 掉层救援（known-issues #14） ----------
-    // 1. 误报：所有可走区按 1 米网格站一遍，正常地面上一个都不能判成掉层
-    // 2. 真掉：在路线旁边找一处比路面低 0.6 米以上的地面，把角色放过去，2.5 秒内要被送回路面
+	private IEnumerator CrateCross()
+	{
+		water.SetInstant(WaterLevel.LevelYs[2]);
+		yield return null;
+		yield return null;
+		List<FloatingCrate> crates = new List<FloatingCrate>(UnityEngine.Object.FindObjectsOfType<FloatingCrate>());
+		if (crates.Count < 2)
+		{
+			Fail("crate_failed", "场景里浮箱少于 2 个");
+			yield break;
+		}
+		crates.Sort((FloatingCrate a, FloatingCrate b) => CrateIndex(a.name).CompareTo(CrateIndex(b.name)));
+		Vector3 position = crates[0].transform.position;
+		Vector3 position2 = crates[crates.Count - 1].transform.position;
+		Vector3 normalized = new Vector3(crates[1].transform.position.x - position.x, 0f, crates[1].transform.position.z - position.z).normalized;
+		Vector3 position3 = crates[crates.Count - 2].transform.position;
+		Vector3 normalized2 = new Vector3(position2.x - position3.x, 0f, position2.z - position3.z).normalized;
+		Vector3 start = position - normalized * 1.4f;
+		start.y = world.GroundAt(start.x, start.z) + 0.01f;
+		List<Vector3> targets = new List<Vector3>();
+		for (int j = 1; j < crates.Count; j++)
+		{
+			targets.Add(crates[j].transform.position);
+		}
+		targets.Add(position2 + normalized2 * 0.3f);
+		RouteDoc routeDoc = JsonUtility.FromJson<RouteDoc>(Resources.Load<TextAsset>("World/route").text);
+		int num = Array.FindIndex(routeDoc.route, (RoutePt r) => r.stop && r.id == "LOW");
+		int num2 = num + 1;
+		while (num >= 0 && num2 < routeDoc.route.Length)
+		{
+			targets.Add(new Vector3(routeDoc.route[num2].x, 0f, routeDoc.route[num2].z));
+			if (routeDoc.route[num2].stop)
+			{
+				break;
+			}
+			num2++;
+		}
+		player.transform.position = start;
+		player.vel = Vector3.zero;
+		player.grounded = true;
+		yield return null;
+		yield return null;
+		float t2 = Time.realtimeSinceStartup;
+		int waterFrames = 0;
+		int frames = 0;
+		int i = 0;
+		float maxY = start.y;
+		float best = float.MaxValue;
+		float bestAt = t2;
+		while (Time.realtimeSinceStartup - t2 < 20f && i < targets.Count)
+		{
+			Vector3 position4 = player.transform.position;
+			Vector3 vector = new Vector3(targets[i].x - position4.x, 0f, targets[i].z - position4.z);
+			float magnitude = vector.magnitude;
+			if (magnitude < 0.5f)
+			{
+				i++;
+				best = float.MaxValue;
+				bestAt = Time.realtimeSinceStartup;
+				continue;
+			}
+			if (magnitude < best - 0.01f)
+			{
+				best = magnitude;
+				bestAt = Time.realtimeSinceStartup;
+			}
+			else if (magnitude < 1.2f && Time.realtimeSinceStartup - bestAt > 0.6f)
+			{
+				i++;
+				best = float.MaxValue;
+				bestAt = Time.realtimeSinceStartup;
+				continue;
+			}
+			if (position4.y < water.Y - 0.05f)
+			{
+				waterFrames++;
+			}
+			maxY = Mathf.Max(maxY, position4.y);
+			vector.Normalize();
+			player.Move(Mathf.Min(0.05f, Time.deltaTime), vector.x, vector.z, run: false, jumpPressed: false);
+			frames++;
+			yield return null;
+		}
+		Vector3 position5 = player.transform.position;
+		float num3 = Time.realtimeSinceStartup - t2;
+		GameObject gameObject = GameObject.Find("P_26");
+		Vector3 vector2 = ((gameObject != null) ? gameObject.transform.position : Vector3.zero);
+		Vector3 position6 = crates[crates.Count / 2].transform.position;
+		bool flag = i >= targets.Count && targets.Count > 1 && waterFrames == 0;
+		crateJson = "{\"ok\":" + (flag ? "true" : "false") + ",\"from\":[" + start.x.ToString("F2") + "," + start.y.ToString("F2") + "," + start.z.ToString("F2") + "],\"to\":[" + position5.x.ToString("F2") + "," + position5.y.ToString("F2") + "," + position5.z.ToString("F2") + "],\"k\":" + i + ",\"targets\":[" + string.Join(",", targets.ConvertAll((Vector3 t) => "[" + t.x.ToString("F2") + "," + t.z.ToString("F2") + "]")) + "],\"crates\":[" + string.Join(",", crates.ConvertAll((FloatingCrate c) => "[" + c.transform.position.x.ToString("F2") + "," + c.transform.position.y.ToString("F2") + "," + c.transform.position.z.ToString("F2") + "]")) + "],\"seconds\":" + num3.ToString("F2") + ",\"frames\":" + frames + ",\"waterFrames\":" + waterFrames + ",\"maxY\":" + maxY.ToString("F2") + ",\"jumpUsed\":false,\"walkableOnCrates\":" + (world.Walkable(position6.x, position6.z) ? "true" : "false") + ",\"walkableInWater\":" + (world.Walkable(vector2.x, vector2.z) ? "true" : "false") + "}";
+		if (!flag)
+		{
+			Fail("crate_failed", "木箱区没走过去：" + crateJson);
+		}
+	}
 
-    [Serializable] class RoutePt { public string id; public bool stop; public float x, z; }
-    [Serializable] class RouteDoc { public RoutePt[] route; }
+	private IEnumerator Rescue()
+	{
+		water.SetInstant(WaterLevel.LevelYs[2]);
+		yield return null;
+		if (safe == null)
+		{
+			Fail("rescue_failed", "场景里没有 SafePoints");
+			yield break;
+		}
+		int before = safe.RescueCount;
+		GameObject gameObject = GameObject.Find("P_26");
+		if (gameObject == null)
+		{
+			Fail("rescue_failed", "场景里没有 P_26 码头点");
+			yield break;
+		}
+		Vector3 position = gameObject.transform.position;
+		Vector3 from = new Vector3(position.x, world.GroundAt(position.x, position.z), position.z);
+		player.transform.position = from;
+		player.vel = Vector3.zero;
+		player.grounded = true;
+		float t0 = Time.realtimeSinceStartup;
+		while (Time.realtimeSinceStartup - t0 < 2f && safe.RescueCount == before)
+		{
+			yield return null;
+		}
+		Vector3 position2 = player.transform.position;
+		bool flag = safe.RescueCount > before;
+		bool flag2 = position2.y >= water.Y - 0.05f;
+		bool flag3 = flag && flag2;
+		rescueJson = "{\"ok\":" + (flag3 ? "true" : "false") + ",\"from\":[" + from.x.ToString("F2") + "," + from.y.ToString("F2") + "," + from.z.ToString("F2") + "],\"to\":[" + position2.x.ToString("F2") + "," + position2.y.ToString("F2") + "," + position2.z.ToString("F2") + "],\"reason\":\"" + safe.LastReason + "\",\"seconds\":" + (Time.realtimeSinceStartup - t0).ToString("F2") + ",\"dry\":" + (flag2 ? "true" : "false") + ",\"rescued\":" + (flag ? "true" : "false") + "}";
+		if (!flag3)
+		{
+			Fail("rescue_failed", "掉水后没回到安全点：" + rescueJson);
+		}
+	}
 
-    IEnumerator Fall()
-    {
-        water.SetInstant(WaterLevel.LevelYs[0]);
-        yield return null;
-        if (safe == null) { Fail("fall_failed", "场景里没有 SafePoints"); yield break; }
-        // 2026-11-16 自由漫游：从台地跳到下一层是正常玩法，"掉层救援"关掉了（SafePoints.FellBelowRoute 直接返回 false）。
-        // 跳下去回不来的坑由编辑器的 RoamAudit 全岛连通检查保证没有（坑都划成了禁区）。这里只验"正常地面不会被误判成掉层"。
-        if (world.FreeRoam)
-        {
-            int fpCount = 0, n = 0;
-            foreach (var q in safe.points) { n++; if (safe.FellBelowRoute(q, out _)) fpCount++; }
-            fallJson = "{\"ok\":" + (fpCount == 0 ? "true" : "false") + ",\"freeRoam\":true,\"tested\":" + n + ",\"falsePositives\":" + fpCount + ",\"note\":\"fell-rescue disabled under free roam; traps covered by RoamAudit\"}";
-            if (fpCount > 0) Fail("fall_failed", "自由漫游下掉层救援应当关闭：" + fallJson);
-            yield break;
-        }
+	private IEnumerator Fall()
+	{
+		water.SetInstant(WaterLevel.LevelYs[0]);
+		yield return null;
+		if (safe == null)
+		{
+			Fail("fall_failed", "场景里没有 SafePoints");
+			yield break;
+		}
+		Vector3 back2;
+		if (world.FreeRoam)
+		{
+			int num = 0;
+			int num2 = 0;
+			foreach (Vector3 point in safe.points)
+			{
+				num2++;
+				if (safe.FellBelowRoute(point, out back2))
+				{
+					num++;
+				}
+			}
+			fallJson = "{\"ok\":" + ((num == 0) ? "true" : "false") + ",\"freeRoam\":true,\"tested\":" + num2 + ",\"falsePositives\":" + num + ",\"note\":\"fell-rescue disabled under free roam; traps covered by RoamAudit\"}";
+			if (num > 0)
+			{
+				Fail("fall_failed", "自由漫游下掉层救援应当关闭：" + fallJson);
+			}
+			yield break;
+		}
+		int tested = 0;
+		int falsePos = 0;
+		StringBuilder fp = new StringBuilder();
+		foreach (WalkPoly walkPoly in world.walkPolys)
+		{
+			if (walkPoly.points == null || walkPoly.points.Length < 3)
+			{
+				continue;
+			}
+			float num3 = float.MaxValue;
+			float num4 = float.MinValue;
+			float num5 = float.MaxValue;
+			float num6 = float.MinValue;
+			Vector2[] points = walkPoly.points;
+			for (int i = 0; i < points.Length; i++)
+			{
+				Vector2 vector = points[i];
+				num3 = Mathf.Min(num3, vector.x);
+				num4 = Mathf.Max(num4, vector.x);
+				num5 = Mathf.Min(num5, vector.y);
+				num6 = Mathf.Max(num6, vector.y);
+			}
+			for (float num7 = Mathf.Ceil(num3); num7 <= num4; num7 += 1f)
+			{
+				for (float num8 = Mathf.Ceil(num5); num8 <= num6; num8 += 1f)
+				{
+					if (!world.InWalkArea(num7, num8))
+					{
+						continue;
+					}
+					float num9 = world.GroundAt(num7, num8, walkPoly.y + 0.5f);
+					if (num9 < 0.2f || num9 < water.Y - 0.05f)
+					{
+						continue;
+					}
+					tested++;
+					if (safe.FellBelowRoute(new Vector3(num7, num9, num8), out back2))
+					{
+						falsePos++;
+						if (falsePos <= 12)
+						{
+							fp.Append((fp.Length == 0) ? "" : ",").Append("[\"").Append(walkPoly.id)
+								.Append("\",")
+								.Append(num7.ToString("F1"))
+								.Append(",")
+								.Append(num9.ToString("F2"))
+								.Append(",")
+								.Append(num8.ToString("F1"))
+								.Append("]");
+						}
+					}
+				}
+			}
+		}
+		TextAsset textAsset = Resources.Load<TextAsset>("World/route");
+		RouteDoc routeDoc = ((textAsset != null) ? JsonUtility.FromJson<RouteDoc>(textAsset.text) : null);
+		Vector3 spot = Vector3.zero;
+		Vector3 back = Vector3.zero;
+		bool found = false;
+		bool foundWalkable = false;
+		if (routeDoc != null && routeDoc.route != null)
+		{
+			for (int j = 0; j + 1 < routeDoc.route.Length; j++)
+			{
+				if (foundWalkable)
+				{
+					break;
+				}
+				Vector2 vector2 = new Vector2(routeDoc.route[j].x, routeDoc.route[j].z);
+				Vector2 vector3 = new Vector2(routeDoc.route[j + 1].x, routeDoc.route[j + 1].z);
+				float magnitude = (vector3 - vector2).magnitude;
+				if (magnitude < 0.1f)
+				{
+					continue;
+				}
+				Vector2 vector4 = (vector3 - vector2) / magnitude;
+				Vector2 vector5 = new Vector2(0f - vector4.y, vector4.x);
+				for (float num10 = 0f; num10 <= magnitude; num10 += 0.5f)
+				{
+					if (foundWalkable)
+					{
+						break;
+					}
+					Vector2 vector6 = vector2 + vector4 * num10;
+					float num11 = world.GroundAt(vector6.x, vector6.y);
+					float[] array = new float[10] { 0.8f, 1.2f, 1.6f, 2f, 2.4f, -0.8f, -1.2f, -1.6f, -2f, -2.4f };
+					foreach (float num12 in array)
+					{
+						Vector2 vector7 = vector6 + vector5 * num12;
+						float num13 = world.GroundAt(vector7.x, vector7.y, num11 - 0.6f);
+						if (num13 <= 0.05f || num13 < water.Y - 0.05f || num11 - num13 < 0.6f)
+						{
+							continue;
+						}
+						Vector3 vector8 = new Vector3(vector7.x, num13, vector7.y);
+						if (safe.FellBelowRoute(vector8, out var back3))
+						{
+							bool flag = world.Walkable(vector7.x, vector7.y);
+							if (!found || (flag && !foundWalkable))
+							{
+								spot = vector8;
+								back = back3;
+								found = true;
+								foundWalkable = flag;
+							}
+							if (flag)
+							{
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+		string text = "false";
+		string text2 = "";
+		string text3 = "null";
+		float num14 = 0f;
+		bool ok = falsePos == 0 && found;
+		if (found)
+		{
+			int before = safe.RescueCount;
+			player.transform.position = spot + Vector3.up * 0.01f;
+			player.vel = Vector3.zero;
+			player.grounded = true;
+			float t0 = Time.realtimeSinceStartup;
+			while (Time.realtimeSinceStartup - t0 < 3.5f && safe.RescueCount == before)
+			{
+				player.Move(Mathf.Min(0.05f, Time.deltaTime), 0f, 0f, run: false, jumpPressed: false);
+				yield return null;
+			}
+			num14 = Time.realtimeSinceStartup - t0;
+			Vector3 position = player.transform.position;
+			bool flag2 = safe.RescueCount > before && safe.LastReason == "fell";
+			bool flag3 = position.y > spot.y + 0.5f;
+			text = (flag2 ? "true" : "false");
+			text2 = safe.LastReason ?? "";
+			text3 = "[" + position.x.ToString("F2") + "," + position.y.ToString("F2") + "," + position.z.ToString("F2") + "]";
+			ok = ok && flag2 && flag3;
+		}
+		fallJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"tested\":" + tested + ",\"falsePositives\":" + falsePos + ",\"falseSamples\":[" + fp?.ToString() + "],\"found\":" + (found ? "true" : "false") + ",\"spotWalkable\":" + (foundWalkable ? "true" : "false") + ",\"spot\":[" + spot.x.ToString("F2") + "," + spot.y.ToString("F2") + "," + spot.z.ToString("F2") + "],\"expectedBack\":[" + back.x.ToString("F2") + "," + back.y.ToString("F2") + "," + back.z.ToString("F2") + "],\"end\":" + text3 + ",\"rescued\":" + text + ",\"reason\":\"" + text2 + "\",\"seconds\":" + num14.ToString("F2") + "}";
+		if (!ok)
+		{
+			Fail("fall_failed", "掉层救援不对：" + fallJson);
+		}
+	}
 
-        // 1. 误报
-        int tested = 0, falsePos = 0;
-        var fp = new StringBuilder();
-        foreach (var poly in world.walkPolys)
-        {
-            if (poly.points == null || poly.points.Length < 3) continue;
-            float x0 = float.MaxValue, x1 = float.MinValue, z0 = float.MaxValue, z1 = float.MinValue;
-            foreach (var v in poly.points) { x0 = Mathf.Min(x0, v.x); x1 = Mathf.Max(x1, v.x); z0 = Mathf.Min(z0, v.y); z1 = Mathf.Max(z1, v.y); }
-            for (float x = Mathf.Ceil(x0); x <= x1; x += 1f)
-            for (float z = Mathf.Ceil(z0); z <= z1; z += 1f)
-            {
-                if (!world.InWalkArea(x, z)) continue;
-                float g = world.GroundAt(x, z, poly.y + 0.5f);
-                if (g < 0.2f || g < water.Y - 0.05f) continue;
-                tested++;
-                if (safe.FellBelowRoute(new Vector3(x, g, z), out _))
-                {
-                    falsePos++;
-                    if (falsePos <= 12) fp.Append(fp.Length == 0 ? "" : ",").Append("[\"").Append(poly.id).Append("\",")
-                        .Append(x.ToString("F1")).Append(",").Append(g.ToString("F2")).Append(",").Append(z.ToString("F1")).Append("]");
-                }
-            }
-        }
+	private string ShaderCheck()
+	{
+		GameObject gameObject = GameObject.Find("Sea");
+		Material material = ((!(gameObject != null)) ? null : gameObject.GetComponent<Renderer>()?.sharedMaterial);
+		Shader shader = Shader.Find("TideTown/Water");
+		bool flag = shader != null && material != null && material.shader != null && material.shader.name == "TideTown/Water";
+		if (!flag)
+		{
+			Fail("shader_failed", "水面着色器不在包里：find=" + ((shader != null) ? shader.name : "null") + " mat=" + ((material != null && material.shader != null) ? material.shader.name : "null"));
+		}
+		return "{\"ok\":" + (flag ? "true" : "false") + ",\"find\":\"" + ((shader != null) ? shader.name : "null") + "\",\"material\":\"" + ((material != null && material.shader != null) ? material.shader.name : "null") + "\"}";
+	}
 
-        // 2. 真掉：沿路线每 0.5 米，往两侧 0.8–2.4 米找低处
-        var asset = Resources.Load<TextAsset>("World/route");
-        var doc = asset != null ? JsonUtility.FromJson<RouteDoc>(asset.text) : null;
-        Vector3 spot = Vector3.zero, back = Vector3.zero;
-        bool found = false, foundWalkable = false;
-        if (doc != null && doc.route != null)
-        {
-            for (int i = 0; i + 1 < doc.route.Length && !foundWalkable; i++)
-            {
-                var a = new Vector2(doc.route[i].x, doc.route[i].z);
-                var b = new Vector2(doc.route[i + 1].x, doc.route[i + 1].z);
-                float len = (b - a).magnitude;
-                if (len < 0.1f) continue;
-                var dir = (b - a) / len;
-                var side = new Vector2(-dir.y, dir.x);
-                for (float t = 0f; t <= len && !foundWalkable; t += 0.5f)
-                {
-                    var c = a + dir * t;
-                    float roadY = world.GroundAt(c.x, c.y);
-                    foreach (float s in new[] { 0.8f, 1.2f, 1.6f, 2.0f, 2.4f, -0.8f, -1.2f, -1.6f, -2.0f, -2.4f })
-                    {
-                        var q = c + side * s;
-                        float g = world.GroundAt(q.x, q.y, roadY - 0.6f);
-                        // 开放草坪后，旧的浅落点成为正常地面。更深的干地由掉层判定确认。
-                        if (g <= 0.05f || g < water.Y - 0.05f || roadY - g < 0.6f) continue;
-                        var cand = new Vector3(q.x, g, q.y);
-                        if (!safe.FellBelowRoute(cand, out var bk)) continue;
-                        bool walk = world.Walkable(q.x, q.y);
-                        if (!found || (walk && !foundWalkable)) { spot = cand; back = bk; found = true; foundWalkable = walk; }
-                        if (walk) break;
-                    }
-                }
-            }
-        }
+	private void Fail(string s, string why)
+	{
+		if (status == "running")
+		{
+			status = s;
+		}
+		reason = why;
+		Debug.Log("WATERAUDIT FAIL " + s + " " + why);
+	}
 
-        string rescued = "false", reasonStr = "", endStr = "null";
-        float secs = 0f;
-        bool ok = falsePos == 0 && found;
-        if (found)
-        {
-            int before = safe.RescueCount;
-            player.transform.position = spot + Vector3.up * 0.01f;
-            player.vel = Vector3.zero;
-            player.grounded = true;
-            float t0 = Time.realtimeSinceStartup;
-            while (Time.realtimeSinceStartup - t0 < 3.5f && safe.RescueCount == before)
-            {
-                player.Move(Mathf.Min(0.05f, Time.deltaTime), 0f, 0f, false, false);
-                yield return null;
-            }
-            secs = Time.realtimeSinceStartup - t0;
-            var end = player.transform.position;
-            bool r = safe.RescueCount > before && safe.LastReason == "fell";
-            bool onRoad = end.y > spot.y + 0.5f;
-            rescued = r ? "true" : "false";
-            reasonStr = safe.LastReason ?? "";
-            endStr = "[" + end.x.ToString("F2") + "," + end.y.ToString("F2") + "," + end.z.ToString("F2") + "]";
-            ok = ok && r && onRoad;
-        }
-
-        fallJson = "{\"ok\":" + (ok ? "true" : "false") + ",\"tested\":" + tested + ",\"falsePositives\":" + falsePos +
-                   ",\"falseSamples\":[" + fp + "],\"found\":" + (found ? "true" : "false") + ",\"spotWalkable\":" + (foundWalkable ? "true" : "false") +
-                   ",\"spot\":[" + spot.x.ToString("F2") + "," + spot.y.ToString("F2") + "," + spot.z.ToString("F2") + "]" +
-                   ",\"expectedBack\":[" + back.x.ToString("F2") + "," + back.y.ToString("F2") + "," + back.z.ToString("F2") + "]" +
-                   ",\"end\":" + endStr + ",\"rescued\":" + rescued + ",\"reason\":\"" + reasonStr + "\",\"seconds\":" + secs.ToString("F2") + "}";
-        if (!ok) Fail("fall_failed", "掉层救援不对：" + fallJson);
-    }
-
-    // ---------- 着色器 ----------
-
-    string ShaderCheck()
-    {
-        var sea = GameObject.Find("Sea");
-        var mat = sea != null ? sea.GetComponent<Renderer>()?.sharedMaterial : null;
-        var found = Shader.Find("TideTown/Water");
-        bool ok = found != null && mat != null && mat.shader != null && mat.shader.name == "TideTown/Water";
-        if (!ok) Fail("shader_failed", "水面着色器不在包里：find=" + (found != null ? found.name : "null") +
-                                        " mat=" + (mat != null && mat.shader != null ? mat.shader.name : "null"));
-        return "{\"ok\":" + (ok ? "true" : "false") + ",\"find\":\"" + (found != null ? found.name : "null") +
-               "\",\"material\":\"" + (mat != null && mat.shader != null ? mat.shader.name : "null") + "\"}";
-    }
-
-    void Fail(string s, string why)
-    {
-        if (status == "running") status = s;
-        reason = why;
-        Debug.Log("WATERAUDIT FAIL " + s + " " + why);
-    }
-
-    void Finish()
-    {
-        float seconds = Time.realtimeSinceStartup - startedAt;
-        string json = "{\"status\":\"" + status + "\",\"reason\":\"" + reason.Replace("\"", "'") +
-            "\",\"seconds\":" + seconds.ToString("F1") +
-            ",\"shader\":" + shaderJson +
-            ",\"levels\":[" + levels + "]" +
-            ",\"rise\":" + riseJson + ",\"crate\":" + crateJson + ",\"rescue\":" + rescueJson + ",\"fall\":" + fallJson + "}";
-        File.WriteAllText(Path.Combine(Application.dataPath, "..", "water-audit.json"), json, new UTF8Encoding(false));
-        Debug.Log("WATERAUDIT " + status + " " + reason);
-        Application.Quit(status == "passed" ? 0 : 1);
-    }
+	private void Finish()
+	{
+		float num = Time.realtimeSinceStartup - startedAt;
+		string contents = "{\"status\":\"" + status + "\",\"reason\":\"" + reason.Replace("\"", "'") + "\",\"seconds\":" + num.ToString("F1") + ",\"shader\":" + shaderJson + ",\"levels\":[" + levels?.ToString() + "],\"rise\":" + riseJson + ",\"crate\":" + crateJson + ",\"rescue\":" + rescueJson + ",\"fall\":" + fallJson + "}";
+		File.WriteAllText(Path.Combine(Application.dataPath, "..", "water-audit.json"), contents, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+		Debug.Log("WATERAUDIT " + status + " " + reason);
+		Application.Quit((!(status == "passed")) ? 1 : 0);
+	}
 }

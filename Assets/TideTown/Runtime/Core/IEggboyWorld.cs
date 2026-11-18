@@ -1,0 +1,1 @@
+// Superseded by Assets\Scripts\IEggboyWorld.cs. Kept as a source migration marker; original meta GUID preserved.

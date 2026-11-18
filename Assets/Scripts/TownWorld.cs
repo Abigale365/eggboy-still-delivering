@@ -1,138 +1,195 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 读场景的世界实现：地面用射线、阻挡用场景标记、可行走区用边界矩形。
-// 角色层与原型世界共用 IEggboyWorld，替换世界不影响移动手感。
 public class TownWorld : MonoBehaviour, IEggboyWorld
 {
-    public LayerMask groundMask;
-    public LayerMask obstacleMask;
-    public Transform mailboxMarker;
-    public Transform spawnMarker;
+	public LayerMask groundMask;
 
-    [Header("可行走区域（世界坐标，可多个矩形）")]
-    public List<Rect> walkRects = new List<Rect>();
+	public LayerMask obstacleMask;
 
-    const float Foot = 0.12f;
+	public Transform mailboxMarker;
 
-    readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
-    float[] groundCache;
-    int cacheW, cacheH;
-    Vector3 cacheOrigin;
-    float cacheStep = 1f;
+	public Transform spawnMarker;
 
-    public IReadOnlyList<EggboyCollider> Colliders => colliders;
-    public void QueryColliders(float x, float z, List<EggboyCollider> results)
-    {
-        results.Clear();
-        results.AddRange(colliders);
-    }
-    public Vector3 MailboxPos => mailboxMarker != null ? mailboxMarker.position : Vector3.zero;
-    public Vector3 SpawnPos => spawnMarker != null ? spawnMarker.position : Vector3.zero;
+	[Header("可行走区域（世界坐标，可多个矩形）")]
+	public List<Rect> walkRects = new List<Rect>();
 
-    void Awake()
-    {
-        if (groundMask == 0) groundMask = LayerMask.GetMask("Ground");
-        if (obstacleMask == 0) obstacleMask = LayerMask.GetMask("TownObstacle");
-        CollectObstacles();
-        EggboyEnv.Apply(transform);
-    }
+	private const float Foot = 0.12f;
 
-    void CollectObstacles()
-    {
-        colliders.Clear();
-        foreach (var o in FindObjectsOfType<TownObstacle>())
-        {
-            var box = o.GetComponent<BoxCollider>();
-            if (box == null) continue;
-            var t = o.transform;
-            Vector3 c = t.TransformPoint(box.center);
-            Vector3 s = Vector3.Scale(box.size, t.lossyScale);
-            var ec = new EggboyCollider
-            {
-                x = c.x,
-                z = c.z,
-                hw = s.x * 0.5f,
-                hd = s.z * 0.5f,
-                water = o.kind == TownObstacle.Kind.Water,
-            };
-            if (o.kind == TownObstacle.Kind.WalkableTop)
-                ec.top = c.y + s.y * 0.5f;
-            colliders.Add(ec);
-        }
-    }
+	private readonly List<EggboyCollider> colliders = new List<EggboyCollider>();
 
-    public bool Walkable(float x, float z)
-    {
-        if (walkRects.Count == 0) return true;
-        foreach (var r in walkRects)
-            if (x >= r.xMin && x <= r.xMax && z >= r.yMin && z <= r.yMax) return true;
-        return false;
-    }
+	private float[] groundCache;
 
-    // 先用预采样的高度网格，命中后再用射线校正；没有地面数据时退回 0。
-    public float GroundAt(float x, float z, float aboveY) => GroundAt(x, z);
+	private int cacheW;
 
-    public float GroundAt(float x, float z)
-    {
-        if (groundCache != null)
-        {
-            int ix = Mathf.RoundToInt((x - cacheOrigin.x) / cacheStep);
-            int iz = Mathf.RoundToInt((z - cacheOrigin.z) / cacheStep);
-            if (ix >= 0 && ix < cacheW && iz >= 0 && iz < cacheH)
-                return groundCache[iz * cacheW + ix];
-        }
-        if (Physics.Raycast(new Vector3(x, 200f, z), Vector3.down, out var hit, 400f, groundMask, QueryTriggerInteraction.Ignore))
-            return hit.point.y;
-        return 0f;
-    }
+	private int cacheH;
 
-    // 编辑器里点一下就能把地面高度烘成网格，运行时不用每帧射线。
-    [ContextMenu("烘焙地面高度")]
-    public void BakeGround()
-    {
-        if (walkRects.Count == 0)
-        {
-            Debug.LogError("没有可行走矩形，无法烘焙地面");
-            return;
-        }
-        float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
-        foreach (var r in walkRects)
-        {
-            minX = Mathf.Min(minX, r.xMin); minZ = Mathf.Min(minZ, r.yMin);
-            maxX = Mathf.Max(maxX, r.xMax); maxZ = Mathf.Max(maxZ, r.yMax);
-        }
-        cacheOrigin = new Vector3(minX, 0f, minZ);
-        cacheW = Mathf.CeilToInt((maxX - minX) / cacheStep) + 1;
-        cacheH = Mathf.CeilToInt((maxZ - minZ) / cacheStep) + 1;
-        groundCache = new float[cacheW * cacheH];
+	private Vector3 cacheOrigin;
 
-        int hits = 0;
-        for (int iz = 0; iz < cacheH; iz++)
-        {
-            for (int ix = 0; ix < cacheW; ix++)
-            {
-                float wx = cacheOrigin.x + ix * cacheStep;
-                float wz = cacheOrigin.z + iz * cacheStep;
-                float y = 0f;
-                if (Physics.Raycast(new Vector3(wx, 200f, wz), Vector3.down, out var hit, 400f, groundMask, QueryTriggerInteraction.Ignore))
-                {
-                    y = hit.point.y;
-                    hits++;
-                }
-                groundCache[iz * cacheW + ix] = y;
-            }
-        }
-        Debug.Log($"地面烘焙完成 {cacheW}x{cacheH}，命中 {hits} 个采样点");
-    }
+	private float cacheStep = 1f;
 
-    void OnDrawGizmosSelected()
-    {
-        Gizmos.color = new Color(0.3f, 0.9f, 0.6f, 0.35f);
-        foreach (var r in walkRects)
-        {
-            var c = new Vector3(r.center.x, 0.2f, r.center.y);
-            Gizmos.DrawWireCube(c, new Vector3(r.width, 0.4f, r.height));
-        }
-    }
+	public IReadOnlyList<EggboyCollider> Colliders => colliders;
+
+	public Vector3 MailboxPos
+	{
+		get
+		{
+			if (!(mailboxMarker != null))
+			{
+				return Vector3.zero;
+			}
+			return mailboxMarker.position;
+		}
+	}
+
+	public Vector3 SpawnPos
+	{
+		get
+		{
+			if (!(spawnMarker != null))
+			{
+				return Vector3.zero;
+			}
+			return spawnMarker.position;
+		}
+	}
+
+	public void QueryColliders(float x, float z, List<EggboyCollider> results)
+	{
+		results.Clear();
+		results.AddRange(colliders);
+	}
+
+	private void Awake()
+	{
+		if ((int)groundMask == 0)
+		{
+			groundMask = LayerMask.GetMask("Ground");
+		}
+		if ((int)obstacleMask == 0)
+		{
+			obstacleMask = LayerMask.GetMask("TownObstacle");
+		}
+		CollectObstacles();
+		EggboyEnv.Apply(base.transform);
+	}
+
+	private void CollectObstacles()
+	{
+		colliders.Clear();
+		TownObstacle[] array = Object.FindObjectsOfType<TownObstacle>();
+		foreach (TownObstacle townObstacle in array)
+		{
+			BoxCollider component = townObstacle.GetComponent<BoxCollider>();
+			if (!(component == null))
+			{
+				Transform transform = townObstacle.transform;
+				Vector3 vector = transform.TransformPoint(component.center);
+				Vector3 vector2 = Vector3.Scale(component.size, transform.lossyScale);
+				EggboyCollider eggboyCollider = new EggboyCollider
+				{
+					x = vector.x,
+					z = vector.z,
+					hw = vector2.x * 0.5f,
+					hd = vector2.z * 0.5f,
+					water = (townObstacle.kind == TownObstacle.Kind.Water)
+				};
+				if (townObstacle.kind == TownObstacle.Kind.WalkableTop)
+				{
+					eggboyCollider.top = vector.y + vector2.y * 0.5f;
+				}
+				colliders.Add(eggboyCollider);
+			}
+		}
+	}
+
+	public bool Walkable(float x, float z)
+	{
+		if (walkRects.Count == 0)
+		{
+			return true;
+		}
+		foreach (Rect walkRect in walkRects)
+		{
+			if (x >= walkRect.xMin && x <= walkRect.xMax && z >= walkRect.yMin && z <= walkRect.yMax)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public float GroundAt(float x, float z, float aboveY)
+	{
+		return GroundAt(x, z);
+	}
+
+	public float GroundAt(float x, float z)
+	{
+		if (groundCache != null)
+		{
+			int num = Mathf.RoundToInt((x - cacheOrigin.x) / cacheStep);
+			int num2 = Mathf.RoundToInt((z - cacheOrigin.z) / cacheStep);
+			if (num >= 0 && num < cacheW && num2 >= 0 && num2 < cacheH)
+			{
+				return groundCache[num2 * cacheW + num];
+			}
+		}
+		if (Physics.Raycast(new Vector3(x, 200f, z), Vector3.down, out var hitInfo, 400f, groundMask, QueryTriggerInteraction.Ignore))
+		{
+			return hitInfo.point.y;
+		}
+		return 0f;
+	}
+
+	[ContextMenu("烘焙地面高度")]
+	public void BakeGround()
+	{
+		if (walkRects.Count == 0)
+		{
+			Debug.LogError("没有可行走矩形，无法烘焙地面");
+			return;
+		}
+		float num = float.MaxValue;
+		float num2 = float.MaxValue;
+		float num3 = float.MinValue;
+		float num4 = float.MinValue;
+		foreach (Rect walkRect in walkRects)
+		{
+			num = Mathf.Min(num, walkRect.xMin);
+			num2 = Mathf.Min(num2, walkRect.yMin);
+			num3 = Mathf.Max(num3, walkRect.xMax);
+			num4 = Mathf.Max(num4, walkRect.yMax);
+		}
+		cacheOrigin = new Vector3(num, 0f, num2);
+		cacheW = Mathf.CeilToInt((num3 - num) / cacheStep) + 1;
+		cacheH = Mathf.CeilToInt((num4 - num2) / cacheStep) + 1;
+		groundCache = new float[cacheW * cacheH];
+		int num5 = 0;
+		for (int i = 0; i < cacheH; i++)
+		{
+			for (int j = 0; j < cacheW; j++)
+			{
+				float x = cacheOrigin.x + (float)j * cacheStep;
+				float z = cacheOrigin.z + (float)i * cacheStep;
+				float num6 = 0f;
+				if (Physics.Raycast(new Vector3(x, 200f, z), Vector3.down, out var hitInfo, 400f, groundMask, QueryTriggerInteraction.Ignore))
+				{
+					num6 = hitInfo.point.y;
+					num5++;
+				}
+				groundCache[i * cacheW + j] = num6;
+			}
+		}
+		Debug.Log($"地面烘焙完成 {cacheW}x{cacheH}，命中 {num5} 个采样点");
+	}
+
+	private void OnDrawGizmosSelected()
+	{
+		Gizmos.color = new Color(0.3f, 0.9f, 0.6f, 0.35f);
+		foreach (Rect walkRect in walkRects)
+		{
+			Gizmos.DrawWireCube(new Vector3(walkRect.center.x, 0.2f, walkRect.center.y), new Vector3(walkRect.width, 0.4f, walkRect.height));
+		}
+	}
 }

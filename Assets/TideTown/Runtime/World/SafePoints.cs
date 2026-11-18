@@ -1,197 +1,405 @@
-// WP-08 安全点：掉进水里或卡住 3 秒，回到最近的安全点（干燥的路线站位）。
-// 2026-11-07：加掉层救援，从路边掉到路面下方 2 秒后送回头顶那段路。
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 public sealed class SafePoints : MonoBehaviour
 {
-    public List<Vector3> points = new List<Vector3>();
-    public float stuckSeconds = 3f;
-    public float stuckSpeed = 0.15f;   // 想走（速度大于它）却没挪动，才算卡住
-    // 3 秒内离起点不到 25 cm 才算卡住。换了字段名：场景里存着旧的 stuckDistance=0.02（按每帧算的），不能沿用
-    public float stuckRadius = 0.25f;
+	[Serializable]
+	private class RoutePt
+	{
+		public string id;
 
-    // 给 -wateraudit 看的记录
-    public bool Enabled = true;
-    public int RescueCount { get; private set; }
-    public string LastReason { get; private set; }
-    public Vector3 LastFrom { get; private set; }
-    public Vector3 LastTarget { get; private set; }
+		public bool stop;
 
-    EggboyPlayer player;
-    IslandWorld world;
-    float stuck;
-    Vector3 last;
+		public float x;
 
-    void Start()
-    {
-        player = FindObjectOfType<EggboyPlayer>();
-        world = FindObjectOfType<IslandWorld>();
-        if (player != null) last = player.transform.position;
-    }
+		public float z;
+	}
 
-    void Update()
-    {
-        if (!Enabled) return;
-        if (player == null) player = FindObjectOfType<EggboyPlayer>();
-        if (player == null) return;
-        if (world == null) world = FindObjectOfType<IslandWorld>();
+	[Serializable]
+	private class RouteDoc
+	{
+		public RoutePt[] route;
+	}
 
-        var p = player.transform.position;
-        // 2026-11-14：沙滩上没过脚不超过 WadeDepth 的浅水可以涉，不算掉水；别处照旧 0.05
-        float wade = world != null && world.IsBeachSurface(p.x, p.z, p.y) ? IslandWorld.WadeDepth + 0.02f : IslandWorld.RoadWadeDepth;
-        if (p.y < WaterLevel.StaticY - wade) { Rescue("water"); return; }
+	public List<Vector3> points = new List<Vector3>();
 
-        // 卡住 = 一直想走，但离开始卡住的那个点不到 stuckRadius。
-        // 以前按“每帧挪动 < 2 cm”判断，帧率一高正常走路每帧也不到 2 cm（60 帧走路约 1.1 cm），
-        // 结果走着走着每 3 秒被传送一次。改成按累计位移判断，和帧率无关。（2026-11-07）
-        float speed = new Vector2(player.vel.x, player.vel.z).magnitude;
-        bool onBeach = world != null && player.grounded && world.IsBeachSurface(p.x, p.z, p.y);
-        bool trying = !player.locked && (onBeach ? player.TryingToMove : speed > stuckSpeed);
-        if (!trying || stuck <= 0f) { last = p; stuck = trying ? Time.deltaTime : 0f; }
-        else if (new Vector2(p.x - last.x, p.z - last.z).magnitude > stuckRadius) { last = p; stuck = Time.deltaTime; }
-        else stuck += Time.deltaTime;
+	public float stuckSeconds = 3f;
 
-        if (stuck >= stuckSeconds)
-        {
-            Rescue(onBeach ? "beach" : "stuck");
-            return;
-        }
+	public float stuckSpeed = 0.15f;
 
-        // 掉层：从路边掉到路面下方，人还能走动但回不去（known-issues #14）
-        Vector3 back = p;
-        if (!player.locked && player.grounded && FellBelowRoute(p, out back)) fell += Time.deltaTime;
-        else fell = 0f;
-        if (fell >= fellSeconds) RescueTo(back, "fell");
-    }
+	public float stuckRadius = 0.25f;
 
-    // ---------- 掉层判定 ----------
-    // 同时满足才算掉层：
-    //   1. 2.5 米内有一段路线，比脚高 0.5–9 米（刚从那儿掉下来）
-    //   2. 2.5 米内没有和脚差不多高的路线（不是正常走在别的路上）
-    //   3. 脚下没有设计高度和脚差不多的可走区（不是落到另一层正常地面上）
-    public float fellSeconds = 2f;
-    public float fellRadius = 2.5f;
-    public float fellDrop = 0.5f;
-    float fell;
+	public bool Enabled = true;
 
-    [System.Serializable] class RoutePt { public string id; public bool stop; public float x, z; }
-    [System.Serializable] class RouteDoc { public RoutePt[] route; }
-    Vector2[] routePts;
+	private EggboyPlayer player;
 
-    void LoadRoute()
-    {
-        routePts = new Vector2[0];
-        var asset = Resources.Load<TextAsset>("World/route");
-        if (asset == null) return;
-        var doc = JsonUtility.FromJson<RouteDoc>(asset.text);
-        if (doc == null || doc.route == null) return;
-        routePts = new Vector2[doc.route.Length];
-        for (int i = 0; i < doc.route.Length; i++) routePts[i] = new Vector2(doc.route[i].x, doc.route[i].z);
-    }
+	private IslandWorld world;
 
-    public bool FellBelowRoute(Vector3 p, out Vector3 back)
-    {
-        back = p;
-        if (world == null || world.IsBeachSurface(p.x, p.z, p.y)) return false;
-        // 2026-11-16 自由漫游：从台地跳到下一层是正常玩法，不再当成"掉层"送回去。
-        // 跳下去回不来的地方由 RoamAudit（编辑器全岛连通检查）保证没有——回不来的坑要么补路要么划进禁区。
-        if (world.FreeRoam) return false;
-        if (routePts == null) LoadRoute();
-        if (routePts.Length < 2) return false;
+	private float stuck;
 
-        // 3：落在别的可走层上就不管
-        foreach (var poly in world.walkPolys)
-            if (Mathf.Abs(poly.y - p.y) < 0.6f && InPoly(poly.points, p.x, p.z)) return false;
-        if (world.lawnPolys != null)
-            foreach (var poly in world.lawnPolys)
-                if (Mathf.Abs(poly.y - p.y) < 0.6f && InPoly(poly.points, p.x, p.z)) return false;
+	private Vector3 last;
 
-        var me = new Vector2(p.x, p.z);
-        bool above = false;
-        float bestD = float.MaxValue;
-        for (int i = 0; i + 1 < routePts.Length; i++)
-        {
-            var q = ClosestOnSegment(routePts[i], routePts[i + 1], me);
-            float d = (q - me).magnitude;
-            if (d > fellRadius) continue;
-            // 只认脚上方 9 米以内的地面（山路最高 8.5 米，从海平面掉下去也能找回），
-            // 塔顶平台比塔脚高 13 米，不算
-            float g = world.GroundAt(q.x, q.y, p.y + 9f);
-            float h = g - p.y;
-            if (h < fellDrop) return false;          // 2：附近有同高的路，正常
-            above = true;
-            if (d < bestD && world.Walkable(q.x, q.y)) { bestD = d; back = new Vector3(q.x, g + 0.02f, q.y); }
-        }
-        return above && bestD < float.MaxValue;
-    }
+	private const int SafeHistoryLimit = 8;
 
-    static Vector2 ClosestOnSegment(Vector2 a, Vector2 b, Vector2 p)
-    {
-        var ab = b - a;
-        float len2 = ab.sqrMagnitude;
-        if (len2 < 1e-6f) return a;
-        float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / len2);
-        return a + ab * t;
-    }
+	private readonly List<Vector3> safeHistory = new List<Vector3>(8);
 
-    static bool InPoly(Vector2[] poly, float x, float z)
-    {
-        if (poly == null || poly.Length < 3) return false;
-        bool inside = false;
-        for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
-        {
-            var a = poly[i];
-            var b = poly[j];
-            if ((a.y > z) != (b.y > z) && x < (b.x - a.x) * (z - a.y) / (b.y - a.y) + a.x)
-                inside = !inside;
-        }
-        return inside;
-    }
+	private float nextSafeSample;
 
-    void RescueTo(Vector3 target, string why)
-    {
-        var from = player.transform.position;
-        player.transform.position = target;
-        player.vel = Vector3.zero;
-        player.grounded = true;
-        player.jump.phase = JumpPhase.none;
-        stuck = 0f;
-        fell = 0f;
-        last = target;
-        RescueCount++;
-        LastReason = why;
-        LastFrom = from;
-        LastTarget = target;
-        Debug.Log($"WATER_SAFE rescue {why} ({from.x:F2},{from.y:F2},{from.z:F2}) -> ({target.x:F2},{target.y:F2},{target.z:F2})");
-    }
+	public float fellSeconds = 2f;
 
-    void Rescue(string why)
-    {
-        var from = player.transform.position;
-        Vector3 best = player.SpawnPos;
-        float bestD = float.MaxValue;
-        bool found = false;
-        foreach (var q in points)
-        {
-            float g = world != null ? world.GroundAt(q.x, q.z, q.y) : q.y;
-            if (g < WaterLevel.StaticY - 0.05f) continue;   // 涨水后不往水里送
-            float d = (new Vector2(q.x - from.x, q.z - from.z)).sqrMagnitude;
-            if (d < bestD) { bestD = d; best = new Vector3(q.x, g + 0.02f, q.z); found = true; }
-        }
-        if (!found) best = new Vector3(player.SpawnPos.x, player.SpawnPos.y + 0.02f, player.SpawnPos.z);
+	public float fellRadius = 2.5f;
 
-        player.transform.position = best;
-        player.vel = Vector3.zero;
-        player.grounded = true;
-        player.jump.phase = JumpPhase.none;
-        stuck = 0f;
-        fell = 0f;
-        last = best;
-        RescueCount++;
-        LastReason = why;
-        LastFrom = from;
-        LastTarget = best;
-        Debug.Log($"WATER_SAFE rescue {why} ({from.x:F2},{from.z:F2}) -> ({best.x:F2},{best.z:F2})");
-    }
+	public float fellDrop = 0.5f;
+
+	private float fell;
+
+	private Vector2[] routePts;
+
+	public int RescueCount { get; private set; }
+
+	public string LastReason { get; private set; }
+
+	public Vector3 LastFrom { get; private set; }
+
+	public Vector3 LastTarget { get; private set; }
+
+	private void Start()
+	{
+		player = UnityEngine.Object.FindObjectOfType<EggboyPlayer>();
+		world = UnityEngine.Object.FindObjectOfType<IslandWorld>();
+		if (player != null)
+		{
+			last = player.transform.position;
+		}
+	}
+
+	private void Update()
+	{
+		if (!Enabled)
+		{
+			return;
+		}
+		if (player == null)
+		{
+			player = UnityEngine.Object.FindObjectOfType<EggboyPlayer>();
+		}
+		if (player == null)
+		{
+			return;
+		}
+		if (world == null)
+		{
+			world = UnityEngine.Object.FindObjectOfType<IslandWorld>();
+		}
+		Vector3 position = player.transform.position;
+		float num = ((world != null && world.IsBeachSurface(position.x, position.z, position.y)) ? 0.2f : 0.05f);
+		if (position.y < WaterLevel.StaticY - num)
+		{
+			Rescue("water");
+			return;
+		}
+		RememberSafeGround(position);
+		float magnitude = new Vector2(player.vel.x, player.vel.z).magnitude;
+		bool flag = world != null && player.grounded && world.IsBeachSurface(position.x, position.z, position.y);
+		bool flag2 = !player.locked && (flag ? player.TryingToMove : (magnitude > stuckSpeed));
+		if (!flag2 || stuck <= 0f)
+		{
+			last = position;
+			stuck = (flag2 ? Time.deltaTime : 0f);
+		}
+		else if (new Vector2(position.x - last.x, position.z - last.z).magnitude > stuckRadius)
+		{
+			last = position;
+			stuck = Time.deltaTime;
+		}
+		else
+		{
+			stuck += Time.deltaTime;
+		}
+		if (stuck >= stuckSeconds)
+		{
+			Rescue(flag ? "beach" : "stuck");
+			return;
+		}
+		Vector3 back = position;
+		if (!player.locked && player.grounded && FellBelowRoute(position, out back))
+		{
+			fell += Time.deltaTime;
+		}
+		else
+		{
+			fell = 0f;
+		}
+		if (fell >= fellSeconds)
+		{
+			RescueTo(back, "fell");
+		}
+	}
+
+	private void RememberSafeGround(Vector3 position)
+	{
+		if (world == null || player.locked || player.ActionLocked || !player.grounded || Time.time < nextSafeSample)
+		{
+			return;
+		}
+		nextSafeSample = Time.time + 0.25f;
+		if ((safeHistory.Count <= 0 || !((position - safeHistory[safeHistory.Count - 1]).sqrMagnitude < 0.36f)) && TrySafeGround(position, out var safe))
+		{
+			if (safeHistory.Count == 8)
+			{
+				safeHistory.RemoveAt(0);
+			}
+			safeHistory.Add(safe);
+		}
+	}
+
+	private bool TrySafeGround(Vector3 position, out Vector3 safe)
+	{
+		safe = position;
+		if (!world.InWalkArea(position.x, position.z))
+		{
+			return false;
+		}
+		if (!Physics.Raycast(position + Vector3.up * 0.25f, Vector3.down, out var hitInfo, 0.5f, world.groundMask, QueryTriggerInteraction.Ignore))
+		{
+			return false;
+		}
+		if (hitInfo.collider.gameObject.layer == 8 || hitInfo.collider.GetComponentInParent<FloatingCrate>() != null || hitInfo.normal.y < 0.6f || hitInfo.point.y <= WaterLevel.StaticY + 0.05f)
+		{
+			return false;
+		}
+		safe = hitInfo.point + Vector3.up * 0.02f;
+		if (!world.InRoamBlock(safe.x, safe.z, hitInfo.point.y) && !world.RockWallAt(safe.x, safe.z, hitInfo.point.y) && !world.RockHeadroomBlocked(safe.x, safe.z, hitInfo.point.y))
+		{
+			return player.HasStandingClearance(safe);
+		}
+		return false;
+	}
+
+	public bool TryReturnToSafety()
+	{
+		if (!Enabled || world == null || player == null || player.ActionLocked)
+		{
+			return false;
+		}
+		for (int num = safeHistory.Count - 1; num >= 0; num--)
+		{
+			if (TrySafeGround(safeHistory[num], out var safe))
+			{
+				ManualReturnTo(safe);
+				return true;
+			}
+		}
+		Vector3 spawnPos = player.SpawnPos;
+		if (TrySafeGround(spawnPos, out var safe2))
+		{
+			ManualReturnTo(safe2);
+			return true;
+		}
+		float num2 = 144f;
+		Vector3 target = spawnPos;
+		bool flag = false;
+		foreach (Vector3 point in points)
+		{
+			float num3 = point.x - spawnPos.x;
+			float num4 = point.z - spawnPos.z;
+			float num5 = num3 * num3 + num4 * num4;
+			if (!(num5 >= num2) && TrySafeGround(point, out var safe3))
+			{
+				num2 = num5;
+				target = safe3;
+				flag = true;
+			}
+		}
+		if (flag)
+		{
+			ManualReturnTo(target);
+		}
+		return flag;
+	}
+
+	private void ManualReturnTo(Vector3 target)
+	{
+		RescueTo(target, "manual");
+		player.SyncAfterSafeReturn();
+		Camera main = Camera.main;
+		if (main != null && main.TryGetComponent<ChaseCamera>(out var component))
+		{
+			component.SnapBehind(target, player.yaw);
+		}
+	}
+
+	private void LoadRoute()
+	{
+		routePts = new Vector2[0];
+		TextAsset textAsset = Resources.Load<TextAsset>("World/route");
+		if (textAsset == null)
+		{
+			return;
+		}
+		RouteDoc routeDoc = JsonUtility.FromJson<RouteDoc>(textAsset.text);
+		if (routeDoc != null && routeDoc.route != null)
+		{
+			routePts = new Vector2[routeDoc.route.Length];
+			for (int i = 0; i < routeDoc.route.Length; i++)
+			{
+				routePts[i] = new Vector2(routeDoc.route[i].x, routeDoc.route[i].z);
+			}
+		}
+	}
+
+	public bool FellBelowRoute(Vector3 p, out Vector3 back)
+	{
+		back = p;
+		if (world == null || world.IsBeachSurface(p.x, p.z, p.y))
+		{
+			return false;
+		}
+		if (world.FreeRoam)
+		{
+			return false;
+		}
+		if (routePts == null)
+		{
+			LoadRoute();
+		}
+		if (routePts.Length < 2)
+		{
+			return false;
+		}
+		foreach (WalkPoly walkPoly in world.walkPolys)
+		{
+			if (Mathf.Abs(walkPoly.y - p.y) < 0.6f && InPoly(walkPoly.points, p.x, p.z))
+			{
+				return false;
+			}
+		}
+		if (world.lawnPolys != null)
+		{
+			foreach (WalkPoly lawnPoly in world.lawnPolys)
+			{
+				if (Mathf.Abs(lawnPoly.y - p.y) < 0.6f && InPoly(lawnPoly.points, p.x, p.z))
+				{
+					return false;
+				}
+			}
+		}
+		Vector2 vector = new Vector2(p.x, p.z);
+		bool flag = false;
+		float num = float.MaxValue;
+		for (int i = 0; i + 1 < routePts.Length; i++)
+		{
+			Vector2 vector2 = ClosestOnSegment(routePts[i], routePts[i + 1], vector);
+			float magnitude = (vector2 - vector).magnitude;
+			if (!(magnitude > fellRadius))
+			{
+				float num2 = world.GroundAt(vector2.x, vector2.y, p.y + 9f);
+				if (num2 - p.y < fellDrop)
+				{
+					return false;
+				}
+				flag = true;
+				if (magnitude < num && world.Walkable(vector2.x, vector2.y))
+				{
+					num = magnitude;
+					back = new Vector3(vector2.x, num2 + 0.02f, vector2.y);
+				}
+			}
+		}
+		if (flag)
+		{
+			return num < float.MaxValue;
+		}
+		return false;
+	}
+
+	private static Vector2 ClosestOnSegment(Vector2 a, Vector2 b, Vector2 p)
+	{
+		Vector2 vector = b - a;
+		float sqrMagnitude = vector.sqrMagnitude;
+		if (sqrMagnitude < 1E-06f)
+		{
+			return a;
+		}
+		float num = Mathf.Clamp01(Vector2.Dot(p - a, vector) / sqrMagnitude);
+		return a + vector * num;
+	}
+
+	private static bool InPoly(Vector2[] poly, float x, float z)
+	{
+		if (poly == null || poly.Length < 3)
+		{
+			return false;
+		}
+		bool flag = false;
+		int num = 0;
+		int num2 = poly.Length - 1;
+		while (num < poly.Length)
+		{
+			Vector2 vector = poly[num];
+			Vector2 vector2 = poly[num2];
+			if (vector.y > z != vector2.y > z && x < (vector2.x - vector.x) * (z - vector.y) / (vector2.y - vector.y) + vector.x)
+			{
+				flag = !flag;
+			}
+			num2 = num++;
+		}
+		return flag;
+	}
+
+	private void RescueTo(Vector3 target, string why)
+	{
+		Vector3 position = player.transform.position;
+		player.transform.position = target;
+		player.vel = Vector3.zero;
+		player.grounded = true;
+		player.jump.phase = JumpPhase.none;
+		stuck = 0f;
+		fell = 0f;
+		last = target;
+		RescueCount++;
+		LastReason = why;
+		LastFrom = position;
+		LastTarget = target;
+		Debug.Log($"WATER_SAFE rescue {why} ({position.x:F2},{position.y:F2},{position.z:F2}) -> ({target.x:F2},{target.y:F2},{target.z:F2})");
+	}
+
+	private void Rescue(string why)
+	{
+		Vector3 position = player.transform.position;
+		Vector3 vector = player.SpawnPos;
+		float num = float.MaxValue;
+		bool flag = false;
+		foreach (Vector3 point in points)
+		{
+			float num2 = ((world != null) ? world.GroundAt(point.x, point.z, point.y) : point.y);
+			if (!(num2 < WaterLevel.StaticY - 0.05f))
+			{
+				float sqrMagnitude = new Vector2(point.x - position.x, point.z - position.z).sqrMagnitude;
+				if (sqrMagnitude < num)
+				{
+					num = sqrMagnitude;
+					vector = new Vector3(point.x, num2 + 0.02f, point.z);
+					flag = true;
+				}
+			}
+		}
+		if (!flag)
+		{
+			vector = new Vector3(player.SpawnPos.x, player.SpawnPos.y + 0.02f, player.SpawnPos.z);
+		}
+		player.transform.position = vector;
+		player.vel = Vector3.zero;
+		player.grounded = true;
+		player.jump.phase = JumpPhase.none;
+		stuck = 0f;
+		fell = 0f;
+		last = vector;
+		RescueCount++;
+		LastReason = why;
+		LastFrom = position;
+		LastTarget = vector;
+		Debug.Log($"WATER_SAFE rescue {why} ({position.x:F2},{position.z:F2}) -> ({vector.x:F2},{vector.z:F2})");
+	}
 }

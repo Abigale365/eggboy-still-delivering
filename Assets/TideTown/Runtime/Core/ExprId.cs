@@ -1,0 +1,19 @@
+public enum ExprId
+{
+	happy,
+	wink,
+	surprised,
+	curious,
+	angry,
+	cute,
+	smug,
+	sleepy,
+	meh,
+	sad,
+	nervous,
+	shy,
+	thinking,
+	puzzled,
+	excited,
+	scared
+}

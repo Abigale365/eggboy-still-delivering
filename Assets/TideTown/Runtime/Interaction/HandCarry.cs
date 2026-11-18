@@ -1,130 +1,195 @@
-// 2026-11-16 手提油壶：壶顶的提手每帧对准右手掌心（PickupGrip.PalmPosition），壶身竖直挂在身体右外侧，
-// 跟着手的移动像钟摆一样前后左右晃；离蛋壳太近就整体往外让；太高会擦地就按比例缩小一点。
-// pourTarget > 0：往前倾倒（塔顶倒油）。执行顺序在姿态层、拾取 IK 之后。
 using UnityEngine;
 
 [DefaultExecutionOrder(150)]
 public sealed class HandCarry : MonoBehaviour
 {
-    public float pourTarget;
-    EggboyPlayer player;
-    Transform hand;
-    PickupGrip grip;
-    Vector3 handleLocal, centerLocal;
-    float heightLocal, radiusLocal;
-    Vector3 baseScale;
-    float scale = 1f;
-    int frames;
-    Vector3 lastPalm;
-    Vector2 tilt, tiltVel;
-    float pour, outward;
+	public float pourTarget;
 
-    public float Scale => scale;
-    public Vector3 HandlePoint => transform.TransformPoint(handleLocal);
-    public float PalmError { get; private set; }
-    public float ShellGap { get; private set; } = 1f;
-    public float GroundGap { get; private set; } = 1f;
+	private EggboyPlayer player;
 
-    public void Init(EggboyPlayer p)
-    {
-        player = p;
-        hand = p.Bones != null ? p.Bones.Bone("handR") : null;
-        grip = PhysicalPickupController.Instance != null ? PhysicalPickupController.Instance.Grip : null;
-        baseScale = transform.localScale;
-        transform.rotation = Quaternion.identity;
-        // 提手 = 最高 14% 那圈顶点的中心（D1 油壶的提手在壶顶）
-        var lb = LocalBounds(gameObject, transform);
-        heightLocal = lb.size.y;
-        radiusLocal = Mathf.Max(lb.extents.x, lb.extents.z);
-        centerLocal = lb.center;
-        Vector3 sum = Vector3.zero; int n = 0;
-        foreach (var mf in GetComponentsInChildren<MeshFilter>())
-            foreach (var v in MeshPoints(mf.sharedMesh))
-            {
-                var l = transform.InverseTransformPoint(mf.transform.TransformPoint(v));
-                if (l.y > lb.max.y - heightLocal * 0.14f) { sum += l; n++; }
-            }
-        handleLocal = n > 0 ? sum / n : new Vector3(lb.center.x, lb.max.y, lb.center.z);
-        handleLocal.y = lb.max.y - heightLocal * 0.04f;
-        lastPalm = Palm();
-    }
+	private Transform hand;
 
-    Vector3 Palm() => grip != null ? grip.PalmPosition : hand != null ? hand.position : player.transform.position + Vector3.up * 0.3f;
+	private PickupGrip grip;
 
-    void LateUpdate()
-    {
-        if (player == null) return;
-        float dt = Mathf.Max(1e-4f, Mathf.Min(0.05f, Time.deltaTime));
-        var palm = Palm();
-        float ground = player.transform.position.y;
-        // 前几帧手臂姿态才到位：取这几帧里最低的掌心定缩放，保证壶底离地 ≥ 5 cm
-        if (frames < 12)
-        {
-            frames++;
-            float room = palm.y - ground - 0.12f;   // 走跑时手会往下沉、壶身倾斜时下角更低，留 12 cm
-            float worldH = heightLocal * baseScale.y;
-            float s = Mathf.Clamp(room / Mathf.Max(0.01f, worldH * 0.96f), 0.45f, 1f);
-            scale = frames == 1 ? s : Mathf.Min(scale, s);
-            transform.localScale = baseScale * scale;
-        }
-        // 钟摆：手往哪边快速移动，壶身就往反方向甩一点，再弹回竖直
-        var hv = (palm - lastPalm) / dt; lastPalm = palm;
-        var fwd = player.transform.forward; var right = player.transform.right;
-        var target = new Vector2(Mathf.Clamp(-Vector3.Dot(hv, fwd) * 9f, -16f, 16f), Mathf.Clamp(Vector3.Dot(hv, right) * 9f, -12f, 12f));
-        tiltVel += (target - tilt) * 70f * dt - tiltVel * 9f * dt;
-        tilt += tiltVel * dt;
-        pour = Mathf.MoveTowards(pour, pourTarget, 170f * dt);
+	private Vector3 handleLocal;
 
-        var rot = Quaternion.Euler(0f, player.transform.eulerAngles.y, 0f) * Quaternion.Euler(tilt.x + pour, 0f, tilt.y);
-        transform.rotation = rot;
-        transform.position = palm - transform.TransformVector(handleLocal);
+	private Vector3 centerLocal;
 
-        // 离蛋壳太近：整体往身体右外侧让（平滑）
-        float need = 0f;
-        if (grip != null)
-        {
-            var c = transform.TransformPoint(centerLocal);
-            float shellR = grip.ShellRadiusAt(c.y, right);
-            float canR = radiusLocal * baseScale.x * scale;
-            float lateral = Vector3.Dot(c - grip.Body.position, right);
-            need = Mathf.Max(0f, shellR + canR + 0.02f - lateral);
-            ShellGap = lateral - canR - shellR;
-        }
-        // 要往外让时立刻让到位（不穿壳优先），回来时慢慢回
-        outward = need > outward ? need : Mathf.MoveTowards(outward, need, 0.25f * dt);
-        transform.position += right * outward;
-        if (grip != null) ShellGap = Vector3.Dot(transform.TransformPoint(centerLocal) - grip.Body.position, right) - radiusLocal * baseScale.x * scale
-            - grip.ShellRadiusAt(transform.TransformPoint(centerLocal).y, right);
-        // 壶底不进地：低于地面 2 cm 就整体往上托（提手会离掌心一点，比穿地好）
-        float bottom = Lux3DModelFit.WorldBounds(gameObject).min.y;
-        if (bottom < ground + 0.02f) transform.position += Vector3.up * (ground + 0.02f - bottom);
-        PalmError = Vector3.Distance(HandlePoint, palm);
-        GroundGap = Lux3DModelFit.WorldBounds(gameObject).min.y - ground;
-    }
+	private float heightLocal;
 
-    // 打包后网格可能没开读写：读不了顶点就用网格包围盒的 8 个角
-    static Vector3[] MeshPoints(Mesh m)
-    {
-        if (m == null) return new Vector3[0];
-        if (m.isReadable) return m.vertices;
-        var b = m.bounds; var p = new Vector3[8];
-        for (int i = 0; i < 8; i++) p[i] = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
-        return p;
-    }
+	private float radiusLocal;
 
-    // 网格顶点在 frame 坐标系里的包围盒
-    public static Bounds LocalBounds(GameObject go, Transform frame)
-    {
-        bool any = false; var b = new Bounds();
-        foreach (var mf in go.GetComponentsInChildren<MeshFilter>())
-        {
-            if (mf.sharedMesh == null) continue;
-            foreach (var v in MeshPoints(mf.sharedMesh))
-            {
-                var l = frame.InverseTransformPoint(mf.transform.TransformPoint(v));
-                if (!any) { b = new Bounds(l, Vector3.zero); any = true; } else b.Encapsulate(l);
-            }
-        }
-        return b;
-    }
+	private Vector3 baseScale;
+
+	private float scale = 1f;
+
+	private int frames;
+
+	private Vector3 lastPalm;
+
+	private Vector2 tilt;
+
+	private Vector2 tiltVel;
+
+	private float pour;
+
+	private float outward;
+
+	public float Scale => scale;
+
+	public Vector3 HandlePoint => base.transform.TransformPoint(handleLocal);
+
+	public float PalmError { get; private set; }
+
+	public float ShellGap { get; private set; } = 1f;
+
+
+	public float GroundGap { get; private set; } = 1f;
+
+
+	public void Init(EggboyPlayer p)
+	{
+		player = p;
+		hand = ((p.Bones != null) ? p.Bones.Bone("handR") : null);
+		grip = ((PhysicalPickupController.Instance != null) ? PhysicalPickupController.Instance.Grip : null);
+		baseScale = base.transform.localScale;
+		base.transform.rotation = Quaternion.identity;
+		Bounds bounds = LocalBounds(base.gameObject, base.transform);
+		heightLocal = bounds.size.y;
+		radiusLocal = Mathf.Max(bounds.extents.x, bounds.extents.z);
+		centerLocal = bounds.center;
+		Vector3 zero = Vector3.zero;
+		int num = 0;
+		MeshFilter[] componentsInChildren = GetComponentsInChildren<MeshFilter>();
+		foreach (MeshFilter meshFilter in componentsInChildren)
+		{
+			Vector3[] array = MeshPoints(meshFilter.sharedMesh);
+			foreach (Vector3 position in array)
+			{
+				Vector3 vector = base.transform.InverseTransformPoint(meshFilter.transform.TransformPoint(position));
+				if (vector.y > bounds.max.y - heightLocal * 0.14f)
+				{
+					zero += vector;
+					num++;
+				}
+			}
+		}
+		handleLocal = ((num > 0) ? (zero / num) : new Vector3(bounds.center.x, bounds.max.y, bounds.center.z));
+		handleLocal.y = bounds.max.y - heightLocal * 0.04f;
+		lastPalm = Palm();
+	}
+
+	private Vector3 Palm()
+	{
+		if (grip == null)
+		{
+			if (!(hand != null))
+			{
+				return player.transform.position + Vector3.up * 0.3f;
+			}
+			return hand.position;
+		}
+		return grip.PalmPosition;
+	}
+
+	private void LateUpdate()
+	{
+		if (!(player == null))
+		{
+			float num = Mathf.Max(0.0001f, Mathf.Min(0.05f, Time.deltaTime));
+			Vector3 vector = Palm();
+			float y = player.transform.position.y;
+			if (frames < 12)
+			{
+				frames++;
+				float num2 = vector.y - y - 0.12f;
+				float num3 = heightLocal * baseScale.y;
+				float num4 = Mathf.Clamp(num2 / Mathf.Max(0.01f, num3 * 0.96f), 0.45f, 1f);
+				scale = ((frames == 1) ? num4 : Mathf.Min(scale, num4));
+				base.transform.localScale = baseScale * scale;
+			}
+			Vector3 lhs = (vector - lastPalm) / num;
+			lastPalm = vector;
+			Vector3 forward = player.transform.forward;
+			Vector3 right = player.transform.right;
+			Vector2 vector2 = new Vector2(Mathf.Clamp((0f - Vector3.Dot(lhs, forward)) * 9f, -16f, 16f), Mathf.Clamp(Vector3.Dot(lhs, right) * 9f, -12f, 12f));
+			tiltVel += (vector2 - tilt) * 70f * num - tiltVel * 9f * num;
+			tilt += tiltVel * num;
+			pour = Mathf.MoveTowards(pour, pourTarget, 170f * num);
+			Quaternion rotation = Quaternion.Euler(0f, player.transform.eulerAngles.y, 0f) * Quaternion.Euler(tilt.x + pour, 0f, tilt.y);
+			base.transform.rotation = rotation;
+			base.transform.position = vector - base.transform.TransformVector(handleLocal);
+			float num5 = 0f;
+			if (grip != null)
+			{
+				Vector3 vector3 = base.transform.TransformPoint(centerLocal);
+				float num6 = grip.ShellRadiusAt(vector3.y, right);
+				float num7 = radiusLocal * baseScale.x * scale;
+				float num8 = Vector3.Dot(vector3 - grip.Body.position, right);
+				num5 = Mathf.Max(0f, num6 + num7 + 0.02f - num8);
+				ShellGap = num8 - num7 - num6;
+			}
+			outward = ((num5 > outward) ? num5 : Mathf.MoveTowards(outward, num5, 0.25f * num));
+			base.transform.position += right * outward;
+			if (grip != null)
+			{
+				ShellGap = Vector3.Dot(base.transform.TransformPoint(centerLocal) - grip.Body.position, right) - radiusLocal * baseScale.x * scale - grip.ShellRadiusAt(base.transform.TransformPoint(centerLocal).y, right);
+			}
+			float y2 = Lux3DModelFit.WorldBounds(base.gameObject).min.y;
+			if (y2 < y + 0.02f)
+			{
+				base.transform.position += Vector3.up * (y + 0.02f - y2);
+			}
+			PalmError = Vector3.Distance(HandlePoint, vector);
+			GroundGap = Lux3DModelFit.WorldBounds(base.gameObject).min.y - y;
+		}
+	}
+
+	private static Vector3[] MeshPoints(Mesh m)
+	{
+		if (m == null)
+		{
+			return new Vector3[0];
+		}
+		if (m.isReadable)
+		{
+			return m.vertices;
+		}
+		Bounds bounds = m.bounds;
+		Vector3[] array = new Vector3[8];
+		for (int i = 0; i < 8; i++)
+		{
+			array[i] = new Vector3(((i & 1) == 0) ? bounds.min.x : bounds.max.x, ((i & 2) == 0) ? bounds.min.y : bounds.max.y, ((i & 4) == 0) ? bounds.min.z : bounds.max.z);
+		}
+		return array;
+	}
+
+	public static Bounds LocalBounds(GameObject go, Transform frame)
+	{
+		bool flag = false;
+		Bounds result = default(Bounds);
+		MeshFilter[] componentsInChildren = go.GetComponentsInChildren<MeshFilter>();
+		foreach (MeshFilter meshFilter in componentsInChildren)
+		{
+			if (meshFilter.sharedMesh == null)
+			{
+				continue;
+			}
+			Vector3[] array = MeshPoints(meshFilter.sharedMesh);
+			foreach (Vector3 position in array)
+			{
+				Vector3 vector = frame.InverseTransformPoint(meshFilter.transform.TransformPoint(position));
+				if (!flag)
+				{
+					result = new Bounds(vector, Vector3.zero);
+					flag = true;
+				}
+				else
+				{
+					result.Encapsulate(vector);
+				}
+			}
+		}
+		return result;
+	}
 }

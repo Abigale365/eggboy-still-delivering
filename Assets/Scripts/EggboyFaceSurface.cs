@@ -1,118 +1,296 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Integrates expressions into the existing renderer's lit shell/visor materials.
 public static class EggboyFaceSurface
 {
-    static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);
-    static List<Vector2> Hull(List<Vector2> p)
-    {
-        p.Sort((a,b) => a.x == b.x ? a.y.CompareTo(b.y) : a.x.CompareTo(b.x));
-        var h=new List<Vector2>();
-        foreach(var v in p) { while(h.Count>1 && Cross(h[h.Count-2],h[h.Count-1],v)<=0) h.RemoveAt(h.Count-1); h.Add(v); }
-        int n=h.Count; for(int i=p.Count-2;i>=0;i--) { var v=p[i]; while(h.Count>n && Cross(h[h.Count-2],h[h.Count-1],v)<=0) h.RemoveAt(h.Count-1); h.Add(v); }
-        if(h.Count>1) h.RemoveAt(h.Count-1); return h;
-    }
-    public static bool Build(EggboySkin skin, Transform model, Texture face, out Transform result)
-    {
-        result=null;
-        var atlas=Resources.Load<Texture2D>("Textures/img0");
-        if(atlas==null || !atlas.isReadable) { Debug.LogError("Face atlas must be readable"); return false; }
-        var verts=skin.verts; var uv=skin.mesh.uv; var p=new Vector3[verts.Length]; var dark=new bool[verts.Length]; var screenColor=new bool[verts.Length];
-        for(int i=0;i<verts.Length;i++)
-        {
-            p[i]=model.InverseTransformPoint(skin.renderer.transform.TransformPoint(verts[i]));
-            Color c=atlas.GetPixelBilinear(uv[i].x,uv[i].y); float lum=.299f*c.r+.587f*c.g+.114f*c.b, mx=Mathf.Max(c.r,c.g,c.b), mn=Mathf.Min(c.r,c.g,c.b);
-            dark[i]=lum<60f/255f; screenColor[i]=dark[i]||(mx>0 && (mx-mn)/mx>.45f && c.r>150f/255f && c.b<130f/255f);
-        }
-        var xs=new List<float>(); var ys=new List<float>(); float frontZ=float.PositiveInfinity;
-        foreach(int i in skin.visorVerts) { frontZ=Mathf.Min(frontZ,p[i].z); if(screenColor[i]) { xs.Add(p[i].x); ys.Add(p[i].y); } }
-        if(xs.Count<30) { Debug.LogError("Insufficient face samples " + xs.Count); return false; }
-        xs.Sort(); ys.Sort(); int lo=Mathf.FloorToInt((xs.Count-1)*.02f), hi=Mathf.FloorToInt((xs.Count-1)*.98f);
-        float x0=xs[lo], x1=xs[hi], y0=ys[lo], y1=ys[hi]; float padx=(x1-x0)*.04f,pady=(y1-y0)*.04f;
-        x0-=padx;x1+=padx;y0-=pady;y1+=pady;frontZ-=.02f;
-        var projected=new Vector2[verts.Length]; var candidates=new List<Vector2>();
-        for(int i=0;i<verts.Length;i++)
-        {
-            projected[i]=p[i].z>=frontZ ? new Vector2((p[i].x-x0)/(x1-x0),(p[i].y-y0)/(y1-y0)) : new Vector2(-10,-10);
-        }
-        const int W=256,H=200;
-        var raster=new bool[W*H];
-        foreach(int s in new[]{skin.shellSubmesh,skin.visorSubmesh})
-        {
-            if(s<0)continue; var tris=skin.mesh.GetTriangles(s);
-            for(int j=0;j<tris.Length;j+=3)
-            {
-                int a=tris[j],b=tris[j+1],c=tris[j+2];
-                if(!Within(projected[a]) || !Within(projected[b]) || !Within(projected[c]))continue;
-                if (dark[a] && dark[b] && dark[c])
-                    Raster(projected[a], projected[b], projected[c], raster, W, H);
-                else if (Mathf.Max(projected[a].x, projected[b].x, projected[c].x) >= 0.66f)
-                    Raster(projected[a], projected[b], projected[c], raster, W, H, atlas, uv[a], uv[b], uv[c]);
-            }
-        }
-        // Keep the connected screen region so dark marks on the shell cannot widen its contour.
-        var visited=new bool[W*H];var stack=new Stack<int>();var largest=new List<int>();
-        for(int i=0;i<raster.Length;i++)
-        {
-            if(!raster[i]||visited[i])continue;var region=new List<int>();stack.Push(i);visited[i]=true;
-            while(stack.Count>0)
-            {
-                int v=stack.Pop();region.Add(v);int x=v%W,y=v/W;
-                foreach(int q in new[]{x>0?v-1:-1,x<W-1?v+1:-1,y>0?v-W:-1,y<H-1?v+W:-1})
-                    if(q>=0 && raster[q] && !visited[q]) { visited[q]=true;stack.Push(q); }
-            }
-            if(region.Count>largest.Count)largest=region;
-        }
-        foreach(int i in largest) { int x=i%W,y=i/W;candidates.Add(new Vector2(x/(float)W,y/(float)H));candidates.Add(new Vector2((x+1f)/W,(y+1f)/H)); }
-        if(candidates.Count<3) { Debug.LogError("Face contour unavailable"); return false; }
-        var hull=Hull(candidates); var mask=new Texture2D(W,H,TextureFormat.RGBA32,false,true); mask.wrapMode=TextureWrapMode.Clamp;
-        var pixels=new Color32[W*H];
-        for(int y=0;y<H;y++)for(int x=0;x<W;x++)
-        {
-            var v=new Vector2((x+.5f)/W,(y+.5f)/H); float distance=float.PositiveInfinity;
-            for(int k=0;k<hull.Count;k++) { var a=hull[k];var b=hull[(k+1)%hull.Count]; float d=Cross(a,b,v)/(b-a).magnitude;distance=Mathf.Min(distance,d); }
-            float feather=Mathf.SmoothStep(0f,1f,distance*W*.55f+.5f);
-            byte alpha=(byte)Mathf.RoundToInt(255f*feather); pixels[y*W+x]=new Color32(alpha,alpha,alpha,255);
-        }
-        mask.SetPixels32(pixels);mask.Apply(false,false);
-        var mesh=Object.Instantiate(skin.mesh);mesh.name="EGGBOY native face UV";mesh.uv2=projected;
-        var shader=Resources.Load<Shader>("EggboyFaceSurface");if(shader==null) { Debug.LogError("Missing face surface shader");return false; }
-        var materials=skin.renderer.materials;
-        foreach(int submesh in new[]{skin.shellSubmesh,skin.visorSubmesh})
-        {
-            if(submesh<0||submesh>=materials.Length)continue;
-            var mat=new Material(materials[submesh]);mat.name=materials[submesh].name+" native face";mat.shader=shader;
-            mat.SetTexture("_FaceMap",face);mat.SetTexture("_FaceMask",mask);materials[submesh]=mat;
-        }
-        skin.renderer.sharedMesh=mesh;skin.renderer.sharedMaterials=materials;result=skin.renderer.transform;
-        Debug.Log($"NATIVE_FACE originalRenderer=true originalSubmeshes={mesh.subMeshCount} screenPixels={largest.Count} hull={hull.Count} x={x0:F3}..{x1:F3} y={y0:F3}..{y1:F3}");return true;
-    }
-    static void Raster(Vector2 a,Vector2 b,Vector2 c,bool[] pixels,int w,int h,
-        Texture2D atlas = null, Vector2 uvA = default, Vector2 uvB = default, Vector2 uvC = default)
-    {
-        a=Vector2.Scale(a,new Vector2(w,h));b=Vector2.Scale(b,new Vector2(w,h));c=Vector2.Scale(c,new Vector2(w,h));
-        int x0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x,b.x,c.x)),0,w-1),x1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x,b.x,c.x)),0,w-1);
-        int y0=Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y,b.y,c.y)),0,h-1),y1=Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y,b.y,c.y)),0,h-1);
-        for(int y=y0;y<=y1;y++)for(int x=x0;x<=x1;x++)
-        {
-            var p=new Vector2(x+.5f,y+.5f);float d0=Cross(a,b,p),d1=Cross(b,c,p),d2=Cross(c,a,p);
-            if (!((d0 >= 0 && d1 >= 0 && d2 >= 0) || (d0 <= 0 && d1 <= 0 && d2 <= 0))) continue;
-            if (atlas != null)
-            {
-                // The model's positive X is the viewer's left. Baked glass highlights at vertices
-                // used to discard whole triangles here, including the darker glass between them.
-                if (p.x / w < 0.66f) continue;
-                float area = d0 + d1 + d2;
-                if (Mathf.Abs(area) < 1e-5f) continue;
-                var uv = (uvA * d1 + uvB * d2 + uvC * d0) / area;
-                Color color = atlas.GetPixelBilinear(uv.x, uv.y);
-                float luminance = 0.299f * color.r + 0.587f * color.g + 0.114f * color.b;
-                if (luminance > 0.52f) continue;
-            }
-            pixels[y*w+x]=true;
-        }
-    }
-    static bool Within(Vector2 uv) => uv.x>-.08f && uv.x<1.08f && uv.y>-.08f && uv.y<1.08f;
-    static bool WithinInner(Vector2 uv) => uv.x>.02f && uv.x<.98f && uv.y>.02f && uv.y<.98f;
+	private static float Cross(Vector2 o, Vector2 a, Vector2 b)
+	{
+		return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+	}
+
+	private static List<Vector2> Hull(List<Vector2> p)
+	{
+		p.Sort((Vector2 a, Vector2 b) => (a.x != b.x) ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+		List<Vector2> list = new List<Vector2>();
+		foreach (Vector2 item in p)
+		{
+			while (list.Count > 1 && Cross(list[list.Count - 2], list[list.Count - 1], item) <= 0f)
+			{
+				list.RemoveAt(list.Count - 1);
+			}
+			list.Add(item);
+		}
+		int count = list.Count;
+		for (int num = p.Count - 2; num >= 0; num--)
+		{
+			Vector2 vector = p[num];
+			while (list.Count > count && Cross(list[list.Count - 2], list[list.Count - 1], vector) <= 0f)
+			{
+				list.RemoveAt(list.Count - 1);
+			}
+			list.Add(vector);
+		}
+		if (list.Count > 1)
+		{
+			list.RemoveAt(list.Count - 1);
+		}
+		return list;
+	}
+
+	public static bool Build(EggboySkin skin, Transform model, Texture face, out Transform result)
+	{
+		result = null;
+		Texture2D texture2D = Resources.Load<Texture2D>("Textures/img0");
+		if (texture2D == null || !texture2D.isReadable)
+		{
+			Debug.LogError("Face atlas must be readable");
+			return false;
+		}
+		Vector3[] verts = skin.verts;
+		Vector2[] uv = skin.mesh.uv;
+		Vector3[] array = new Vector3[verts.Length];
+		bool[] array2 = new bool[verts.Length];
+		bool[] array3 = new bool[verts.Length];
+		for (int i = 0; i < verts.Length; i++)
+		{
+			array[i] = model.InverseTransformPoint(skin.renderer.transform.TransformPoint(verts[i]));
+			Color pixelBilinear = texture2D.GetPixelBilinear(uv[i].x, uv[i].y);
+			float num = 0.299f * pixelBilinear.r + 0.587f * pixelBilinear.g + 0.114f * pixelBilinear.b;
+			float num2 = Mathf.Max(pixelBilinear.r, pixelBilinear.g, pixelBilinear.b);
+			float num3 = Mathf.Min(pixelBilinear.r, pixelBilinear.g, pixelBilinear.b);
+			array2[i] = num < 0.23529412f;
+			array3[i] = array2[i] || (num2 > 0f && (num2 - num3) / num2 > 0.45f && pixelBilinear.r > 0.5882353f && pixelBilinear.b < 26f / 51f);
+		}
+		List<float> list = new List<float>();
+		List<float> list2 = new List<float>();
+		float num4 = float.PositiveInfinity;
+		int[] visorVerts = skin.visorVerts;
+		foreach (int num5 in visorVerts)
+		{
+			num4 = Mathf.Min(num4, array[num5].z);
+			if (array3[num5])
+			{
+				list.Add(array[num5].x);
+				list2.Add(array[num5].y);
+			}
+		}
+		if (list.Count < 30)
+		{
+			Debug.LogError("Insufficient face samples " + list.Count);
+			return false;
+		}
+		list.Sort();
+		list2.Sort();
+		int index = Mathf.FloorToInt((float)(list.Count - 1) * 0.02f);
+		int index2 = Mathf.FloorToInt((float)(list.Count - 1) * 0.98f);
+		float num6 = list[index];
+		float num7 = list[index2];
+		float num8 = list2[index];
+		float num9 = list2[index2];
+		float num10 = (num7 - num6) * 0.04f;
+		float num11 = (num9 - num8) * 0.04f;
+		num6 -= num10;
+		num7 += num10;
+		num8 -= num11;
+		num9 += num11;
+		num4 -= 0.02f;
+		Vector2[] array4 = new Vector2[verts.Length];
+		List<Vector2> list3 = new List<Vector2>();
+		for (int k = 0; k < verts.Length; k++)
+		{
+			array4[k] = ((array[k].z >= num4) ? new Vector2((array[k].x - num6) / (num7 - num6), (array[k].y - num8) / (num9 - num8)) : new Vector2(-10f, -10f));
+		}
+		bool[] array5 = new bool[51200];
+		visorVerts = new int[2] { skin.shellSubmesh, skin.visorSubmesh };
+		foreach (int num12 in visorVerts)
+		{
+			if (num12 < 0)
+			{
+				continue;
+			}
+			int[] triangles = skin.mesh.GetTriangles(num12);
+			for (int l = 0; l < triangles.Length; l += 3)
+			{
+				int num13 = triangles[l];
+				int num14 = triangles[l + 1];
+				int num15 = triangles[l + 2];
+				if (Within(array4[num13]) && Within(array4[num14]) && Within(array4[num15]))
+				{
+					if (array2[num13] && array2[num14] && array2[num15])
+					{
+						Raster(array4[num13], array4[num14], array4[num15], array5, 256, 200);
+					}
+					else if (Mathf.Max(array4[num13].x, array4[num14].x, array4[num15].x) >= 0.66f)
+					{
+						Raster(array4[num13], array4[num14], array4[num15], array5, 256, 200, texture2D, uv[num13], uv[num14], uv[num15]);
+					}
+				}
+			}
+		}
+		bool[] array6 = new bool[51200];
+		Stack<int> stack = new Stack<int>();
+		List<int> list4 = new List<int>();
+		for (int m = 0; m < array5.Length; m++)
+		{
+			if (!array5[m] || array6[m])
+			{
+				continue;
+			}
+			List<int> list5 = new List<int>();
+			stack.Push(m);
+			array6[m] = true;
+			while (stack.Count > 0)
+			{
+				int num16 = stack.Pop();
+				list5.Add(num16);
+				int num17 = num16 % 256;
+				int num18 = num16 / 256;
+				visorVerts = new int[4]
+				{
+					(num17 > 0) ? (num16 - 1) : (-1),
+					(num17 < 255) ? (num16 + 1) : (-1),
+					(num18 > 0) ? (num16 - 256) : (-1),
+					(num18 < 199) ? (num16 + 256) : (-1)
+				};
+				foreach (int num19 in visorVerts)
+				{
+					if (num19 >= 0 && array5[num19] && !array6[num19])
+					{
+						array6[num19] = true;
+						stack.Push(num19);
+					}
+				}
+			}
+			if (list5.Count > list4.Count)
+			{
+				list4 = list5;
+			}
+		}
+		foreach (int item in list4)
+		{
+			int num20 = item % 256;
+			int num21 = item / 256;
+			list3.Add(new Vector2((float)num20 / 256f, (float)num21 / 200f));
+			list3.Add(new Vector2(((float)num20 + 1f) / 256f, ((float)num21 + 1f) / 200f));
+		}
+		if (list3.Count < 3)
+		{
+			Debug.LogError("Face contour unavailable");
+			return false;
+		}
+		List<Vector2> list6 = Hull(list3);
+		Texture2D texture2D2 = new Texture2D(256, 200, TextureFormat.RGBA32, mipChain: false, linear: true);
+		texture2D2.wrapMode = TextureWrapMode.Clamp;
+		Color32[] array7 = new Color32[51200];
+		for (int n = 0; n < 200; n++)
+		{
+			for (int num22 = 0; num22 < 256; num22++)
+			{
+				Vector2 b = new Vector2(((float)num22 + 0.5f) / 256f, ((float)n + 0.5f) / 200f);
+				float num23 = float.PositiveInfinity;
+				for (int num24 = 0; num24 < list6.Count; num24++)
+				{
+					Vector2 vector = list6[num24];
+					Vector2 vector2 = list6[(num24 + 1) % list6.Count];
+					float b2 = Cross(vector, vector2, b) / (vector2 - vector).magnitude;
+					num23 = Mathf.Min(num23, b2);
+				}
+				float num25 = Mathf.SmoothStep(0f, 1f, num23 * 256f * 0.55f + 0.5f);
+				byte b3 = (byte)Mathf.RoundToInt(255f * num25);
+				array7[n * 256 + num22] = new Color32(b3, b3, b3, byte.MaxValue);
+			}
+		}
+		texture2D2.SetPixels32(array7);
+		texture2D2.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+		Mesh mesh = Object.Instantiate(skin.mesh);
+		mesh.name = "EGGBOY native face UV";
+		mesh.uv2 = array4;
+		Shader shader = Resources.Load<Shader>("EggboyFaceSurface");
+		if (shader == null)
+		{
+			Debug.LogError("Missing face surface shader");
+			return false;
+		}
+		Material[] materials = skin.renderer.materials;
+		visorVerts = new int[2] { skin.shellSubmesh, skin.visorSubmesh };
+		foreach (int num26 in visorVerts)
+		{
+			if (num26 >= 0 && num26 < materials.Length)
+			{
+				Material material = new Material(materials[num26]);
+				material.name = materials[num26].name + " native face";
+				material.shader = shader;
+				material.SetTexture("_FaceMap", face);
+				material.SetTexture("_FaceMask", texture2D2);
+				materials[num26] = material;
+			}
+		}
+		skin.renderer.sharedMesh = mesh;
+		skin.renderer.sharedMaterials = materials;
+		result = skin.renderer.transform;
+		Debug.Log($"NATIVE_FACE originalRenderer=true originalSubmeshes={mesh.subMeshCount} screenPixels={list4.Count} hull={list6.Count} x={num6:F3}..{num7:F3} y={num8:F3}..{num9:F3}");
+		return true;
+	}
+
+	private static void Raster(Vector2 a, Vector2 b, Vector2 c, bool[] pixels, int w, int h, Texture2D atlas = null, Vector2 uvA = default(Vector2), Vector2 uvB = default(Vector2), Vector2 uvC = default(Vector2))
+	{
+		a = Vector2.Scale(a, new Vector2(w, h));
+		b = Vector2.Scale(b, new Vector2(w, h));
+		c = Vector2.Scale(c, new Vector2(w, h));
+		int num = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.x, b.x, c.x)), 0, w - 1);
+		int num2 = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.x, b.x, c.x)), 0, w - 1);
+		int num3 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Min(a.y, b.y, c.y)), 0, h - 1);
+		int num4 = Mathf.Clamp(Mathf.CeilToInt(Mathf.Max(a.y, b.y, c.y)), 0, h - 1);
+		for (int i = num3; i <= num4; i++)
+		{
+			for (int j = num; j <= num2; j++)
+			{
+				Vector2 b2 = new Vector2((float)j + 0.5f, (float)i + 0.5f);
+				float num5 = Cross(a, b, b2);
+				float num6 = Cross(b, c, b2);
+				float num7 = Cross(c, a, b2);
+				if ((!(num5 >= 0f) || !(num6 >= 0f) || !(num7 >= 0f)) && (!(num5 <= 0f) || !(num6 <= 0f) || !(num7 <= 0f)))
+				{
+					continue;
+				}
+				if (atlas != null)
+				{
+					if (b2.x / (float)w < 0.66f)
+					{
+						continue;
+					}
+					float num8 = num5 + num6 + num7;
+					if (Mathf.Abs(num8) < 1E-05f)
+					{
+						continue;
+					}
+					Vector2 vector = (uvA * num6 + uvB * num7 + uvC * num5) / num8;
+					Color pixelBilinear = atlas.GetPixelBilinear(vector.x, vector.y);
+					if (0.299f * pixelBilinear.r + 0.587f * pixelBilinear.g + 0.114f * pixelBilinear.b > 0.52f)
+					{
+						continue;
+					}
+				}
+				pixels[i * w + j] = true;
+			}
+		}
+	}
+
+	private static bool Within(Vector2 uv)
+	{
+		if (uv.x > -0.08f && uv.x < 1.08f && uv.y > -0.08f)
+		{
+			return uv.y < 1.08f;
+		}
+		return false;
+	}
+
+	private static bool WithinInner(Vector2 uv)
+	{
+		if (uv.x > 0.02f && uv.x < 0.98f && uv.y > 0.02f)
+		{
+			return uv.y < 0.98f;
+		}
+		return false;
+	}
 }

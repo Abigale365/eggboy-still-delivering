@@ -1,152 +1,251 @@
-// GTA 式第三人称镜头：挂在 EGGBOY 身后偏右肩，鼠标转视角，滚轮拉远拉近；
-// 走起来一会儿没动鼠标，镜头慢慢绕回背后；撞到房子往前缩，向场景 Shader 广播遮挡消融开关。
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 public class ChaseCamera : MonoBehaviour
 {
-    const float DistMin = 2.2f, DistMax = 7.5f, DistDefault = 4.2f;
-    const float Height = 0.95f, Shoulder = 0.35f;
-    const float MouseSens = 0.04f; // Input.GetAxis 的鼠标值是"像素 × 0.05"，折算成和网页版一样的手感
-    static float sens = -1f;
-    // 视角灵敏度倍率，暂停菜单可调，存 PlayerPrefs；0.4–2.0，默认 1.0
-    public static float Sensitivity
-    {
-        get
-        {
-            if (sens < 0f) sens = Mathf.Clamp(PlayerPrefs.GetFloat("tidetown.sensitivity", 1f), 0.4f, 2f);
-            return sens;
-        }
-        set
-        {
-            sens = Mathf.Clamp(value, 0.4f, 2f);
-            PlayerPrefs.SetFloat("tidetown.sensitivity", sens);
-            PlayerPrefs.Save();
-        }
-    }
-    public static bool AutoRecenter
-    {
-        get => PlayerPrefs.GetInt("tidetown.recenter", 1) == 1;
-        set { PlayerPrefs.SetInt("tidetown.recenter", value ? 1 : 0); PlayerPrefs.Save(); }
-    }
-    public System.Func<Vector3, Vector3, float, float> extraBlock;
-    public bool fadeActive;
-    const float RecenterDelay = 5.5f, RecenterRamp = 0.8f, RecenterSpeed = 1.6f, RecenterMaxAngle = 70f * Mathf.Deg2Rad;
-    const float MinDist = 0.4f;
-    static readonly float[,] Rays = { { 0f, 1f }, { 12f, 0.65f }, { -12f, 0.65f }, { 24f, 0.3f }, { -24f, 0.3f } }; // 偏转角度, 权重
-    static readonly float PitchMin = -20f * Mathf.Deg2Rad, PitchMax = 55f * Mathf.Deg2Rad;
+	private const float DistMin = 2.2f;
 
-    public float yaw; // 弧度，0 = 看向 +Z
-    public float extraLift; // WP-08 涨水过场时额外抬高，默认 0
-    float pitch = 14f * Mathf.Deg2Rad, yawGoal, pitchGoal = 14f * Mathf.Deg2Rad;
-    float dist = DistDefault, distGoal = DistDefault, wallDist = DistDefault;
-    float sinceBlocked = 99f, idleMouse;
-    Vector3 target;
-    Camera cam;
+	private const float DistMax = 7.5f;
 
-    static float Damp(float rate, float dt) => 1f - Mathf.Exp(-rate * dt);
-    static float Wrap(float a) => Mathf.Atan2(Mathf.Sin(a), Mathf.Cos(a));
+	private const float DistDefault = 4.2f;
 
-    void Awake() { cam = GetComponent<Camera>(); }
+	private const float Height = 0.95f;
 
-    public Vector3 Forward => new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
-    public Vector3 Right => new Vector3(Mathf.Cos(yaw), 0f, -Mathf.Sin(yaw));
+	private const float Shoulder = 0.35f;
 
-    public void SnapBehind(Vector3 pos, float heading)
-    {
-        yaw = yawGoal = heading;
-        target = new Vector3(pos.x, pos.y + Height, pos.z);
-    }
+	private const float MouseSens = 0.04f;
 
-    public void Tick(float dt, Vector3 pos, float heading, bool moving, bool running)
-    {
-        // 自由漫游中点击画面锁定光标；Esc 由 MenuController 统一处理。
-        bool anyClick = Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1);
-        if (anyClick && Cursor.lockState != CursorLockMode.Locked
-            && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
-        { Cursor.lockState = CursorLockMode.Locked; Cursor.visible = false; }
-        // 保留按住右键锁定的习惯，但松开右键不再强制解锁
-        if (Cursor.lockState == CursorLockMode.Locked)
-        {
-            float mx = Input.GetAxisRaw("Mouse X"), my = Input.GetAxisRaw("Mouse Y");
-            if (Mathf.Abs(mx) > 0f || Mathf.Abs(my) > 0f) idleMouse = 0f;
-            float sens = MouseSens * Sensitivity;
-            yawGoal += mx * sens;
-            pitchGoal = Mathf.Clamp(pitchGoal - my * sens, PitchMin, PitchMax);
-        }
-        // 滚轮：按比例拉远拉近
-        float wheel = Input.mouseScrollDelta.y;
-        if (wheel != 0f) distGoal = Mathf.Clamp(distGoal * Mathf.Exp(-wheel * 0.12f), DistMin, DistMax);
+	private static float sens = -1f;
 
-        // 跟随点平滑追上角色
-        target = Vector3.Lerp(target, new Vector3(pos.x, pos.y + Height + extraLift, pos.z), Damp(12f, dt));
+	public Func<Vector3, Vector3, float, float> extraBlock;
 
-        // 走着又没动鼠标：慢慢绕回背后，角度差越大越弱
-        idleMouse += dt;
-        if (AutoRecenter && moving && idleMouse > RecenterDelay)
-        {
-            float ramp = Mathf.Min(1f, (idleMouse - RecenterDelay) / RecenterRamp);
-            float d = Wrap(heading - yawGoal);
-            float fade = Mathf.Max(0f, Mathf.Cos(Mathf.Min(Mathf.PI / 2f, Mathf.Abs(d) / RecenterMaxAngle * (Mathf.PI / 2f))));
-            yawGoal += d * ramp * fade * Mathf.Min(1f, dt * RecenterSpeed);
-        }
+	public bool fadeActive;
 
-        yaw += Wrap(yawGoal - yaw) * Damp(24f, dt);
-        pitch += (pitchGoal - pitch) * Damp(24f, dt);
-        dist += (distGoal - dist) * Damp(7f, dt);
-        cam.fieldOfView += ((running && moving ? 60f : 55f) - cam.fieldOfView) * Damp(4f, dt);
+	private const float RecenterDelay = 5.5f;
 
-        var back = new Vector3(-Mathf.Sin(yaw) * Mathf.Cos(pitch), Mathf.Sin(pitch), -Mathf.Cos(yaw) * Mathf.Cos(pitch));
-        var pivot = target + Right * Shoulder;
-        if (Physics.CheckSphere(pivot, 0.12f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            pivot = target - Right * Shoulder;
+	private const float RecenterRamp = 0.8f;
 
-        // 防穿墙：正后方一条射线，左右各偏 12°、24° 打"提前量"射线，偏得越多权重越低
-        float wanted = dist;
-        if (Physics.SphereCast(pivot, 0.16f, back, out var wall, dist, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            wanted = Mathf.Max(MinDist, wall.distance - 0.12f);
-        for (int i = 0; i < Rays.GetLength(0); i++)
-        {
-            var dir = Quaternion.AngleAxis(Rays[i, 0], Vector3.up) * back;
-            if (!Physics.Raycast(pivot, dir, out var hit, dist + 0.3f)) continue;
-            float h = Mathf.Max(MinDist, hit.distance - 0.25f);
-            wanted = Mathf.Min(wanted, dist - (dist - h) * Rays[i, 1]);
-        }
-        if (extraBlock != null) wanted = Mathf.Min(wanted, Mathf.Max(MinDist, extraBlock(pivot, back, dist)));
-        sinceBlocked = wanted < dist - 0.01f ? 0f : sinceBlocked + dt;
-        float rate = wanted < wallDist ? 14f : sinceBlocked < 0.8f ? 3f : 7f;
-        float step = Mathf.Clamp((wanted - wallDist) * Damp(rate, dt), -8f * dt, 8f * dt);
-        wallDist = Mathf.Min(wallDist + step, wanted);
+	private const float RecenterSpeed = 1.6f;
 
-        // 贴着墙时镜头一边靠近一边升高
-        float lift = Mathf.Max(0f, 1.3f - wallDist) * 0.6f;
-        var camPos = pivot + back * wallDist;
-        camPos.y = Mathf.Max(camPos.y + lift, 0.25f);
-        // 再检查抬高后的实际射线，不能让避墙升高把镜头送入檐口。
-        var finalRay = camPos - pivot;
-        float safe = finalRay.magnitude;
-        if (Physics.SphereCast(pivot, .16f, finalRay.normalized, out var finalHit, safe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) safe = Mathf.Min(safe, Mathf.Max(.1f, finalHit.distance - .12f));
-        if (extraBlock != null) safe = Mathf.Min(safe, Mathf.Max(.1f, extraBlock(pivot, finalRay.normalized, finalRay.magnitude)));
-        camPos = pivot + finalRay.normalized * safe;
-        transform.position = camPos;
-        transform.LookAt(new Vector3(pivot.x, pivot.y - 0.1f - lift * 0.4f, pivot.z));
-    }
+	private const float RecenterMaxAngle = 1.2217305f;
 
-    public void SetFadeActive(bool on) { fadeActive = on && enabled; BroadcastFade(); }
-    void LateUpdate() => BroadcastFade();
-    void BroadcastFade()
-    {
-        var camPos = transform.position;
-        Shader.SetGlobalVector("_TideCamFade", new Vector4(camPos.x, camPos.y, camPos.z, fadeActive ? 1f : 0f));
-    }
-    void OnDisable() { fadeActive = false; BroadcastFade(); }
-    public void DebugOrbit(float radians, float pitchDegrees = 14f)
-    {
-        yaw = yawGoal = radians; pitch = pitchGoal = Mathf.Clamp(pitchDegrees * Mathf.Deg2Rad, PitchMin, PitchMax); idleMouse = 0f;
-    }
+	private const float MinDist = 0.4f;
 
-    void OnApplicationFocus(bool focus)
-    {
-        if (!focus) { Cursor.lockState = CursorLockMode.None; Cursor.visible = true; }
-    }
+	private const int CamMask = -261;
+
+	private static readonly float[,] Rays = new float[5, 2]
+	{
+		{ 0f, 1f },
+		{ 12f, 0.65f },
+		{ -12f, 0.65f },
+		{ 24f, 0.3f },
+		{ -24f, 0.3f }
+	};
+
+	private static readonly float PitchMin = -0.34906584f;
+
+	private static readonly float PitchMax = 0.9599311f;
+
+	public float yaw;
+
+	public float extraLift;
+
+	private float pitch = 0.2443461f;
+
+	private float yawGoal;
+
+	private float pitchGoal = 0.2443461f;
+
+	private float dist = 4.2f;
+
+	private float distGoal = 4.2f;
+
+	private float wallDist = 4.2f;
+
+	private float sinceBlocked = 99f;
+
+	private float idleMouse;
+
+	private Vector3 target;
+
+	private Camera cam;
+
+	public static float Sensitivity
+	{
+		get
+		{
+			if (sens < 0f)
+			{
+				sens = Mathf.Clamp(PlayerPrefs.GetFloat("tidetown.sensitivity", 1f), 0.4f, 2f);
+			}
+			return sens;
+		}
+		set
+		{
+			sens = Mathf.Clamp(value, 0.4f, 2f);
+			PlayerPrefs.SetFloat("tidetown.sensitivity", sens);
+			PlayerPrefs.Save();
+		}
+	}
+
+	public static bool AutoRecenter
+	{
+		get
+		{
+			return PlayerPrefs.GetInt("tidetown.recenter", 1) == 1;
+		}
+		set
+		{
+			PlayerPrefs.SetInt("tidetown.recenter", value ? 1 : 0);
+			PlayerPrefs.Save();
+		}
+	}
+
+	public Vector3 Forward => new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
+
+	public Vector3 Right => new Vector3(Mathf.Cos(yaw), 0f, 0f - Mathf.Sin(yaw));
+
+	private static float Damp(float rate, float dt)
+	{
+		return 1f - Mathf.Exp((0f - rate) * dt);
+	}
+
+	private static float Wrap(float a)
+	{
+		return Mathf.Atan2(Mathf.Sin(a), Mathf.Cos(a));
+	}
+
+	private void Awake()
+	{
+		cam = GetComponent<Camera>();
+	}
+
+	public void SnapBehind(Vector3 pos, float heading)
+	{
+		yaw = (yawGoal = heading);
+		target = new Vector3(pos.x, pos.y + 0.95f, pos.z);
+	}
+
+	public void Tick(float dt, Vector3 pos, float heading, bool moving, bool running)
+	{
+		if ((Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) && Cursor.lockState != CursorLockMode.Locked && (EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject()))
+		{
+			Cursor.lockState = CursorLockMode.Locked;
+			Cursor.visible = false;
+		}
+		if (Cursor.lockState == CursorLockMode.Locked)
+		{
+			float axisRaw = Input.GetAxisRaw("Mouse X");
+			float axisRaw2 = Input.GetAxisRaw("Mouse Y");
+			if (Mathf.Abs(axisRaw) > 0f || Mathf.Abs(axisRaw2) > 0f)
+			{
+				idleMouse = 0f;
+			}
+			float num = 0.04f * Sensitivity;
+			yawGoal += axisRaw * num;
+			pitchGoal = Mathf.Clamp(pitchGoal - axisRaw2 * num, PitchMin, PitchMax);
+		}
+		float y = Input.mouseScrollDelta.y;
+		if (y != 0f)
+		{
+			distGoal = Mathf.Clamp(distGoal * Mathf.Exp((0f - y) * 0.12f), 2.2f, 7.5f);
+		}
+		target = Vector3.Lerp(target, new Vector3(pos.x, pos.y + 0.95f + extraLift, pos.z), Damp(12f, dt));
+		idleMouse += dt;
+		if (AutoRecenter && moving && idleMouse > 5.5f)
+		{
+			float num2 = Mathf.Min(1f, (idleMouse - 5.5f) / 0.8f);
+			float num3 = Wrap(heading - yawGoal);
+			float num4 = Mathf.Max(0f, Mathf.Cos(Mathf.Min(MathF.PI / 2f, Mathf.Abs(num3) / 1.2217305f * (MathF.PI / 2f))));
+			yawGoal += num3 * num2 * num4 * Mathf.Min(1f, dt * 1.6f);
+		}
+		yaw += Wrap(yawGoal - yaw) * Damp(24f, dt);
+		pitch += (pitchGoal - pitch) * Damp(24f, dt);
+		dist += (distGoal - dist) * Damp(7f, dt);
+		cam.fieldOfView += (((running && moving) ? 60f : 55f) - cam.fieldOfView) * Damp(4f, dt);
+		Vector3 vector = new Vector3((0f - Mathf.Sin(yaw)) * Mathf.Cos(pitch), Mathf.Sin(pitch), (0f - Mathf.Cos(yaw)) * Mathf.Cos(pitch));
+		Vector3 vector2 = target + Right * 0.35f;
+		if (Physics.CheckSphere(vector2, 0.12f, -261, QueryTriggerInteraction.Ignore))
+		{
+			vector2 = target - Right * 0.35f;
+		}
+		float num5 = dist;
+		if (Physics.SphereCast(vector2, 0.16f, vector, out var hitInfo, dist, -261, QueryTriggerInteraction.Ignore))
+		{
+			num5 = Mathf.Max(0.4f, hitInfo.distance - 0.12f);
+		}
+		for (int i = 0; i < Rays.GetLength(0); i++)
+		{
+			Vector3 direction = Quaternion.AngleAxis(Rays[i, 0], Vector3.up) * vector;
+			if (Physics.Raycast(vector2, direction, out var hitInfo2, dist + 0.3f, -261))
+			{
+				float num6 = Mathf.Max(0.4f, hitInfo2.distance - 0.25f);
+				num5 = Mathf.Min(num5, dist - (dist - num6) * Rays[i, 1]);
+			}
+		}
+		if (extraBlock != null)
+		{
+			num5 = Mathf.Min(num5, Mathf.Max(0.4f, extraBlock(vector2, vector, dist)));
+		}
+		sinceBlocked = ((num5 < dist - 0.01f) ? 0f : (sinceBlocked + dt));
+		float rate = ((num5 < wallDist) ? 14f : ((sinceBlocked < 0.8f) ? 3f : 7f));
+		float num7 = Mathf.Clamp((num5 - wallDist) * Damp(rate, dt), -8f * dt, 8f * dt);
+		wallDist = Mathf.Min(wallDist + num7, num5);
+		float num8 = Mathf.Max(0f, 1.3f - wallDist) * 0.6f;
+		Vector3 vector3 = vector2 + vector * wallDist;
+		vector3.y = Mathf.Max(vector3.y + num8, 0.25f);
+		Vector3 vector4 = vector3 - vector2;
+		float num9 = vector4.magnitude;
+		if (Physics.SphereCast(vector2, 0.16f, vector4.normalized, out var hitInfo3, num9, -261, QueryTriggerInteraction.Ignore))
+		{
+			num9 = Mathf.Min(num9, Mathf.Max(0.1f, hitInfo3.distance - 0.12f));
+		}
+		if (extraBlock != null)
+		{
+			num9 = Mathf.Min(num9, Mathf.Max(0.1f, extraBlock(vector2, vector4.normalized, vector4.magnitude)));
+		}
+		vector3 = vector2 + vector4.normalized * num9;
+		base.transform.position = vector3;
+		base.transform.LookAt(new Vector3(vector2.x, vector2.y - 0.1f - num8 * 0.4f, vector2.z));
+	}
+
+	public void SetFadeActive(bool on)
+	{
+		fadeActive = on && base.enabled;
+		BroadcastFade();
+	}
+
+	private void LateUpdate()
+	{
+		BroadcastFade();
+	}
+
+	private void BroadcastFade()
+	{
+		Vector3 position = base.transform.position;
+		Shader.SetGlobalVector("_TideCamFade", new Vector4(position.x, position.y, position.z, fadeActive ? 1f : 0f));
+	}
+
+	private void OnDisable()
+	{
+		fadeActive = false;
+		BroadcastFade();
+	}
+
+	public void DebugOrbit(float radians, float pitchDegrees = 14f)
+	{
+		yaw = (yawGoal = radians);
+		pitch = (pitchGoal = Mathf.Clamp(pitchDegrees * (MathF.PI / 180f), PitchMin, PitchMax));
+		idleMouse = 0f;
+	}
+
+	private void OnApplicationFocus(bool focus)
+	{
+		if (!focus)
+		{
+			Cursor.lockState = CursorLockMode.None;
+			Cursor.visible = true;
+		}
+	}
 }

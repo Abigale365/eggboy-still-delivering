@@ -3,70 +3,84 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 
-// 自动巡检：跑一段路线、记录帧率、卡住次数、地面高度变化，最后写 JSON。
-// 用法：-autotest 加在命令行。
 public class TideTownAutoTest : MonoBehaviour
 {
-    public float duration = 24f;
-    EggboyPlayer player;
-    float t, sumFps, minFps, maxFps;
-    int frames, stuckFrames;
-    Vector3 lastPos;
-    float maxGroundDelta;
-    readonly StringBuilder route = new StringBuilder();
+	public float duration = 24f;
 
-    public void Begin(EggboyPlayer p)
-    {
-        player = p;
-        lastPos = p.transform.position;
-        StartCoroutine(Run());
-    }
+	private EggboyPlayer player;
 
-    IEnumerator Run()
-    {
-        float start = Time.time;
-        float nextSample = 0.5f;
-        while (Time.time - start < duration)
-        {
-            yield return null;
-            float dt = Time.deltaTime;
-            if (dt <= 0f) continue;
-            frames++;
-            float fps = 1f / dt;
-            sumFps += fps;
-            if (frames > 10)
-            {
-                minFps = minFps == 0f ? fps : Mathf.Min(minFps, fps);
-                maxFps = Mathf.Max(maxFps, fps);
-            }
-            var p = player.transform.position;
-            if ((p - lastPos).magnitude < 0.02f * dt * 60f && player.Speed < 0.05f && player.locked == false)
-                stuckFrames++;
-            lastPos = p;
+	private float t;
 
-            if (Time.time - start >= nextSample)
-            {
-                nextSample += 0.5f;
-                route.Append($"({p.x:F1},{p.y:F2},{p.z:F1}) ");
-            }
-        }
+	private float sumFps;
 
-        float avg = frames > 0 ? sumFps / frames : 0f;
-        var sb = new StringBuilder();
-        sb.AppendLine("{");
-        sb.AppendLine($"  \"avgFps\": {avg:F1},");
-        sb.AppendLine($"  \"minFps\": {minFps:F1},");
-        sb.AppendLine($"  \"maxFps\": {maxFps:F1},");
-        sb.AppendLine($"  \"frames\": {frames},");
-        sb.AppendLine($"  \"duration\": {duration},");
-        sb.AppendLine($"  \"finalPos\": \"{player.transform.position}\",");
-        sb.AppendLine($"  \"route\": \"{route.ToString().Trim()}\"");
-        sb.AppendLine("}");
-        string dir = Path.Combine(Application.persistentDataPath, "..");
-        string path = Path.Combine(Application.dataPath, "..", "autotest.json");
-        File.WriteAllText(path, sb.ToString(), new UTF8Encoding(false));
-        Debug.Log("AUTOTEST " + path + " avg=" + avg.ToString("F1") + " min=" + minFps.ToString("F1"));
-        yield return new WaitForSeconds(1f);
-        Application.Quit();
-    }
+	private float minFps;
+
+	private float maxFps;
+
+	private int frames;
+
+	private int stuckFrames;
+
+	private Vector3 lastPos;
+
+	private float maxGroundDelta;
+
+	private readonly StringBuilder route = new StringBuilder();
+
+	public void Begin(EggboyPlayer p)
+	{
+		player = p;
+		lastPos = p.transform.position;
+		StartCoroutine(Run());
+	}
+
+	private IEnumerator Run()
+	{
+		float start = Time.time;
+		float nextSample = 0.5f;
+		while (Time.time - start < duration)
+		{
+			yield return null;
+			float deltaTime = Time.deltaTime;
+			if (!(deltaTime <= 0f))
+			{
+				frames++;
+				float num = 1f / deltaTime;
+				sumFps += num;
+				if (frames > 10)
+				{
+					minFps = ((minFps == 0f) ? num : Mathf.Min(minFps, num));
+					maxFps = Mathf.Max(maxFps, num);
+				}
+				Vector3 position = player.transform.position;
+				if ((position - lastPos).magnitude < 0.02f * deltaTime * 60f && player.Speed < 0.05f && !player.locked)
+				{
+					stuckFrames++;
+				}
+				lastPos = position;
+				if (Time.time - start >= nextSample)
+				{
+					nextSample += 0.5f;
+					route.Append($"({position.x:F1},{position.y:F2},{position.z:F1}) ");
+				}
+			}
+		}
+		float num2 = ((frames > 0) ? (sumFps / (float)frames) : 0f);
+		StringBuilder stringBuilder = new StringBuilder();
+		stringBuilder.AppendLine("{");
+		stringBuilder.AppendLine($"  \"avgFps\": {num2:F1},");
+		stringBuilder.AppendLine($"  \"minFps\": {minFps:F1},");
+		stringBuilder.AppendLine($"  \"maxFps\": {maxFps:F1},");
+		stringBuilder.AppendLine($"  \"frames\": {frames},");
+		stringBuilder.AppendLine($"  \"duration\": {duration},");
+		stringBuilder.AppendLine($"  \"finalPos\": \"{player.transform.position}\",");
+		stringBuilder.AppendLine("  \"route\": \"" + route.ToString().Trim() + "\"");
+		stringBuilder.AppendLine("}");
+		Path.Combine(Application.persistentDataPath, "..");
+		string text = Path.Combine(Application.dataPath, "..", "autotest.json");
+		File.WriteAllText(text, stringBuilder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+		Debug.Log("AUTOTEST " + text + " avg=" + num2.ToString("F1") + " min=" + minFps.ToString("F1"));
+		yield return new WaitForSeconds(1f);
+		Application.Quit();
+	}
 }

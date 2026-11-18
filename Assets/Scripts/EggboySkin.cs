@@ -1,201 +1,317 @@
-// 蒙皮网格数据：FBX 里外壳 / 皮革 / 面屏是同一个网格的三个子材质，网页版里是三个 SkinnedMesh。
-// 这里按子材质把顶点分开，供表情、防穿模和邮差包轴使用。
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class EggboySkin
 {
-    public readonly SkinnedMeshRenderer renderer;
-    public readonly Mesh mesh;
-    public readonly Transform model;
-    public readonly Material shellMat, leatherMat, visorMat;
-    public readonly int shellSubmesh = -1, leatherSubmesh = -1, visorSubmesh = -1;
-    public readonly int[] shellVerts, leatherVerts, visorVerts;
-    public readonly Vector3[] verts;
-    public readonly BoneWeight[] weights;
-    public readonly int[] boneOfVertex; // -1 = 权重不集中在一根骨头
+	public readonly SkinnedMeshRenderer renderer;
 
-    public EggboySkin(GameObject modelObject, SkinnedMeshRenderer smr)
-    {
-        model = modelObject.transform;
-        renderer = smr;
-        mesh = smr != null ? smr.sharedMesh : null;
-        if (mesh == null)
-        {
-            shellVerts = leatherVerts = visorVerts = new int[0];
-            verts = new Vector3[0];
-            weights = new BoneWeight[0];
-            boneOfVertex = new int[0];
-            return;
-        }
-        if (!mesh.isReadable)
-            Debug.LogError("模型网格不可读，无法做表情/防穿模；请在导入设置里打开 Read/Write。");
+	public readonly Mesh mesh;
 
-        verts = mesh.vertices;
-        weights = mesh.boneWeights;
-        boneOfVertex = new int[verts.Length];
-        for (int i = 0; i < boneOfVertex.Length; i++) boneOfVertex[i] = Dominant(i, 0.9f);
+	public readonly Transform model;
 
-        var mats = smr.sharedMaterials;
-        var sets = new Dictionary<string, HashSet<int>>();
-        var kinds = new string[mesh.subMeshCount];
-        for (int s = 0; s < mesh.subMeshCount; s++)
-        {
-            Material m = s < mats.Length ? mats[s] : null;
-            string kind = MatKind(m != null ? m.name : null);
-            if (kind.Length == 0 && mesh.subMeshCount == 3)
-                kind = s == 0 ? "shell" : s == 1 ? "leather" : "visor";
-            kinds[s] = kind;
-            if (kind.Length == 0 || sets.ContainsKey(kind)) continue;
-            var set = new HashSet<int>();
-            foreach (int vi in mesh.GetTriangles(s)) set.Add(vi);
-            sets[kind] = set;
-        }
-        shellVerts = ToArray(sets, "shell");
-        leatherVerts = ToArray(sets, "leather");
-        visorVerts = ToArray(sets, "visor");
-        shellSubmesh = Find(kinds, "shell");
-        leatherSubmesh = Find(kinds, "leather");
-        visorSubmesh = Find(kinds, "visor");
-        shellMat = MaterialOf(mats, shellSubmesh);
-        leatherMat = MaterialOf(mats, leatherSubmesh);
-        visorMat = MaterialOf(mats, visorSubmesh);
+	public readonly Material shellMat;
 
-        ApplyAtlas();
-    }
+	public readonly Material leatherMat;
 
-    // GLB 里 shell/leather/visor 共用同一张 baseColor 图集；FBX 导入后材质没接上
-    void ApplyAtlas()
-    {
-        var tex = Resources.Load<Texture2D>("Textures/img0");
-        if (tex == null)
-        {
-            Debug.LogError("找不到 Resources/Textures/img0，角色会保持白模");
-            return;
-        }
-        var mats = renderer.materials;
-        foreach (var m in mats)
-        {
-            if (m == null) continue;
-            if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);
-            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-            if (m.HasProperty("_Color")) m.SetColor("_Color", Color.white);
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-            m.mainTexture = tex;
-        }
+	public readonly Material visorMat;
 
-        // img1 是 glTF 的 metallicRoughness（G=粗糙度，B=金属度）。
-        // URP Lit 的金属贴图同样是 R=金属度、A=平滑度，所以用离线转换好的 img1_mg。
-        // 变体由 Resources 里的 URP 模板材质保证，避免打包时 _METALLICGLOSSMAP 被裁掉。
-        var mg = Resources.Load<Texture2D>("Textures/img1_mg");
-        var tpl = Resources.Load<Material>("EggboyURPLitMetallic");
-        if (mg != null && tpl != null)
-        {
-            foreach (var m in mats)
-            {
-                if (m == null) continue;
-                m.shader = tpl.shader;
-                if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-                if (m.HasProperty("_MetallicGlossMap")) m.SetTexture("_MetallicGlossMap", mg);
-                m.EnableKeyword("_METALLICSPECGLOSSMAP");
-                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 1f);
-                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 1f);
-                if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 1f);
-            }
-            Debug.Log("URP 金属度/粗糙度贴图已接入：" + mg.width + "x" + mg.height);
-        }
-        else Debug.LogError("找不到 img1_mg 或 EggboyURPLitMetallic 模板，角色材质会不完整");
+	public readonly int shellSubmesh = -1;
 
-        Debug.Log("角色图集已接入：" + tex.width + "x" + tex.height);
-    }
+	public readonly int leatherSubmesh = -1;
 
-    static string MatKind(string name)
-    {
-        string n = EggboyBones.Norm(name);
-        if (n.Contains("visor")) return "visor";
-        if (n.Contains("leather")) return "leather";
-        if (n.Contains("shell")) return "shell";
-        return "";
-    }
+	public readonly int visorSubmesh = -1;
 
-    static int Find(string[] kinds, string kind)
-    {
-        for (int i = 0; i < kinds.Length; i++) if (kinds[i] == kind) return i;
-        return -1;
-    }
+	public readonly int[] shellVerts;
 
-    static Material MaterialOf(Material[] mats, int submesh)
-    {
-        return submesh >= 0 && submesh < mats.Length ? mats[submesh] : null;
-    }
+	public readonly int[] leatherVerts;
 
-    static int[] ToArray(Dictionary<string, HashSet<int>> sets, string kind)
-    {
-        if (!sets.TryGetValue(kind, out var set)) return new int[0];
-        var arr = new int[set.Count];
-        set.CopyTo(arr);
-        System.Array.Sort(arr);
-        return arr;
-    }
+	public readonly int[] visorVerts;
 
-    public int BoneIndex(string name)
-    {
-        if (renderer == null) return -1;
-        string want = EggboyBones.Norm(name);
-        for (int i = 0; i < renderer.bones.Length; i++)
-            if (renderer.bones[i] != null && EggboyBones.Norm(renderer.bones[i].name) == want) return i;
-        return -1;
-    }
+	public readonly Vector3[] verts;
 
-    public Transform Bone(string name)
-    {
-        int i = BoneIndex(name);
-        return i >= 0 ? renderer.bones[i] : null;
-    }
+	public readonly BoneWeight[] weights;
 
-    public int Dominant(int vertex, float threshold)
-    {
-        var w = weights[vertex];
-        int best = -1;
-        float bw = threshold;
-        if (w.weight0 > bw) { bw = w.weight0; best = w.boneIndex0; }
-        if (w.weight1 > bw) { bw = w.weight1; best = w.boneIndex1; }
-        if (w.weight2 > bw) { bw = w.weight2; best = w.boneIndex2; }
-        if (w.weight3 > bw) { bw = w.weight3; best = w.boneIndex3; }
-        return best;
-    }
+	public readonly int[] boneOfVertex;
 
-    public Matrix4x4 SkinMatrix(int boneIndex)
-    {
-        return renderer.bones[boneIndex].localToWorldMatrix * mesh.bindposes[boneIndex];
-    }
+	public EggboySkin(GameObject modelObject, SkinnedMeshRenderer smr)
+	{
+		model = modelObject.transform;
+		renderer = smr;
+		mesh = ((smr != null) ? smr.sharedMesh : null);
+		if (mesh == null)
+		{
+			shellVerts = (leatherVerts = (visorVerts = new int[0]));
+			verts = new Vector3[0];
+			weights = new BoneWeight[0];
+			boneOfVertex = new int[0];
+			return;
+		}
+		if (!mesh.isReadable)
+		{
+			Debug.LogError("模型网格不可读，无法做表情/防穿模；请在导入设置里打开 Read/Write。");
+		}
+		verts = mesh.vertices;
+		weights = mesh.boneWeights;
+		boneOfVertex = new int[verts.Length];
+		for (int i = 0; i < boneOfVertex.Length; i++)
+		{
+			boneOfVertex[i] = Dominant(i, 0.9f);
+		}
+		Material[] sharedMaterials = smr.sharedMaterials;
+		Dictionary<string, HashSet<int>> dictionary = new Dictionary<string, HashSet<int>>();
+		string[] array = new string[mesh.subMeshCount];
+		for (int j = 0; j < mesh.subMeshCount; j++)
+		{
+			Material material = ((j < sharedMaterials.Length) ? sharedMaterials[j] : null);
+			string text = MatKind((material != null) ? material.name : null);
+			if (text.Length == 0 && mesh.subMeshCount == 3)
+			{
+				text = j switch
+				{
+					1 => "leather", 
+					0 => "shell", 
+					_ => "visor", 
+				};
+			}
+			array[j] = text;
+			if (text.Length != 0 && !dictionary.ContainsKey(text))
+			{
+				HashSet<int> hashSet = new HashSet<int>();
+				int[] triangles = mesh.GetTriangles(j);
+				foreach (int item in triangles)
+				{
+					hashSet.Add(item);
+				}
+				dictionary[text] = hashSet;
+			}
+		}
+		shellVerts = ToArray(dictionary, "shell");
+		leatherVerts = ToArray(dictionary, "leather");
+		visorVerts = ToArray(dictionary, "visor");
+		shellSubmesh = Find(array, "shell");
+		leatherSubmesh = Find(array, "leather");
+		visorSubmesh = Find(array, "visor");
+		shellMat = MaterialOf(sharedMaterials, shellSubmesh);
+		leatherMat = MaterialOf(sharedMaterials, leatherSubmesh);
+		visorMat = MaterialOf(sharedMaterials, visorSubmesh);
+		ApplyAtlas();
+	}
 
-    public Matrix4x4[] SkinMatrices()
-    {
-        var mats = new Matrix4x4[renderer.bones.Length];
-        for (int i = 0; i < mats.Length; i++) mats[i] = SkinMatrix(i);
-        return mats;
-    }
+	private void ApplyAtlas()
+	{
+		Texture2D texture2D = Resources.Load<Texture2D>("Textures/img0");
+		if (texture2D == null)
+		{
+			Debug.LogError("找不到 Resources/Textures/img0，角色会保持白模");
+			return;
+		}
+		Material[] materials = renderer.materials;
+		Material[] array = materials;
+		foreach (Material material in array)
+		{
+			if (!(material == null))
+			{
+				if (material.HasProperty("_MainTex"))
+				{
+					material.SetTexture("_MainTex", texture2D);
+				}
+				if (material.HasProperty("_BaseMap"))
+				{
+					material.SetTexture("_BaseMap", texture2D);
+				}
+				if (material.HasProperty("_Color"))
+				{
+					material.SetColor("_Color", Color.white);
+				}
+				if (material.HasProperty("_BaseColor"))
+				{
+					material.SetColor("_BaseColor", Color.white);
+				}
+				material.mainTexture = texture2D;
+			}
+		}
+		Texture2D texture2D2 = Resources.Load<Texture2D>("Textures/img1_mg");
+		Material material2 = Resources.Load<Material>("EggboyURPLitMetallic");
+		if (texture2D2 != null && material2 != null)
+		{
+			array = materials;
+			foreach (Material material3 in array)
+			{
+				if (!(material3 == null))
+				{
+					material3.shader = material2.shader;
+					if (material3.HasProperty("_BaseMap"))
+					{
+						material3.SetTexture("_BaseMap", texture2D);
+					}
+					if (material3.HasProperty("_BaseColor"))
+					{
+						material3.SetColor("_BaseColor", Color.white);
+					}
+					if (material3.HasProperty("_MetallicGlossMap"))
+					{
+						material3.SetTexture("_MetallicGlossMap", texture2D2);
+					}
+					material3.EnableKeyword("_METALLICSPECGLOSSMAP");
+					if (material3.HasProperty("_Metallic"))
+					{
+						material3.SetFloat("_Metallic", 1f);
+					}
+					if (material3.HasProperty("_Smoothness"))
+					{
+						material3.SetFloat("_Smoothness", 1f);
+					}
+					if (material3.HasProperty("_Glossiness"))
+					{
+						material3.SetFloat("_Glossiness", 1f);
+					}
+				}
+			}
+			Debug.Log("URP 金属度/粗糙度贴图已接入：" + texture2D2.width + "x" + texture2D2.height);
+		}
+		else
+		{
+			Debug.LogError("找不到 img1_mg 或 EggboyURPLitMetallic 模板，角色材质会不完整");
+		}
+		Debug.Log("角色图集已接入：" + texture2D.width + "x" + texture2D.height);
+	}
 
-    // 蒙皮后的世界坐标；四个权重都走 Unity 的 BoneWeight
-    public Vector3 VertexWorld(int vertex, Matrix4x4[] skin)
-    {
-        var w = weights[vertex];
-        Vector3 v = verts[vertex];
-        float sum = w.weight0 + w.weight1 + w.weight2 + w.weight3;
-        if (sum < 1e-4f) return renderer.transform.TransformPoint(v);
-        Vector3 p = Vector3.zero;
-        p += skin[w.boneIndex0].MultiplyPoint3x4(v) * w.weight0;
-        p += skin[w.boneIndex1].MultiplyPoint3x4(v) * w.weight1;
-        p += skin[w.boneIndex2].MultiplyPoint3x4(v) * w.weight2;
-        p += skin[w.boneIndex3].MultiplyPoint3x4(v) * w.weight3;
-        return p / sum;
-    }
+	private static string MatKind(string name)
+	{
+		string text = EggboyBones.Norm(name);
+		if (text.Contains("visor"))
+		{
+			return "visor";
+		}
+		if (text.Contains("leather"))
+		{
+			return "leather";
+		}
+		if (text.Contains("shell"))
+		{
+			return "shell";
+		}
+		return "";
+	}
 
-    // 绑定姿态下某个顶点在模型本地坐标里的位置
-    public Vector3 BindWorld(int vertex)
-    {
-        return renderer.transform.TransformPoint(verts[vertex]);
-    }
+	private static int Find(string[] kinds, string kind)
+	{
+		for (int i = 0; i < kinds.Length; i++)
+		{
+			if (kinds[i] == kind)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private static Material MaterialOf(Material[] mats, int submesh)
+	{
+		if (submesh < 0 || submesh >= mats.Length)
+		{
+			return null;
+		}
+		return mats[submesh];
+	}
+
+	private static int[] ToArray(Dictionary<string, HashSet<int>> sets, string kind)
+	{
+		if (!sets.TryGetValue(kind, out var value))
+		{
+			return new int[0];
+		}
+		int[] array = new int[value.Count];
+		value.CopyTo(array);
+		Array.Sort(array);
+		return array;
+	}
+
+	public int BoneIndex(string name)
+	{
+		if (renderer == null)
+		{
+			return -1;
+		}
+		string text = EggboyBones.Norm(name);
+		for (int i = 0; i < renderer.bones.Length; i++)
+		{
+			if (renderer.bones[i] != null && EggboyBones.Norm(renderer.bones[i].name) == text)
+			{
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	public Transform Bone(string name)
+	{
+		int num = BoneIndex(name);
+		if (num < 0)
+		{
+			return null;
+		}
+		return renderer.bones[num];
+	}
+
+	public int Dominant(int vertex, float threshold)
+	{
+		BoneWeight boneWeight = weights[vertex];
+		int result = -1;
+		float num = threshold;
+		if (boneWeight.weight0 > num)
+		{
+			num = boneWeight.weight0;
+			result = boneWeight.boneIndex0;
+		}
+		if (boneWeight.weight1 > num)
+		{
+			num = boneWeight.weight1;
+			result = boneWeight.boneIndex1;
+		}
+		if (boneWeight.weight2 > num)
+		{
+			num = boneWeight.weight2;
+			result = boneWeight.boneIndex2;
+		}
+		if (boneWeight.weight3 > num)
+		{
+			num = boneWeight.weight3;
+			result = boneWeight.boneIndex3;
+		}
+		return result;
+	}
+
+	public Matrix4x4 SkinMatrix(int boneIndex)
+	{
+		return renderer.bones[boneIndex].localToWorldMatrix * mesh.bindposes[boneIndex];
+	}
+
+	public Matrix4x4[] SkinMatrices()
+	{
+		Matrix4x4[] array = new Matrix4x4[renderer.bones.Length];
+		for (int i = 0; i < array.Length; i++)
+		{
+			array[i] = SkinMatrix(i);
+		}
+		return array;
+	}
+
+	public Vector3 VertexWorld(int vertex, Matrix4x4[] skin)
+	{
+		BoneWeight boneWeight = weights[vertex];
+		Vector3 vector = verts[vertex];
+		float num = boneWeight.weight0 + boneWeight.weight1 + boneWeight.weight2 + boneWeight.weight3;
+		if (num < 0.0001f)
+		{
+			return renderer.transform.TransformPoint(vector);
+		}
+		return (Vector3.zero + skin[boneWeight.boneIndex0].MultiplyPoint3x4(vector) * boneWeight.weight0 + skin[boneWeight.boneIndex1].MultiplyPoint3x4(vector) * boneWeight.weight1 + skin[boneWeight.boneIndex2].MultiplyPoint3x4(vector) * boneWeight.weight2 + skin[boneWeight.boneIndex3].MultiplyPoint3x4(vector) * boneWeight.weight3) / num;
+	}
+
+	public Vector3 BindWorld(int vertex)
+	{
+		return renderer.transform.TransformPoint(verts[vertex]);
+	}
 }

@@ -1,0 +1,100 @@
+[
+  {
+    "name": "flap_school",
+    "width": 460,
+    "height": 176,
+    "sha256": "8f3d142f727eb4e75273f02c02997b210558a41528ea792aa5709be8d1051c5a",
+    "source_path_id": 122
+  },
+  {
+    "name": "stamp_ending",
+    "width": 127,
+    "height": 88,
+    "sha256": "3cf89adb57a56ef00b5b649a76acb9fc64190cd01548bc8c4075e9ce3e866f52",
+    "source_path_id": 150
+  },
+  {
+    "name": "stamp_lighthouse",
+    "width": 450,
+    "height": 388,
+    "sha256": "857aee832865b360da98906c7c3add6b364a1bb4579cd058818a9cc2333a7359",
+    "source_path_id": 170
+  },
+  {
+    "name": "flap_ending",
+    "width": 460,
+    "height": 177,
+    "sha256": "2809154002cf1af9e7bc3552437b5fef25b1caf0b5044f5a972c15b5760380e2",
+    "source_path_id": 173
+  },
+  {
+    "name": "stamp_bakery",
+    "width": 450,
+    "height": 388,
+    "sha256": "b232eba719d8b0bf9ef36dbda724bb85e236abbff45f8064ebecaf7f26aed180",
+    "source_path_id": 174
+  },
+  {
+    "name": "envelope_bakery",
+    "width": 460,
+    "height": 310,
+    "sha256": "009859b32684174cf4bc52b5ce794805d15df4f5c4ded4d01997a2e2f10019f3",
+    "source_path_id": 180
+  },
+  {
+    "name": "flap_lighthouse",
+    "width": 460,
+    "height": 137,
+    "sha256": "0ec080360773df2f153b36ba4cfd571c63d7eb567b09d4df25f44b5e1e6bdc63",
+    "source_path_id": 184
+  },
+  {
+    "name": "postcard",
+    "width": 768,
+    "height": 532,
+    "sha256": "01bbada98be9dc6a98ef1b3f85379f4bf1e1f43a558cfb7fec1aef096d807b05",
+    "source_path_id": 195
+  },
+  {
+    "name": "envelope_school",
+    "width": 460,
+    "height": 313,
+    "sha256": "db92f1549f7878ccc764459ccba8a66913c265261ef2febed599d910d605fec4",
+    "source_path_id": 208
+  },
+  {
+    "name": "flap_bakery",
+    "width": 460,
+    "height": 175,
+    "sha256": "bbf28a59db9b5d9c34fb3fa77523d9c67182735c8bdcb9c8d422c4d7cca7b04e",
+    "source_path_id": 245
+  },
+  {
+    "name": "stamp_handle",
+    "width": 252,
+    "height": 368,
+    "sha256": "8802361db22857d50fbca49836886be1921f64be94f471d6dbfbabac60d789d3",
+    "source_path_id": 258
+  },
+  {
+    "name": "envelope_lighthouse",
+    "width": 460,
+    "height": 313,
+    "sha256": "993e8e028ef416df4f913f4e1b81eba362769de554cc4313cc0726c14a7c931a",
+    "source_path_id": 264
+  },
+  {
+    "name": "envelope_ending",
+    "width": 460,
+    "height": 313,
+    "sha256": "2d812cf9a681102151d8436801b4b8e1274754ca93dc65fae15dcc1011a9bf7d",
+    "source_path_id": 276
+  },
+  {
+    "name": "stamp_school",
+    "width": 450,
+    "height": 388,
+    "sha256": "0f33b991169cc3c2c499d8dca75dd9cedf3102e531555ee67e743ef9bb0afe6a",
+    "source_path_id": 287
+  }
+]

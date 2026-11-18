@@ -33,21 +33,30 @@ public static class TideBuild
         Build(WebGLOut, BuildTarget.WebGL, "WEBGL");
     }
 
+    // Repack resource-only changes after a successful full WebGL build.
+    public static void WebGLIncremental()
+    {
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+        PlayerSettings.WebGL.decompressionFallback = true;
+        PlayerSettings.WebGL.template = "PROJECT:EGGBOY";
+        Build(WebGLOut, BuildTarget.WebGL, "WEBGL", BuildOptions.None, false);
+    }
+
     public static void All()
     {
         Windows();
         WebGL();
     }
 
-    static void Build(string output, BuildTarget target, string tag, BuildOptions options = BuildOptions.None)
+    static void Build(string output, BuildTarget target, string tag, BuildOptions options = BuildOptions.None, bool clean = true)
     {
         // Clean worktrees must restore the ignored, deterministic GLB texture cache before packing materials.
         GlbTextureCompressor.Extract();
         AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
-        AssetDatabase.ImportAsset(GlbTextureCompressor.MatRoot,
+        if (clean) AssetDatabase.ImportAsset(GlbTextureCompressor.MatRoot,
             ImportAssetOptions.ForceUpdate | ImportAssetOptions.ImportRecursive | ImportAssetOptions.ForceSynchronousImport);
         AssetDatabase.ImportAsset(Scene, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
-        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, options | BuildOptions.CleanBuildCache);
+        var report = BuildPipeline.BuildPlayer(new[] { Scene }, output, target, options | (clean ? BuildOptions.CleanBuildCache : BuildOptions.None));
         Debug.Log($"TIDEBUILD {tag} {report.summary.result} errors={report.summary.totalErrors} size={report.summary.totalSize} scene={Scene}");
         if (report.summary.result != BuildResult.Succeeded)
             throw new System.Exception(tag + " build failed");

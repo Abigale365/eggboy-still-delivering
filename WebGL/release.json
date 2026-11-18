@@ -1,0 +1,114 @@
+{
+  "release": "2026-11-18",
+  "source_commit": "4b2ba4b3928d6ca9be003fef17c482b768f5972d",
+  "files": {
+    "easyinput.js": {
+      "bytes": 3262,
+      "sha256": "0332250829adae6f4ce4eba5482ef5c3ce67246e11ae2338dba7998a4dd4977b"
+    },
+    "index.html": {
+      "bytes": 5444,
+      "sha256": "33d1428a61013cef4ee7a3d9d0f7b03d0965a2f439105ce1851ef65b87e9370c"
+    },
+    "_headers": {
+      "bytes": 92,
+      "sha256": "6a119a2ed8b4223beeeafc03216628bc25ba5fe72e903f847d6122a053102cb8"
+    },
+    "Build/MainWebGL.data.unityweb.part00": {
+      "bytes": 20971520,
+      "sha256": "40f6fdd8319682126b6cef24fe38169a688a1d984f9caff111a45b37394571e0"
+    },
+    "Build/MainWebGL.data.unityweb.part01": {
+      "bytes": 20971520,
+      "sha256": "e97669120a0baa82adcb559b377baad6b7c78ba07a24899facab1cde94e958f4"
+    },
+    "Build/MainWebGL.data.unityweb.part02": {
+      "bytes": 20971520,
+      "sha256": "99b1b38e612d762a7f9b963a10335c46331a8c4cc9b5859bcc1ba840cd85455e"
+    },
+    "Build/MainWebGL.data.unityweb.part03": {
+      "bytes": 20971520,
+      "sha256": "9a0c5b2b200c77533f890913c1761c71d52397adf2cb130ebfd471c2f6b913e0"
+    },
+    "Build/MainWebGL.data.unityweb.part04": {
+      "bytes": 20971520,
+      "sha256": "91f4b76ef8de9d42c520314e72516c5ba11c7e8f31b57fe09f3ca9797d676e08"
+    },
+    "Build/MainWebGL.data.unityweb.part05": {
+      "bytes": 20971520,
+      "sha256": "60058392b56cbea5b73ac22ea4ab2a4e3507b3385559b63d2fb3b99b21fb54d2"
+    },
+    "Build/MainWebGL.data.unityweb.part06": {
+      "bytes": 20971520,
+      "sha256": "3cf3db74e26c88a1dbd0727e9d1078eb82feb5a4d8fd276a1f5785ab7b1449d3"
+    },
+    "Build/MainWebGL.data.unityweb.part07": {
+      "bytes": 20971520,
+      "sha256": "7fe0683651d076e5b03022bda2647821e2ea8b6ef31520af7d04e16e6253e84d"
+    },
+    "Build/MainWebGL.data.unityweb.part08": {
+      "bytes": 20971520,
+      "sha256": "f63f171190eaeed6b0532c1ebb29c4540ecaff47125ec510d5eed21cb58bce4a"
+    },
+    "Build/MainWebGL.data.unityweb.part09": {
+      "bytes": 20971520,
+      "sha256": "b86e286a54df3d2f4eb8de6c74c4eb0dabd49bb68cc72c466cdcb2d77cffe859"
+    },
+    "Build/MainWebGL.data.unityweb.part10": {
+      "bytes": 20971520,
+      "sha256": "c3a40dcaae12e96c819259f916c1b1d3150ad43355d327ff68d62ce1c9f3bb99"
+    },
+    "Build/MainWebGL.data.unityweb.part11": {
+      "bytes": 20971520,
+      "sha256": "d744e1194abf09e1c2707cc0c43a4d612942c9aa09899f34a694be08dec709f7"
+    },
+    "Build/MainWebGL.data.unityweb.part12": {
+      "bytes": 20971520,
+      "sha256": "d20a474cd2eb662334137c09c0ce951492826a05033f99c2bd3212caff1dd6cf"
+    },
+    "Build/MainWebGL.data.unityweb.part13": {
+      "bytes": 20971520,
+      "sha256": "76948f6cbe0106f94c399744d04b9175d4130206a7d5f4cedc754cc0bf74301c"
+    },
+    "Build/MainWebGL.data.unityweb.part14": {
+      "bytes": 20971520,
+      "sha256": "0ad2ca7b803f0c6a2599a16b557fb2c2cdcc3251a440d20a58465d64d38a80b3"
+    },
+    "Build/MainWebGL.data.unityweb.part15": {
+      "bytes": 20971520,
+      "sha256": "2ddfad606a6e1af836c1848311d274ea4e7c62d0685c4f339f24175adbfae2ef"
+    },
+    "Build/MainWebGL.data.unityweb.part16": {
+      "bytes": 20971520,
+      "sha256": "7d7d28bbc9c02b688e121b76d9a4544d9d4752ad8d9467a60a44f7e1ffa70d97"
+    },
+    "Build/MainWebGL.data.unityweb.part17": {
+      "bytes": 20227742,
+      "sha256": "fd4c853e462e3c9bfcfeb6f814bcdf765d458d925d0aac21c1d54bb1f71066fc"
+    },
+    "Build/MainWebGL.data.unityweb.parts.json": {
+      "bytes": 642,
+      "sha256": "712ab20285bee08ec4a8394c9c6aa30645291261c3219d39fdccb9ca5dff7f8a"
+    },
+    "Build/MainWebGL.framework.js.unityweb": {
+      "bytes": 85869,
+      "sha256": "e23f0535be1a236e6d226173d45760ce7be5f2aabd7493e01c925ef76a44bf10"
+    },
+    "Build/MainWebGL.loader.js": {
+      "bytes": 44292,
+      "sha256": "d7a3ee7acf704a81c53418d29e8d58d9b34f9674e01c1bdb44bcbdf6406d7bfa"
+    },
+    "Build/MainWebGL.wasm.unityweb": {
+      "bytes": 9276567,
+      "sha256": "8dc3480bc896ca359d8563ad827eb066756e2716aa5a7e328763beafbd1c7726"
+    },
+    "StreamingAssets/EasyInputNative/EasyInputRelay.exe": {
+      "bytes": 9550514,
+      "sha256": "d54cf0040f1dd9f8e7e358d262b84c3e9e3aa2c4884839a1a8b68636677dc6d7"
+    },
+    "StreamingAssets/EasyInputNative/THIRD_PARTY_NOTICES.txt": {
+      "bytes": 115544,
+      "sha256": "b77f3e386fde75627881bea953bf6346fee0f5e939a8bda70a43ebe109382080"
+    }
+  }
+}

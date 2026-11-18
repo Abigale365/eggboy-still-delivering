@@ -458,3 +458,10 @@ GPT 线剩下的收尾交给 Claude，不再分文件隔离。
 - 无屏幕参数启动，1280×720、1600×900、1920×1080 三档计算与本机窗口应用自检通过。
 - 场景 SHA-256 F6553B9CC0E31F95B8E54BF8D3B597E6458A75321E4AF5A62F7BA24199DF83C7。游戏程序集 SHA-256 5C98D148F1C06803A109CE370DEE66A01C88C0993D016CB763DA1052352C13D5。
 - [全量审计](evidence/windows-2026-11-16/acceptance.json) · [包哈希对照](evidence/windows-2026-11-16/package-hash-comparison.json) · [界面实拍](evidence/windows-2026-11-16/interface.jpg) · [Windows 发布页](https://github.com/forkseek/eggboy-still-delivering/releases/tag/windows-2026-11-16)
+
+## 2026-11-18 · WebGL 正式域名发布（Codex）
+
+- 解决合流源码重复定义，保留 10 步新手教程、QuestGuide 任务指引与最新主线。完整构建和两次增量构建成功，恢复 14 张信件 UI 素材及场景脚本引用。
+- 正式域名 https://tidetown.xbalab.cn 已发布；最终部署 2cf5380d-fe27-4448-a84b-4c95a38bec79。游戏运行时来源 4b2ba4b，加载提示更正为 Shift 慢走。
+- 正式站点已进入游戏，看到新手教程、取信指引与地图并操作镜头、移动；用户要求自行检查后停止试玩。未声称正式版完整通关。
+- GitHub 使用自己的 Abigale365/eggboy-still-delivering 仓库，分支 tidetown-webgl-20261118，仓库名保持不变。

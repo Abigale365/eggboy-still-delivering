@@ -19,3 +19,12 @@ Assets/TideTown/Art/GlbTex.meta
 
 # Lux3D Ô­Ê¼ÏÂÔØ£¨Ñ¹ËõºóµÄÔÚ Resources/Lux3DLibrary£©
 tools/lux3d_out/
+
+# Local publishing helpers (kept off GitHub)
+/tools/deploy-tidetown.cmd
+/tools/deploy-tidetown.ps1
+/tools/pages_deploy_serial.py
+/tools/save-deploy-token.ps1
+/docs/ä¸€é”®é‡æ–°éƒ¨ç½².md
+/docs/evidence/webgl-20261118/deployment-token-active.jpg
+/docs/evidence/webgl-20261118/token-permission-review.jpg

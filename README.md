@@ -4,7 +4,7 @@
 
 参加 Aholo 3D AI 黑客松的作品。场景里的建筑、道具和角色都用 Aholo Lux3D 生成，用 Unity 2022.3（URP）搭成可以玩的小镇。
 
-**在线试玩：** https://forkseek.github.io/eggboy-still-delivering/
+**在线试玩：** https://tidetown.xbalab.cn
 
 建议用电脑上的 Chrome 或 Edge 打开。第一次加载要下载约 195 MB。
 

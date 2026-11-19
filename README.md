@@ -8,7 +8,7 @@
 
 解压整个 ZIP 后，双击 `TideTown.exe` 开始。 [更新说明](https://github.com/forkseek/eggboy-still-delivering/releases/tag/windows-2026-11-16) · [实机画面](docs/evidence/windows-2026-11-16/interface.jpg)
 
-**在线试玩：** https://forkseek.github.io/eggboy-still-delivering/
+**在线试玩：** https://tidetown.xbalab.cn
 
 建议用电脑上的 Chrome 或 Edge 打开。第一次加载要下载约 195 MB。
 

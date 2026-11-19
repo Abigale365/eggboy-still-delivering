@@ -36,7 +36,7 @@
       "x": -6.8,
       "z": -4.7,
       "yaw": 90,
-      "doorOffset": -1.1199999999999999
+      "doorOffset": -1.0
     },
     {
       "id": "B7_market_l2",
@@ -50,7 +50,7 @@
       "x": 4.8,
       "z": -4.7,
       "yaw": 270,
-      "doorOffset": 1.1199999999999999
+      "doorOffset": 1.0
     },
     {
       "id": "B7_market_r2",
@@ -71,7 +71,7 @@
       "x": -17.5,
       "z": 23.6,
       "yaw": 180,
-      "doorOffset": 1.1199999999999999
+      "doorOffset": 0
     },
     {
       "id": "B7_house_l3",
@@ -99,7 +99,7 @@
       "x": -2.1,
       "z": 28.3,
       "yaw": 180,
-      "doorOffset": -1.54
+      "doorOffset": 0
     },
     {
       "id": "B7_house_m3",
@@ -137,7 +137,7 @@
       "x": 16.1,
       "z": 23.8,
       "yaw": 180,
-      "doorOffset": 1.1199999999999999
+      "doorOffset": 0
     },
     {
       "id": "B6_house_r3",

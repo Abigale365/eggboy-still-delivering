@@ -32,20 +32,21 @@ public sealed class EasyInputBridge : MonoBehaviour
     {
         if (EasyInputReportDecoder.IsFnHeld)
         {
-            if (Input.GetKeyDown(KeyCode.W)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s1"); }
-            if (Input.GetKeyDown(KeyCode.A)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s2"); }
-            if (Input.GetKeyDown(KeyCode.S)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s3"); }
-            if (Input.GetKeyDown(KeyCode.D)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s4"); }
-            if (Input.GetKeyDown(KeyCode.E)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s5"); }
+            if (Input.GetKeyDown(KeyCode.W)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s2"); }
+            if (Input.GetKeyDown(KeyCode.E)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s3"); }
+            if (Input.GetKeyDown(KeyCode.A)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s5"); }
+            if (Input.GetKeyDown(KeyCode.S)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s6"); }
+            if (Input.GetKeyDown(KeyCode.D)) { EasyInputReportDecoder.MarkFnUsed(); OnAction("combo-s7"); }
             return;
         }
 
         if (WoodenMechanismPuzzleModal.IsOpen)
         {
-            if (Input.GetKeyDown(KeyCode.W)) HandlePuzzle("s1");
-            if (Input.GetKeyDown(KeyCode.A)) HandlePuzzle("s2");
-            if (Input.GetKeyDown(KeyCode.S)) HandlePuzzle("s3");
-            if (Input.GetKeyDown(KeyCode.E)) HandlePuzzle("s5");
+            if (Input.GetKeyDown(KeyCode.W)) HandlePuzzle("s2");
+            if (Input.GetKeyDown(KeyCode.E)) HandlePuzzle("s3");
+            if (Input.GetKeyDown(KeyCode.A)) HandlePuzzle("s5");
+            if (Input.GetKeyDown(KeyCode.S)) HandlePuzzle("s6");
+            if (Input.GetKeyDown(KeyCode.D)) HandlePuzzle("s7");
             return;
         }
 
@@ -76,19 +77,25 @@ public sealed class EasyInputBridge : MonoBehaviour
         if (WoodenMechanismPuzzleModal.IsOpen && HandlePuzzle(action)) return;
         switch (action)
         {
-            case "combo-s4": Pulse(KeyCode.V, 0); break;
-            case "combo-s5": Pulse(KeyCode.Tab, 0); break;
-            case "combo-s6": Pulse(KeyCode.R, 0); break;
-            case "combo-s7": Pulse(KeyCode.B, 0); break;
-            case "combo-s8": Pulse(KeyCode.F, 0); break;
-            case "s1": Pulse(KeyCode.W, .20f); break;
-            case "s2": Pulse(KeyCode.A, .20f); break;
-            case "s3": Pulse(KeyCode.S, .20f); break;
-            case "s4": Pulse(KeyCode.D, .20f); break;
-            case "s5": case "dial-press": Pulse(KeyCode.E, 1f); break;
-            case "s6": Pulse(KeyCode.Space, 0); break;
-            case "s7": Pulse(KeyCode.M, 0); break;
-            case "s8": Pulse(KeyCode.Escape, 0); break;
+            // 按住旋钮 + 按键（组合技能）
+            case "combo-s1": Pulse(KeyCode.Tab, 0); break;
+            case "combo-s2": Pulse(KeyCode.R, 0); break;
+            case "combo-s3": Pulse(KeyCode.H, 0); break;
+            case "combo-s4": Pulse(KeyCode.B, 0); break;
+            case "combo-s5": Pulse(KeyCode.F, 0); break;
+            case "combo-s6": Pulse(KeyCode.V, 0); break;
+            case "combo-s7": Pulse(KeyCode.C, 0); break;
+            case "combo-s8": Pulse(KeyCode.Tab, 0); break;
+            // 标准键盘倒 T 形 WASD + 紧邻 Esc / E / M / Space
+            case "s1": Pulse(KeyCode.Escape, 0); break;
+            case "s2": Pulse(KeyCode.W, .20f); break;
+            case "s3": Pulse(KeyCode.E, 1f); break;
+            case "s4": Pulse(KeyCode.M, 0); break;
+            case "s5": Pulse(KeyCode.A, .20f); break;
+            case "s6": Pulse(KeyCode.S, .20f); break;
+            case "s7": Pulse(KeyCode.D, .20f); break;
+            case "s8": Pulse(KeyCode.Space, 0); break;
+            case "dial-press": Pulse(KeyCode.E, 1f); break;
             case "dial-left": Pulse(KeyCode.A, .12f); break;
             case "dial-right": Pulse(KeyCode.D, .12f); break;
         }
@@ -101,15 +108,19 @@ public sealed class EasyInputBridge : MonoBehaviour
             case "s1": WoodenMechanismPuzzleModal.ExternalToggleLatch(0); return true;
             case "s2": WoodenMechanismPuzzleModal.ExternalToggleLatch(1); return true;
             case "s3": WoodenMechanismPuzzleModal.ExternalToggleLatch(2); return true;
+            case "s4": Pulse(KeyCode.Escape, 0); return true;
+            case "s5":
             case "combo-s1": WoodenMechanismPuzzleModal.ActiveRingSelection = 0; return true;
+            case "s6":
             case "combo-s2": WoodenMechanismPuzzleModal.ActiveRingSelection = 1; return true;
+            case "s7":
             case "combo-s3": WoodenMechanismPuzzleModal.ActiveRingSelection = 2; return true;
             case "dial-left":
             case "dial-right":
                 WoodenMechanismPuzzleModal.ExternalRotateRing(
                     WoodenMechanismPuzzleModal.ActiveRingSelection, action == "dial-left" ? -1 : 1);
                 return true;
-            case "s5":
+            case "s8":
             case "dial-press":
                 WoodenMechanismPuzzleModal.ExternalAttemptUnlock();
                 return true;
